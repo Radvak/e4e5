@@ -3,7 +3,8 @@
 Build and learn chess opening repertoires, with Lichess statistics at your level.
 
 - Import PGN (variations kept), add and edit lines on the board, and export to PGN.
-- Log in with Lichess: arrows show what players of your rating play (blitz, rapid, or both).
+- Log in with Lichess or a username/password, and link a Chess.com username.
+- Arrows show what Lichess players of a chosen rating range play (blitz, rapid, or both).
 - Coming next: training (spaced repetition), gap finder, and growing your repertoire from your Lichess games. See [PLAN.md](PLAN.md).
 
 ## Stack
@@ -28,6 +29,7 @@ pnpm typecheck
 ```
 
 There is no Lichess app to register: OAuth uses PKCE, and the client id is just a name.
+Set `LICHESS_APP_TOKEN` (see `.env.example`) so users without a linked Lichess account get statistics.
 
 ## Deployment
 

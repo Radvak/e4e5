@@ -17,7 +17,9 @@ const app = Fastify({ logger: { level: env.isProd ? 'info' : 'debug' }, trustPro
 await app.register(cookie, { secret: env.cookieSecret });
 
 app.setErrorHandler((err, _req, reply) => {
-  if (err instanceof ZodError) return reply.code(400).send({ error: 'Invalid request', issues: err.issues });
+  if (err instanceof ZodError) {
+    return reply.code(400).send({ error: err.issues[0]?.message ?? 'Invalid request', issues: err.issues });
+  }
   app.log.error(err);
   const status = (err as { statusCode?: number }).statusCode ?? 500;
   return reply.code(status).send({ error: status < 500 ? (err as Error).message : 'Internal error' });

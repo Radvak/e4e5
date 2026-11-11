@@ -41,7 +41,16 @@ CREATE TABLE `sessions` (
 CREATE TABLE `users` (
 	`id` text PRIMARY KEY NOT NULL,
 	`username` text NOT NULL,
+	`login` text,
+	`password_hash` text,
+	`lichess_id` text,
+	`lichess_username` text,
 	`lichess_token` text,
-	`perfs` text,
+	`lichess_perfs` text,
+	`chesscom_username` text,
+	`chesscom_ratings` text,
 	`created_at` integer NOT NULL
 );
+--> statement-breakpoint
+CREATE UNIQUE INDEX `users_login_unique` ON `users` (`login`);--> statement-breakpoint
+CREATE UNIQUE INDEX `users_lichess_id_unique` ON `users` (`lichess_id`);

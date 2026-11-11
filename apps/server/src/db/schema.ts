@@ -3,14 +3,28 @@ import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqli
 const createdAt = () =>
   integer('created_at', { mode: 'timestamp_ms' }).notNull().$defaultFn(() => new Date());
 
-/** One row per Lichess account (id = lowercase Lichess username). */
+export type Perfs = Record<string, { rating: number; games: number; prov?: boolean }>;
+/** Ratings from the Chess.com API, e.g. { rapid: 1450, blitz: 1320 }. */
+export type ChesscomRatings = Partial<Record<'rapid' | 'blitz' | 'bullet' | 'daily', number>>;
+
+/**
+ * An app account. It can be reached by password (`login` + `passwordHash`), by Lichess OAuth
+ * (`lichessId`), or both. Guests have `login` = "guest:<name>" and no password.
+ */
 export const users = sqliteTable('users', {
   id: text('id').primaryKey(),
+  /** Display name. */
   username: text('username').notNull(),
-  /** Null for guest accounts (no Lichess link). */
+  /** Lowercase login name for password accounts (and "guest:<name>" for guests). */
+  login: text('login').unique(),
+  passwordHash: text('password_hash'),
+  lichessId: text('lichess_id').unique(),
+  lichessUsername: text('lichess_username'),
   lichessToken: text('lichess_token'),
-  /** Lichess `perfs` object (ratings per speed), refreshed at each login. */
-  perfs: text('perfs', { mode: 'json' }).$type<Record<string, { rating: number; games: number; prov?: boolean }>>(),
+  /** Lichess `perfs` (ratings per speed), refreshed at each Lichess login. */
+  lichessPerfs: text('lichess_perfs', { mode: 'json' }).$type<Perfs>(),
+  chesscomUsername: text('chesscom_username'),
+  chesscomRatings: text('chesscom_ratings', { mode: 'json' }).$type<ChesscomRatings>(),
   createdAt: createdAt(),
 });
 

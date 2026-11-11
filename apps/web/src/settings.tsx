@@ -1,6 +1,6 @@
 import { bucketsFor, RATING_BUCKETS, type Speed } from '@prepa-cahier/core';
 import { createContext, useContext, useState, type ReactNode } from 'react';
-import type { Perfs } from './api';
+import type { Me } from './api';
 
 export type SpeedChoice = 'blitz' | 'rapid' | 'both';
 
@@ -53,10 +53,23 @@ export function useSettings(): Settings {
   return ctx;
 }
 
-/** Rating for the chosen speed(s): mean of the Lichess ratings of those speeds. */
-export function ratingFor(perfs: Perfs | null | undefined, speed: SpeedChoice): number {
-  const ratings = SPEEDS[speed].map((s) => perfs?.[s]).filter((p) => p && p.games > 0).map((p) => p!.rating);
-  return ratings.length ? Math.round(ratings.reduce((a, b) => a + b, 0) / ratings.length) : 1500;
+function mean(xs: number[]): number | null {
+  return xs.length ? Math.round(xs.reduce((a, b) => a + b, 0) / xs.length) : null;
+}
+
+/**
+ * The user's own rating for the chosen speed(s), used for the default explorer range:
+ * Lichess if linked, else Chess.com as-is (the user adjusts the range), else 1500.
+ */
+export function ratingFor(me: Me, speed: SpeedChoice): { rating: number; source: 'Lichess' | 'Chess.com' | null } {
+  const lichess = mean(
+    SPEEDS[speed].map((s) => me.lichess?.perfs?.[s]).filter((p) => p && p.games > 0).map((p) => p!.rating),
+  );
+  if (lichess) return { rating: lichess, source: 'Lichess' };
+  const ratings = me.chesscom?.ratings;
+  const chesscom = mean(SPEEDS[speed].map((s) => (s === 'blitz' || s === 'rapid' ? ratings?.[s] : undefined)).filter((r): r is number => !!r));
+  if (chesscom) return { rating: chesscom, source: 'Chess.com' };
+  return { rating: 1500, source: null };
 }
 
 /** Upper bound (inclusive) of a Lichess explorer bucket, or null for the top one. */
@@ -72,10 +85,10 @@ export function rangeLabel(buckets: number[]): string {
   return top === null ? `${lo}+` : `${lo}–${top}`;
 }
 
-export function explorerParams(perfs: Perfs | null | undefined, speed: SpeedChoice, range: RatingRange | null) {
-  const rating = ratingFor(perfs, speed);
+export function explorerParams(me: Me, speed: SpeedChoice, range: RatingRange | null) {
+  const { rating, source } = ratingFor(me, speed);
   const ratings = range
     ? RATING_BUCKETS.filter((b) => b >= range[0] && b <= range[1])
     : bucketsFor(rating);
-  return { rating, speeds: SPEEDS[speed], ratings, auto: range === null };
+  return { rating, source, speeds: SPEEDS[speed], ratings, auto: range === null };
 }

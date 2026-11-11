@@ -77,3 +77,10 @@ details.panel summary { cursor: pointer; font-weight: bold; }
 .rating-range { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
 .rating-range input[type='range'] { width: 110px; padding: 0; }
 .small-text { font-size: 0.8em; margin: 2px 0 8px; }
+.brand { color: var(--text); font-weight: bold; text-decoration: none; }
+.account-form { display: flex; flex-direction: column; gap: 8px; max-width: 320px; margin: 28px auto 0; }
+.tabs { display: flex; gap: 4px; }
+.tabs button { flex: 1; }
+.tabs button.active { background: var(--accent); border-color: var(--accent); }
+.settings { max-width: 640px; }
+.settings .row input { flex: 1; }

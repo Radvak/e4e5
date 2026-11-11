@@ -28,13 +28,13 @@ export function RepertoireEditor({ me }: { me: Me }) {
     if (firstMissing >= 0) setPath(path.slice(0, firstMissing));
   }, [data, path]);
 
-  const ex = explorerParams(me.perfs, speed, range);
+  const ex = explorerParams(me, speed, range);
   const explorer = useQuery({
     queryKey: ['explorer', fen, ex.speeds, ex.ratings],
     queryFn: () => api.explorer(fen, ex.speeds, ex.ratings),
     staleTime: Infinity,
     retry: false,
-    enabled: me.lichess,
+    enabled: me.explorer,
   });
 
   const refresh = () => qc.invalidateQueries({ queryKey: ['repertoire', id] });
@@ -163,13 +163,15 @@ export function RepertoireEditor({ me }: { me: Me }) {
           {addMove.error && <p className="error">{String(addMove.error)}</p>}
         </section>
 
-        {!me.lichess && (
+        {!me.explorer && (
           <section className="panel">
             <h3>Lichess statistics</h3>
-            <p className="muted">Guest mode: log in with Lichess to see what players of your level play here.</p>
+            <p className="muted">
+              Connect your Lichess account in <Link to="/settings">Settings</Link> to see what players of your level play here.
+            </p>
           </section>
         )}
-        {me.lichess && <ExplorerPanel
+        {me.explorer && <ExplorerPanel
           fen={fen}
           rep={rep}
           data={explorer.data}
@@ -177,9 +179,11 @@ export function RepertoireEditor({ me }: { me: Me }) {
           loading={explorer.isLoading}
           ratings={ex.ratings}
           note={
-            ex.auto
-              ? `Default: around your Lichess ${ex.speeds.join('+')} rating (${ex.rating}).`
-              : `Custom range, ${ex.speeds.join('+')} games.`
+            !ex.auto
+              ? `Custom range, ${ex.speeds.join('+')} games.`
+              : ex.source
+                ? `Default: around your ${ex.source} ${ex.speeds.join('+')} rating (${ex.rating}).`
+                : `Default: around 1500 (no rating known).`
           }
           onPick={play}
         />}

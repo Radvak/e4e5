@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { requireUser } from '../auth.js';
 import { db } from '../db/client.js';
 import { explorerCache } from '../db/schema.js';
+import { env } from '../env.js';
 import { explorerFetch, RateLimited } from '../lichess.js';
 
 const TTL_MS = 7 * 86_400_000;
@@ -20,7 +21,7 @@ const query = z.object({
 /** Lichess opening explorer through a shared, cached, rate-limited proxy. */
 export async function explorerRoutes(app: FastifyInstance) {
   app.get('/api/explorer', { preHandler: requireUser }, async (req, reply) => {
-    const token = req.user!.lichessToken;
+    const token = req.user!.lichessToken ?? env.lichessAppToken;
     if (!token) return reply.code(409).send({ error: 'Log in with Lichess to see statistics' });
     const q = query.parse(req.query);
     try {

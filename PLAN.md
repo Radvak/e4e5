@@ -7,8 +7,8 @@ with their Lichess account.
 
 | Topic | Decision |
 |---|---|
-| Users | Multi-user (friends). Login with Lichess (OAuth2 PKCE). Guest login (name only) for testing, on by default in dev only |
-| Chess.com | First-class for games and ratings (public API). Login with Chess.com needs an approved OAuth app: apply, and plug it in next to Lichess once approved. Until then Chess.com-only users need another login (to decide) |
+| Users | Multi-user (friends). Username + password accounts (scrypt) and/or Login with Lichess (OAuth2 PKCE). A password account can link Lichess later. Guest login (name only) for testing, on by default in dev only |
+| Chess.com | First-class for games and ratings (public API). Login with Chess.com needs an approved OAuth app: apply, and plug it in next to Lichess once approved. Until then Chess.com players use a password account and enter their Chess.com username in Settings |
 | Stack | TypeScript monorepo (pnpm): React + Vite + chessground / Fastify / SQLite (Drizzle + libsql) |
 | Chess logic | `chessops` in a shared `packages/core` (used by server and browser) |
 | License | GPL-3.0 is acceptable (chessground, chessops) |
@@ -21,7 +21,7 @@ The repertoire is a **graph of positions** (FEN without move counters) linked by
 transpositions merge. At positions where it is the user's turn there should be exactly one
 move. Several moves there are flagged as a "conflict".
 
-Tables: `users` (Lichess id, token, ratings), `sessions`, `repertoires` (name, color),
+Tables: `users` (login + password hash, Lichess id/token/ratings, Chess.com username/ratings), `sessions`, `repertoires` (name, color),
 `rep_moves` (from/to FEN, uci, san, comment, nags, isMain, source), and `explorer_cache`
 (shared by all users).
 
@@ -50,9 +50,10 @@ Planned: `review_cards` (FSRS state per user move), `game_syncs`, `inbox_items`.
 - [x] **3a. Lichess login + explorer overlay**: arrows (green = prepared, yellow = popular but
   not prepared, blue = prepared but rare), explorer table, speed selector.
 - [x] **3b. Guest login + rating range slider**.
-- [ ] **3c. Chess.com**: Chess.com username in the profile, ratings from `/pub/player/{u}/stats`;
-  a server-wide Lichess token so users without a linked Lichess account still get statistics;
-  apply for Chess.com OAuth.
+- [x] **3c. Accounts + Chess.com profile**: password accounts, link/unlink Lichess, Chess.com
+  username and ratings in Settings, optional server-wide `LICHESS_APP_TOKEN` so users without a
+  linked Lichess account still get statistics.
+- [ ] **3d. Chess.com OAuth**: apply for an app (once deployed publicly), then add "Login with Chess.com".
 - [ ] **2. Training**: drill mode with FSRS (`ts-fsrs`). The app plays the opponent, choosing
   replies weighted by explorer frequency. Modes: due cards / one line / new lines.
 - [ ] **4. Gap finder**: probability of reaching each position (product of opponent move

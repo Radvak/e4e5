@@ -19,4 +19,10 @@ export const env = {
   explorerUrl: get('EXPLORER_URL', 'https://explorer.lichess.ovh'),
   /** Login with just a name, without Lichess (testing, or networks where Lichess is blocked). */
   guestLogin: get('GUEST_LOGIN', isProd ? 'false' : 'true') === 'true',
+  /**
+   * Optional Lichess token of the app owner (https://lichess.org/account/oauth/token, no scope),
+   * used for explorer statistics of users who have not linked a Lichess account.
+   */
+  lichessAppToken: process.env.LICHESS_APP_TOKEN || null,
+  chesscomApi: get('CHESSCOM_API', 'https://api.chess.com'),
 };

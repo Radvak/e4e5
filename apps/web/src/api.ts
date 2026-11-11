@@ -21,7 +21,18 @@ async function request<T>(method: string, url: string, body?: unknown): Promise<
 }
 
 export type Perfs = Record<string, { rating: number; games: number; prov?: boolean }>;
-export interface Me { id: string; username: string; perfs: Perfs | null; /** false for guests */ lichess: boolean }
+export type ChesscomRatings = Partial<Record<'rapid' | 'blitz' | 'bullet' | 'daily', number>>;
+export interface Me {
+  id: string;
+  username: string;
+  guest: boolean;
+  hasPassword: boolean;
+  login: string | null;
+  lichess: { username: string; perfs: Perfs | null } | null;
+  chesscom: { username: string; ratings: ChesscomRatings | null } | null;
+  /** Explorer statistics available (own Lichess token or the app's). */
+  explorer: boolean;
+}
 export interface RepertoireSummary { id: string; name: string; color: Color; createdAt: string }
 export interface StoredMove extends RepMove { id: number; source: string }
 export interface RepertoireDetail extends RepertoireSummary { moves: StoredMove[] }
@@ -33,6 +44,12 @@ export const api = {
   me: () => request<Me>('GET', '/api/me'),
   authConfig: () => request<{ guestLogin: boolean }>('GET', '/api/auth/config'),
   guestLogin: (username: string) => request<{ ok: true }>('POST', '/api/auth/guest', { username }),
+  register: (username: string, password: string) => request<{ ok: true }>('POST', '/api/auth/register', { username, password }),
+  passwordLogin: (username: string, password: string) =>
+    request<{ ok: true }>('POST', '/api/auth/password', { username, password }),
+  updateMe: (patch: { chesscomUsername?: string | null; password?: string }) =>
+    request<{ user: Me; warning?: string }>('PATCH', '/api/me', patch),
+  unlinkLichess: () => request<{ user: Me }>('DELETE', '/api/me/lichess'),
   logout: () => request<{ ok: true }>('POST', '/api/auth/logout'),
   repertoires: () => request<RepertoireSummary[]>('GET', '/api/repertoires'),
   createRepertoire: (name: string, color: Color) => request<RepertoireSummary>('POST', '/api/repertoires', { name, color }),

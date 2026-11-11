@@ -1,10 +1,11 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Route, Routes } from 'react-router-dom';
+import { Link, Route, Routes } from 'react-router-dom';
 import { api, ApiError } from './api';
 import { Login } from './pages/Login';
 import { RepertoireEditor } from './pages/RepertoireEditor';
 import { RepertoireList } from './pages/RepertoireList';
-import { ratingFor, useSettings, type SpeedChoice } from './settings';
+import { Settings } from './pages/Settings';
+import { useSettings, type SpeedChoice } from './settings';
 
 export function App() {
   const qc = useQueryClient();
@@ -18,7 +19,7 @@ export function App() {
   return (
     <div className="app">
       <header className="topbar">
-        <strong>Prepa-cahier</strong>
+        <Link to="/" className="brand">Prepa-cahier</Link>
         <div className="spacer" />
         <label title="Time control used for the Lichess statistics">
           Stats for{' '}
@@ -28,9 +29,10 @@ export function App() {
             <option value="both">Blitz + Rapid</option>
           </select>
         </label>
-        <span className="muted">
-          {me.data.username} {me.data.lichess ? `(${ratingFor(me.data.perfs, speed)})` : '(guest)'}
-        </span>
+        <Link to="/settings" title="Settings and linked accounts">
+          {me.data.username}
+          {me.data.guest && ' (guest)'}
+        </Link>
         <button
           className="small"
           onClick={async () => {
@@ -46,6 +48,7 @@ export function App() {
         <Routes>
           <Route path="/" element={<RepertoireList />} />
           <Route path="/r/:id" element={<RepertoireEditor me={me.data} />} />
+          <Route path="/settings" element={<Settings me={me.data} />} />
         </Routes>
       </main>
     </div>
