@@ -4,7 +4,7 @@
  *   pnpm --filter server stats:import <file>...
  *
  * Accepted files (optionally gzipped): a seed ({ version: 1, entries }) or a JSON object mapping
- * Lichess explorer query strings to explorer answers (e.g. alphaechecs' .lichess-cache.json).
+ * Lichess explorer query strings to explorer answers (e.g. a .lichess-cache.json written by an explorer script).
  */
 import { readFileSync, statSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';

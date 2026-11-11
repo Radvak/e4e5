@@ -23,8 +23,8 @@ move. Several moves there are flagged as a "conflict".
 
 Position statistics live in `position_stats`: one row per (position, speeds, rating buckets),
 shared by all users. It grows with every live Lichess request and with imported seeds
-(`apps/server/seed/*.json.gz`, imported once per file at startup). The first seed comes from the
-alphaechecs cache: 2,578 positions, blitz+rapid+classical, 1600–1999. When live data cannot be
+(`apps/server/seed/*.json.gz`, imported once per file at startup). The first seed comes from a
+previous explorer cache: 2,578 positions, blitz+rapid+classical, 1600–1999. When live data cannot be
 fetched (no token, rate limit, network), the closest stored combination is shown, labelled as such.
 
 Tables: `users` (login + password hash, Lichess id/token/ratings, Chess.com username/ratings), `sessions`, `repertoires` (name, color),
@@ -58,7 +58,7 @@ Planned: `review_cards` (FSRS state per user move), `game_syncs`, `inbox_items`.
 - [x] **3c. Accounts + Chess.com profile**: password accounts, link/unlink Lichess, Chess.com
   username and ratings in Settings, optional server-wide `LICHESS_APP_TOKEN` so users without a
   linked Lichess account still get statistics.
-- [x] **3e. Stored position statistics**: `position_stats` table, seed from alphaechecs,
+- [x] **3e. Stored position statistics**: `position_stats` table, initial seed,
   fallback to the closest stored range, import/export scripts.
 - [ ] **3f. Grow the statistics**: background prefetch of repertoire positions (by reach
   probability) for the common ranges, and periodic seed exports.

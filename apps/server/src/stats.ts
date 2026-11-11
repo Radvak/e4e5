@@ -155,8 +155,8 @@ export interface StatsSeed {
 }
 
 /**
- * Entries from a JSON object mapping explorer query strings to explorer answers, as cached by
- * the alphaechecs scripts (`play=e2e4,e7e5…` or `fen=…` queries).
+ * Entries from a JSON object mapping explorer query strings to explorer answers, e.g. a cache
+ * written by an explorer script (`play=e2e4,e7e5…` or `fen=…` queries).
  */
 export function entriesFromQueryCache(cache: Record<string, ExplorerResponse>, fetchedAt: number): StatsEntry[] {
   const entries: StatsEntry[] = [];
