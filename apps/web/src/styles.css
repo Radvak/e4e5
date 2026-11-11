@@ -48,9 +48,9 @@ main { padding: 16px; }
 .board { width: 100%; aspect-ratio: 1; }
 .nav { display: flex; justify-content: center; gap: 8px; margin-top: 8px; }
 .legend { text-align: center; font-size: 0.85em; }
-.c-green { color: #15781b; font-weight: bold; }
-.c-yellow { color: #e68f00; font-weight: bold; }
-.c-blue { color: #003088; font-weight: bold; filter: brightness(2); }
+.legend { display: flex; justify-content: center; gap: 16px; flex-wrap: wrap; }
+.legend-item { display: inline-flex; align-items: center; gap: 6px; }
+.swatch { display: inline-block; width: 22px; height: 6px; border-radius: 3px; }
 
 .panel { background: var(--panel); border-radius: 6px; padding: 10px 14px; margin-top: 12px; }
 .panel h3 { margin: 0 0 8px; font-size: 1em; }
@@ -84,3 +84,9 @@ details.panel summary { cursor: pointer; font-weight: bold; }
 .tabs button.active { background: var(--accent); border-color: var(--accent); }
 .settings { max-width: 640px; }
 .settings .row input { flex: 1; }
+.moves-path .unsaved { color: var(--warn); font-style: italic; }
+.moves-path .current { background: #3a3835; border-radius: 3px; font-weight: bold; }
+.moves-path .ahead { opacity: 0.55; }
+.draft { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+.draft .warning { flex-basis: 100%; margin: 0; }
+button.primary { background: var(--accent); border-color: var(--accent); }

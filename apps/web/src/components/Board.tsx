@@ -1,11 +1,12 @@
 import { positionFromFen } from '@prepa-cahier/core';
 import { Chessground } from 'chessground';
 import type { Api } from 'chessground/api';
-import type { DrawShape } from 'chessground/draw';
+import type { DrawBrushes, DrawShape } from 'chessground/draw';
 import type { Key } from 'chessground/types';
 import { parseSquare } from 'chessops';
 import { chessgroundDests } from 'chessops/compat';
 import { useEffect, useRef } from 'react';
+import { BRUSHES } from './arrows';
 import 'chessground/assets/chessground.base.css';
 import 'chessground/assets/chessground.brown.css';
 import 'chessground/assets/chessground.cburnett.css';
@@ -28,7 +29,12 @@ export function Board({ fen, orientation, lastMove, shapes = NO_SHAPES, onMove }
   onMoveRef.current = onMove;
 
   useEffect(() => {
-    cg.current = Chessground(el.current!, { animation: { duration: 150 }, coordinates: true });
+    cg.current = Chessground(el.current!, {
+      animation: { duration: 150 },
+      coordinates: true,
+      // chessground deep-merges config: these brushes are added to its default ones.
+      drawable: { brushes: BRUSHES as unknown as DrawBrushes },
+    });
     return () => cg.current?.destroy();
   }, []);
 

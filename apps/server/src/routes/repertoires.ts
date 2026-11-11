@@ -2,6 +2,9 @@ import { randomUUID } from 'node:crypto';
 import {
   pgnToMoves,
   playUci,
+  playUciOn,
+  positionFromFen,
+  START_FEN,
   Repertoire,
   repertoireToPgn,
   type Color,
@@ -23,6 +26,10 @@ const patchMoveBody = z.object({
   isMain: z.boolean().optional(),
 });
 const importBody = z.object({ pgn: z.string().min(1).max(5_000_000) });
+const lineBody = z.object({
+  /** The variation from the initial position, in UCI. */
+  ucis: z.array(z.string().regex(/^[a-h][1-8][a-h][1-8][qrbn]?$/)).min(1).max(300),
+});
 
 type Params = { id: string };
 type MoveParams = { id: string; moveId: string };
@@ -115,6 +122,33 @@ export async function repertoireRoutes(app: FastifyInstance) {
       .from(repMoves)
       .where(and(eq(repMoves.repertoireId, rep.id), eq(repMoves.fromFen, played.fromFen), eq(repMoves.uci, played.uci)));
     return existing;
+  });
+
+  /**
+   * Saves a variation: every move of the line (from the initial position) that is not in the
+   * repertoire yet is added. A new move is the main line only where the position had no move.
+   */
+  app.post<{ Params: Params }>('/api/repertoires/:id/lines', async (req, reply) => {
+    const rep = await ownRepertoire(req, reply);
+    if (!rep) return;
+    const { ucis } = lineBody.parse(req.body);
+    const pos = positionFromFen(START_FEN);
+    const played = [];
+    for (const uci of ucis) {
+      const move = playUciOn(pos, uci);
+      if (!move) return reply.code(400).send({ error: `Illegal move ${uci} at ply ${played.length + 1}` });
+      played.push(move);
+    }
+    const graph = new Repertoire(rep.color, await loadMoves(rep.id));
+    const rows = [];
+    for (const m of played) {
+      if (graph.has(m.fromFen, m.uci)) continue;
+      const isMain = graph.movesAt(m.fromFen).length === 0;
+      graph.add(m);
+      rows.push({ ...m, repertoireId: rep.id, isMain, source: 'manual' as const });
+    }
+    if (rows.length) await db.insert(repMoves).values(rows).onConflictDoNothing();
+    return { added: rows.length, conflicts: graph.conflicts().length };
   });
 
   app.patch<{ Params: MoveParams }>('/api/repertoires/:id/moves/:moveId', async (req, reply) => {

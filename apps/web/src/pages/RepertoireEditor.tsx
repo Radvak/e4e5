@@ -1,32 +1,41 @@
-import { Repertoire, START_FEN, totalGames, turnOf } from '@prepa-cahier/core';
+import { playUci, Repertoire, START_FEN, totalGames, turnOf, type PlayedMove } from '@prepa-cahier/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { DrawShape } from 'chessground/draw';
 import type { Key } from 'chessground/types';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api, type ImportResult, type Me, type StoredMove } from '../api';
+import { ARROWS, type ArrowKind } from '../components/arrows';
 import { Board } from '../components/Board';
 import { ExplorerPanel } from '../components/ExplorerPanel';
 import { explorerParams, useSettings } from '../settings';
+
+/** A move of the line on the board; saved or not is derived from the repertoire. */
+type LineMove = PlayedMove;
 
 export function RepertoireEditor({ me }: { me: Me }) {
   const { id = '' } = useParams();
   const qc = useQueryClient();
   const { speed, range } = useSettings();
   const { data, isLoading, error } = useQuery({ queryKey: ['repertoire', id], queryFn: () => api.repertoire(id) });
-  const [path, setPath] = useState<StoredMove[]>([]);
+  /**
+   * The line on the board and the cursor in it. Moves played on the board are a draft: they are
+   * only added to the repertoire with "Save variation". Going back keeps the line, so you can
+   * step forward through it again.
+   */
+  const [line, setLine] = useState<LineMove[]>([]);
+  const [ply, setPly] = useState(0);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const rep = useMemo(() => new Repertoire(data?.color ?? 'white', data?.moves ?? []), [data]);
-  const fen = path.at(-1)?.toFen ?? START_FEN;
+  const stored = useMemo(() => new Map((data?.moves ?? []).map((m) => [`${m.fromFen} ${m.uci}`, m])), [data]);
+  const storedMove = (m: LineMove) => stored.get(`${m.fromFen} ${m.uci}`);
+  const fen = line[ply - 1]?.toFen ?? START_FEN;
   const here = rep.movesAt(fen) as StoredMove[];
-
-  // Keep the path valid after deletions.
-  useEffect(() => {
-    if (!data) return;
-    const ids = new Set(data.moves.map((m) => m.id));
-    const firstMissing = path.findIndex((m) => !ids.has(m.id));
-    if (firstMissing >= 0) setPath(path.slice(0, firstMissing));
-  }, [data, path]);
+  const shown = line.slice(0, ply);
+  const unsaved = shown.filter((m) => !rep.has(m.fromFen, m.uci));
+  /** Draft moves of my side where the repertoire already has another move. */
+  const replacing = unsaved.filter((m) => rep.isMyTurn(m.fromFen) && rep.movesAt(m.fromFen).length > 0);
 
   const ex = explorerParams(me, speed, range);
   const explorer = useQuery({
@@ -37,11 +46,11 @@ export function RepertoireEditor({ me }: { me: Me }) {
   });
 
   const refresh = () => qc.invalidateQueries({ queryKey: ['repertoire', id] });
-  const addMove = useMutation({
-    mutationFn: (uci: string) => api.addMove(id, fen, uci),
-    onSuccess: async (move) => {
+  const saveLine = useMutation({
+    mutationFn: () => api.saveLine(id, shown.map((m) => m.uci)),
+    onSuccess: async (r) => {
       await refresh();
-      setPath((p) => [...p, move]);
+      setNotice(`${r.added} move(s) saved.`);
     },
   });
   const deleteMove = useMutation({ mutationFn: (m: StoredMove) => api.deleteMove(id, m.id), onSuccess: refresh });
@@ -51,44 +60,78 @@ export function RepertoireEditor({ me }: { me: Me }) {
     onSuccess: refresh,
   });
 
+  const goTo = (n: number) => {
+    setPly(Math.max(0, Math.min(n, line.length)));
+    setNotice(null);
+  };
+
+  /** Plays a move at the cursor: follows the line if it is the next move, else branches off. */
   const play = useCallback(
     (uci: string) => {
-      const existing = here.find((m) => m.uci === uci);
-      if (existing) setPath((p) => [...p, existing]);
-      else addMove.mutate(uci);
+      setNotice(null);
+      if (line[ply]?.uci === uci) return setPly(ply + 1);
+      const move = playUci(fen, uci);
+      if (!move) return;
+      setLine([...line.slice(0, ply), move]);
+      setPly(ply + 1);
     },
-    [here, addMove],
+    [line, ply, fen],
   );
+
+  /** Next move: the line's, else the repertoire main line. */
+  const forward = useCallback(() => {
+    if (line[ply]) return setPly(ply + 1);
+    if (here[0]) play(here[0].uci);
+  }, [line, ply, here, play]);
+
+  /** Drops the unsaved moves: back to the longest saved part of the line. */
+  const discard = () => {
+    const firstUnsaved = line.findIndex((m) => !rep.has(m.fromFen, m.uci));
+    if (firstUnsaved < 0) return;
+    setLine(line.slice(0, firstUnsaved));
+    setPly(Math.min(ply, firstUnsaved));
+  };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.target as HTMLElement).closest('textarea, input')) return;
-      if (e.key === 'ArrowLeft') setPath((p) => p.slice(0, -1));
-      if (e.key === 'ArrowRight' && here[0]) setPath((p) => [...p, here[0]!]);
-      if (e.key === 'Home') setPath([]);
+      if (e.key === 'ArrowLeft') goTo(ply - 1);
+      if (e.key === 'ArrowRight') forward();
+      if (e.key === 'Home') goTo(0);
+      if (e.key === 'End') goTo(line.length);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [here]);
+  });
 
+  // Warn before leaving the page with an unsaved variation.
+  const hasDraft = line.some((m) => !rep.has(m.fromFen, m.uci));
+  useEffect(() => {
+    if (!hasDraft) return;
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [hasDraft]);
+
+  /**
+   * Arrows: green = move in the repertoire (thicker = more popular), orange = popular move
+   * (3%+ of games) that is not in the repertoire.
+   */
   const shapes = useMemo<DrawShape[]>(() => {
-    const out: DrawShape[] = [];
     const ed = explorer.data?.data;
     const total = ed ? totalGames(ed) : 0;
-    const drawn = new Set<string>();
+    const share = new Map((ed?.moves ?? []).map((m) => [m.uci, total ? totalGames(m) / total : 0]));
+    const width = (s: number) => Math.round(4 + 12 * s);
+    const arrow = (uci: string, brush: ArrowKind, lineWidth: number): DrawShape => ({
+      orig: uci.slice(0, 2) as Key,
+      dest: uci.slice(2, 4) as Key,
+      brush,
+      modifiers: { lineWidth },
+    });
+    const out = here.map((m) => arrow(m.uci, 'repertoire', width(share.get(m.uci) ?? 0)));
     for (const m of ed?.moves.slice(0, 6) ?? []) {
-      const share = total ? totalGames(m) / total : 0;
-      if (share < 0.03) continue;
-      drawn.add(m.uci);
-      out.push({
-        orig: m.uci.slice(0, 2) as Key,
-        dest: m.uci.slice(2, 4) as Key,
-        brush: rep.has(fen, m.uci) ? 'green' : 'yellow',
-        modifiers: { lineWidth: Math.round(4 + 12 * share) },
-      });
-    }
-    for (const m of here) {
-      if (!drawn.has(m.uci)) out.push({ orig: m.uci.slice(0, 2) as Key, dest: m.uci.slice(2, 4) as Key, brush: 'blue' });
+      const s = share.get(m.uci) ?? 0;
+      if (s >= 0.03 && !rep.has(fen, m.uci)) out.push(arrow(m.uci, 'popular', width(s)));
     }
     return out;
   }, [explorer.data, rep, fen, here]);
@@ -97,7 +140,8 @@ export function RepertoireEditor({ me }: { me: Me }) {
   if (error || !data) return <p className="error">Could not load the repertoire.</p>;
 
   const myTurn = turnOf(fen) === data.color;
-  const last = path.at(-1);
+  const last = line[ply - 1];
+  const lastStored = last ? storedMove(last) : undefined;
   const conflicts = rep.conflicts();
 
   return (
@@ -105,13 +149,19 @@ export function RepertoireEditor({ me }: { me: Me }) {
       <div className="editor-board">
         <Board fen={fen} orientation={data.color} lastMove={last?.uci} shapes={shapes} onMove={play} />
         <div className="nav">
-          <button onClick={() => setPath([])} title="Start (Home)">⏮</button>
-          <button onClick={() => setPath((p) => p.slice(0, -1))} title="Back (←)">◀</button>
-          <button onClick={() => here[0] && setPath((p) => [...p, here[0]!])} title="Main line (→)">▶</button>
+          <button onClick={() => goTo(0)} title="Start (Home)">⏮</button>
+          <button onClick={() => goTo(ply - 1)} title="Back (←)">◀</button>
+          <button onClick={forward} title="Forward (→)">▶</button>
+          <button onClick={() => goTo(line.length)} title="End of the line (End)">⏭</button>
         </div>
         <p className="legend muted">
-          Arrows: <span className="c-green">in repertoire</span> · <span className="c-yellow">popular, not prepared</span> ·{' '}
-          <span className="c-blue">prepared, rarely played</span>
+          {(Object.keys(ARROWS) as ArrowKind[]).map((k) => (
+            <span key={k} className="legend-item">
+              <span className="swatch" style={{ background: ARROWS[k].color }} />
+              {ARROWS[k].label}
+            </span>
+          ))}
+          <span className="legend-item">thicker = played more often</span>
         </p>
       </div>
 
@@ -128,38 +178,64 @@ export function RepertoireEditor({ me }: { me: Me }) {
 
         <section className="panel">
           <div className="moves-path">
-            <button className="link" onClick={() => setPath([])}>Start</button>
-            {path.map((m, i) => (
-              <button key={i} className="link" onClick={() => setPath(path.slice(0, i + 1))}>
+            <button className={`link ${ply === 0 ? 'current' : ''}`} onClick={() => goTo(0)}>Start</button>
+            {line.map((m, i) => (
+              <button
+                key={i}
+                className={['link', rep.has(m.fromFen, m.uci) ? '' : 'unsaved', i === ply - 1 ? 'current' : '', i >= ply ? 'ahead' : '']
+                  .filter(Boolean)
+                  .join(' ')}
+                onClick={() => goTo(i + 1)}
+                title={rep.has(m.fromFen, m.uci) ? 'In your repertoire' : 'Not saved'}
+              >
                 {i % 2 === 0 ? `${i / 2 + 1}. ` : ''}{m.san}
               </button>
             ))}
           </div>
-          {last && <CommentBox key={last.id} move={last} onSave={(comment) => setComment.mutate({ m: last, comment })} />}
+
+          {unsaved.length > 0 && (
+            <div className="draft">
+              <button className="primary" disabled={saveLine.isPending} onClick={() => saveLine.mutate()}>
+                Save variation ({unsaved.length} new move{unsaved.length > 1 ? 's' : ''})
+              </button>
+              <button className="small" onClick={discard}>Discard</button>
+              {replacing.length > 0 && (
+                <p className="warning small-text">
+                  ⚠ At {replacing.map((m) => m.san).join(', ')} you already have another move prepared: saving keeps both.
+                </p>
+              )}
+            </div>
+          )}
+          {notice && <p className="muted small-text">{notice}</p>}
+          {saveLine.error && <p className="error">{saveLine.error.message}</p>}
+          {lastStored && (
+            <CommentBox key={lastStored.id} move={lastStored} onSave={(comment) => setComment.mutate({ m: lastStored, comment })} />
+          )}
         </section>
 
         <section className="panel">
           <h3>{myTurn ? 'Your move' : 'Opponent replies'} in your repertoire</h3>
-          {here.length === 0 && <p className="muted">Nothing prepared yet: play a move on the board or pick one below.</p>}
+          {here.length === 0 && (
+            <p className="muted">Nothing prepared here. Play moves on the board, then “Save variation”.</p>
+          )}
           {myTurn && here.length > 1 && <p className="warning">Several moves prepared for your side here.</p>}
           <ul className="rep-moves">
             {here.map((m) => (
               <li key={m.id}>
-                <button className="link" onClick={() => setPath([...path, m])}>{m.san}</button>
+                <button className="link" onClick={() => play(m.uci)}>{m.san}</button>
                 {m.isMain ? <span className="muted"> main</span> : (
                   <button className="small" onClick={() => setMain.mutate(m)}>make main</button>
                 )}
                 {m.comment && <span className="comment"> {m.comment}</span>}
                 <button
                   className="small danger"
-                  onClick={() => confirm(`Delete ${m.san} and the lines after it?`) && deleteMove.mutate(m)}
+                  onClick={() => confirm(`Delete ${m.san} and the lines after it from the repertoire?`) && deleteMove.mutate(m)}
                 >
                   delete
                 </button>
               </li>
             ))}
           </ul>
-          {addMove.error && <p className="error">{String(addMove.error)}</p>}
         </section>
 
         <ExplorerPanel

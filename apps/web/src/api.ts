@@ -73,7 +73,8 @@ export const api = {
   createRepertoire: (name: string, color: Color) => request<RepertoireSummary>('POST', '/api/repertoires', { name, color }),
   deleteRepertoire: (id: string) => request<{ ok: true }>('DELETE', `/api/repertoires/${id}`),
   repertoire: (id: string) => request<RepertoireDetail>('GET', `/api/repertoires/${id}`),
-  addMove: (id: string, fromFen: string, uci: string) => request<StoredMove>('POST', `/api/repertoires/${id}/moves`, { fromFen, uci }),
+  saveLine: (id: string, ucis: string[]) =>
+    request<{ added: number; conflicts: number }>('POST', `/api/repertoires/${id}/lines`, { ucis }),
   updateMove: (id: string, moveId: number, patch: { comment?: string | null; isMain?: boolean }) =>
     request<StoredMove>('PATCH', `/api/repertoires/${id}/moves/${moveId}`, patch),
   deleteMove: (id: string, moveId: number) => request<{ ok: true; pruned: number }>('DELETE', `/api/repertoires/${id}/moves/${moveId}`),
