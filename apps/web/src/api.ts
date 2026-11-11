@@ -1,0 +1,51 @@
+import type { Color, ExplorerResponse, RepMove } from '@prepa-cahier/core';
+
+export class ApiError extends Error {
+  constructor(public status: number, message: string) {
+    super(message);
+  }
+}
+
+async function request<T>(method: string, url: string, body?: unknown): Promise<T> {
+  const res = await fetch(url, {
+    method,
+    headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+    credentials: 'same-origin',
+  });
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new ApiError(res.status, err.error ?? res.statusText);
+  }
+  return res.json() as Promise<T>;
+}
+
+export type Perfs = Record<string, { rating: number; games: number; prov?: boolean }>;
+export interface Me { id: string; username: string; perfs: Perfs | null; /** false for guests */ lichess: boolean }
+export interface RepertoireSummary { id: string; name: string; color: Color; createdAt: string }
+export interface StoredMove extends RepMove { id: number; source: string }
+export interface RepertoireDetail extends RepertoireSummary { moves: StoredMove[] }
+export interface ImportResult {
+  games: number; added: number; duplicates: number; unreachable: number; errors: string[]; conflicts: number;
+}
+
+export const api = {
+  me: () => request<Me>('GET', '/api/me'),
+  authConfig: () => request<{ guestLogin: boolean }>('GET', '/api/auth/config'),
+  guestLogin: (username: string) => request<{ ok: true }>('POST', '/api/auth/guest', { username }),
+  logout: () => request<{ ok: true }>('POST', '/api/auth/logout'),
+  repertoires: () => request<RepertoireSummary[]>('GET', '/api/repertoires'),
+  createRepertoire: (name: string, color: Color) => request<RepertoireSummary>('POST', '/api/repertoires', { name, color }),
+  deleteRepertoire: (id: string) => request<{ ok: true }>('DELETE', `/api/repertoires/${id}`),
+  repertoire: (id: string) => request<RepertoireDetail>('GET', `/api/repertoires/${id}`),
+  addMove: (id: string, fromFen: string, uci: string) => request<StoredMove>('POST', `/api/repertoires/${id}/moves`, { fromFen, uci }),
+  updateMove: (id: string, moveId: number, patch: { comment?: string | null; isMain?: boolean }) =>
+    request<StoredMove>('PATCH', `/api/repertoires/${id}/moves/${moveId}`, patch),
+  deleteMove: (id: string, moveId: number) => request<{ ok: true; pruned: number }>('DELETE', `/api/repertoires/${id}/moves/${moveId}`),
+  importPgn: (id: string, pgn: string) => request<ImportResult>('POST', `/api/repertoires/${id}/import-pgn`, { pgn }),
+  explorer: (fen: string, speeds: string[], ratings: number[]) =>
+    request<ExplorerResponse>(
+      'GET',
+      `/api/explorer?${new URLSearchParams({ fen, speeds: speeds.join(','), ratings: ratings.join(',') })}`,
+    ),
+};

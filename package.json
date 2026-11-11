@@ -1,0 +1,14 @@
+{
+  "name": "prepa-cahier",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.13.1",
+  "scripts": {
+    "dev": "pnpm -r --parallel dev",
+    "build": "pnpm --filter web build",
+    "start": "pnpm --filter server start",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
+    "db:generate": "pnpm --filter server db:generate"
+  }
+}
