@@ -2,9 +2,14 @@ import { bucketsFor, RATING_BUCKETS, type Speed } from '@prepa-cahier/core';
 import { createContext, useContext, useState, type ReactNode } from 'react';
 import type { Me } from './api';
 
-export type SpeedChoice = 'blitz' | 'rapid' | 'both';
+export type SpeedChoice = 'blitz' | 'rapid' | 'both' | 'all';
 
-const SPEEDS: Record<SpeedChoice, Speed[]> = { blitz: ['blitz'], rapid: ['rapid'], both: ['blitz', 'rapid'] };
+export const SPEEDS: Record<SpeedChoice, Speed[]> = {
+  blitz: ['blitz'],
+  rapid: ['rapid'],
+  both: ['blitz', 'rapid'],
+  all: ['blitz', 'rapid', 'classical'],
+};
 
 /** Lichess explorer rating range, as [lowest bucket, highest bucket] (e.g. [1600, 1800] = 1600-1999). */
 export type RatingRange = [number, number];

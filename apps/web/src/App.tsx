@@ -27,6 +27,7 @@ export function App() {
             <option value="blitz">Blitz</option>
             <option value="rapid">Rapid</option>
             <option value="both">Blitz + Rapid</option>
+            <option value="all">Blitz + Rapid + Classical</option>
           </select>
         </label>
         <Link to="/settings" title="Settings and linked accounts">

@@ -34,7 +34,6 @@ export function RepertoireEditor({ me }: { me: Me }) {
     queryFn: () => api.explorer(fen, ex.speeds, ex.ratings),
     staleTime: Infinity,
     retry: false,
-    enabled: me.explorer,
   });
 
   const refresh = () => qc.invalidateQueries({ queryKey: ['repertoire', id] });
@@ -74,7 +73,7 @@ export function RepertoireEditor({ me }: { me: Me }) {
 
   const shapes = useMemo<DrawShape[]>(() => {
     const out: DrawShape[] = [];
-    const ed = explorer.data;
+    const ed = explorer.data?.data;
     const total = ed ? totalGames(ed) : 0;
     const drawn = new Set<string>();
     for (const m of ed?.moves.slice(0, 6) ?? []) {
@@ -163,18 +162,10 @@ export function RepertoireEditor({ me }: { me: Me }) {
           {addMove.error && <p className="error">{String(addMove.error)}</p>}
         </section>
 
-        {!me.explorer && (
-          <section className="panel">
-            <h3>Lichess statistics</h3>
-            <p className="muted">
-              Connect your Lichess account in <Link to="/settings">Settings</Link> to see what players of your level play here.
-            </p>
-          </section>
-        )}
-        {me.explorer && <ExplorerPanel
+        <ExplorerPanel
           fen={fen}
           rep={rep}
-          data={explorer.data}
+          stats={explorer.data}
           error={explorer.error}
           loading={explorer.isLoading}
           ratings={ex.ratings}
@@ -186,7 +177,7 @@ export function RepertoireEditor({ me }: { me: Me }) {
                 : `Default: around 1500 (no rating known).`
           }
           onPick={play}
-        />}
+        />
 
         <PgnImport repertoireId={id} onDone={refresh} />
       </div>

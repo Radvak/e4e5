@@ -1,4 +1,5 @@
-import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import type { ExplorerResponse } from '@prepa-cahier/core';
+import { index, integer, primaryKey, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 const createdAt = () =>
   integer('created_at', { mode: 'timestamp_ms' }).notNull().$defaultFn(() => new Date());
@@ -67,11 +68,30 @@ export const repMoves = sqliteTable(
   ],
 );
 
-/** Explorer answers shared by all users (saves Lichess rate limit). */
-export const explorerCache = sqliteTable('explorer_cache', {
-  key: text('key').primaryKey(),
-  data: text('data', { mode: 'json' }).notNull(),
-  fetchedAt: integer('fetched_at', { mode: 'timestamp_ms' }).notNull(),
+/**
+ * Lichess explorer statistics of a position for one combination of speeds and rating buckets,
+ * shared by all users. Filled by live explorer requests and by imported seeds; it only grows.
+ */
+export const positionStats = sqliteTable(
+  'position_stats',
+  {
+    /** Position key (FEN without move counters, see core fenKey). */
+    fen: text('fen').notNull(),
+    /** Sorted, comma-separated: "blitz,rapid". */
+    speeds: text('speeds').notNull(),
+    /** Sorted, comma-separated rating buckets: "1600,1800". */
+    ratings: text('ratings').notNull(),
+    data: text('data', { mode: 'json' }).$type<ExplorerResponse>().notNull(),
+    fetchedAt: integer('fetched_at', { mode: 'timestamp_ms' }).notNull(),
+    source: text('source', { enum: ['lichess', 'seed', 'import'] }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.fen, t.speeds, t.ratings] })],
+);
+
+/** Seed files of `seed/` already imported into position_stats. */
+export const seedImports = sqliteTable('seed_imports', {
+  name: text('name').primaryKey(),
+  importedAt: integer('imported_at', { mode: 'timestamp_ms' }).notNull(),
 });
 
 export type User = typeof users.$inferSelect;

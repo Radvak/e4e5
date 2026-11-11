@@ -8,7 +8,9 @@
     "start": "tsx src/index.ts",
     "test": "vitest run --passWithNoTests",
     "typecheck": "tsc --noEmit",
-    "db:generate": "drizzle-kit generate"
+    "db:generate": "drizzle-kit generate",
+    "stats:import": "tsx --env-file-if-exists=../../.env src/scripts/import-stats.ts",
+    "stats:export-seed": "tsx --env-file-if-exists=../../.env src/scripts/export-seed.ts"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.0",

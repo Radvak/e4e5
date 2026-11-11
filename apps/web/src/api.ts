@@ -1,7 +1,25 @@
 import type { Color, ExplorerResponse, RepMove } from '@prepa-cahier/core';
 
+export interface StatsMeta {
+  speeds: string[];
+  ratings: number[];
+  /** false: closest stored combination, not the one asked for. */
+  exact: boolean;
+  fetchedAt: string;
+  source: 'lichess' | 'seed' | 'import';
+  reason?: 'no-token' | 'rate-limited' | 'unreachable';
+}
+export interface Stats {
+  data: ExplorerResponse;
+  meta: StatsMeta;
+}
+
 export class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  constructor(
+    public status: number,
+    message: string,
+    public body: Record<string, unknown> = {},
+  ) {
     super(message);
   }
 }
@@ -15,7 +33,7 @@ async function request<T>(method: string, url: string, body?: unknown): Promise<
   });
   if (!res.ok) {
     const err = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new ApiError(res.status, err.error ?? res.statusText);
+    throw new ApiError(res.status, err.error ?? res.statusText, err);
   }
   return res.json() as Promise<T>;
 }
@@ -30,7 +48,7 @@ export interface Me {
   login: string | null;
   lichess: { username: string; perfs: Perfs | null } | null;
   chesscom: { username: string; ratings: ChesscomRatings | null } | null;
-  /** Explorer statistics available (own Lichess token or the app's). */
+  /** Live explorer statistics available (own Lichess token or the app's); stored ones are always served. */
   explorer: boolean;
 }
 export interface RepertoireSummary { id: string; name: string; color: Color; createdAt: string }
@@ -61,7 +79,7 @@ export const api = {
   deleteMove: (id: string, moveId: number) => request<{ ok: true; pruned: number }>('DELETE', `/api/repertoires/${id}/moves/${moveId}`),
   importPgn: (id: string, pgn: string) => request<ImportResult>('POST', `/api/repertoires/${id}/import-pgn`, { pgn }),
   explorer: (fen: string, speeds: string[], ratings: number[]) =>
-    request<ExplorerResponse>(
+    request<Stats>(
       'GET',
       `/api/explorer?${new URLSearchParams({ fen, speeds: speeds.join(','), ratings: ratings.join(',') })}`,
     ),

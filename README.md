@@ -31,6 +31,16 @@ pnpm typecheck
 There is no Lichess app to register: OAuth uses PKCE, and the client id is just a name.
 Set `LICHESS_APP_TOKEN` (see `.env.example`) so users without a linked Lichess account get statistics.
 
+## Position statistics
+
+Lichess explorer answers are stored in the `position_stats` table and reused by every user.
+Bundled seeds (`apps/server/seed/*.json.gz`) are imported at startup, once per file.
+
+```bash
+pnpm --filter server stats:import ../alphaechecs/.lichess-cache.json   # explorer cache or seed file
+pnpm --filter server stats:export-seed my-seed-name                   # table -> seed/my-seed-name.json.gz
+```
+
 ## Deployment
 
 The app runs as a single container. The server also serves the built web app.

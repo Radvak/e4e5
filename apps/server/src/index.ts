@@ -10,6 +10,7 @@ import { runMigrations } from './db/client.js';
 import { env } from './env.js';
 import { explorerRoutes } from './routes/explorer.js';
 import { repertoireRoutes } from './routes/repertoires.js';
+import { importSeeds } from './stats.js';
 
 await runMigrations();
 
@@ -24,6 +25,8 @@ app.setErrorHandler((err, _req, reply) => {
   const status = (err as { statusCode?: number }).statusCode ?? 500;
   return reply.code(status).send({ error: status < 500 ? (err as Error).message : 'Internal error' });
 });
+
+await importSeeds(app.log);
 
 app.get('/api/health', async () => ({ ok: true }));
 await app.register(authRoutes);

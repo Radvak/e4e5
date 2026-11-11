@@ -1,7 +1,11 @@
-CREATE TABLE `explorer_cache` (
-	`key` text PRIMARY KEY NOT NULL,
+CREATE TABLE `position_stats` (
+	`fen` text NOT NULL,
+	`speeds` text NOT NULL,
+	`ratings` text NOT NULL,
 	`data` text NOT NULL,
-	`fetched_at` integer NOT NULL
+	`fetched_at` integer NOT NULL,
+	`source` text NOT NULL,
+	PRIMARY KEY(`fen`, `speeds`, `ratings`)
 );
 --> statement-breakpoint
 CREATE TABLE `rep_moves` (
@@ -31,6 +35,11 @@ CREATE TABLE `repertoires` (
 );
 --> statement-breakpoint
 CREATE INDEX `repertoires_user` ON `repertoires` (`user_id`);--> statement-breakpoint
+CREATE TABLE `seed_imports` (
+	`name` text PRIMARY KEY NOT NULL,
+	`imported_at` integer NOT NULL
+);
+--> statement-breakpoint
 CREATE TABLE `sessions` (
 	`id` text PRIMARY KEY NOT NULL,
 	`user_id` text NOT NULL,
