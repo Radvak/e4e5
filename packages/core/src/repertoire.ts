@@ -2,8 +2,7 @@
  * A repertoire is a graph of positions (keyed by fenKey) linked by moves. A graph rather than
  * a tree: transpositions merge into the same node automatically.
  *
- * Rule of a healthy repertoire: in positions where it is "my" turn there is exactly one move;
- * the opponent may have any number of moves.
+ * Any position can have several moves, for either side (e.g. two prepared answers for me).
  */
 import { START_FEN, turnOf, type Color } from './position.js';
 
@@ -15,11 +14,6 @@ export interface RepMove {
   comment?: string | null;
   nags?: number[] | null;
   isMain?: boolean | null;
-}
-
-export interface Conflict {
-  fen: string;
-  moves: RepMove[];
 }
 
 export class Repertoire {
@@ -65,15 +59,6 @@ export class Repertoire {
     let n = 0;
     for (const list of this.byFen.values()) n += list.length;
     return n;
-  }
-
-  /** Positions where I have more than one move prepared. */
-  conflicts(): Conflict[] {
-    const out: Conflict[] = [];
-    for (const [fen, moves] of this.byFen) {
-      if (moves.length > 1 && this.isMyTurn(fen)) out.push({ fen, moves });
-    }
-    return out;
   }
 
   /** Position keys reachable from `root` (the initial position by default). */

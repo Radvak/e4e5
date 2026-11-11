@@ -18,8 +18,8 @@ with their Lichess account.
 ## Data model
 
 The repertoire is a **graph of positions** (FEN without move counters) linked by moves, so
-transpositions merge. At positions where it is the user's turn there should be exactly one
-move. Several moves there are flagged as a "conflict".
+transpositions merge. Any position may have several moves, including for the user's side
+(several prepared answers are fine; training accepts any of them).
 
 Position statistics live in `position_stats`: one row per (position, speeds, rating buckets),
 shared by all users. It grows with every live Lichess request and with imported seeds
@@ -51,7 +51,7 @@ Planned: `review_cards` (FSRS state per user move), `game_syncs`, `inbox_items`.
 
 - [x] **0. Setup**: monorepo, configs, schema, Docker.
 - [x] **1. Repertoire core**: graph, board editor, add/delete moves, main line, comments,
-  PGN import (merge, conflicts, orphans) and export. Unit tests in `packages/core`.
+  PGN import (merge, orphans) and export. Unit tests in `packages/core`.
 - [x] **3a. Lichess login + explorer overlay**: arrows (green = prepared, yellow = popular but
   not prepared, blue = prepared but rare), explorer table, speed selector.
 - [x] **3b. Guest login + rating range slider**.
@@ -76,7 +76,7 @@ Planned: `review_cards` (FSRS state per user move), `game_syncs`, `inbox_items`.
   - end of prep: offer to extend the line
 
   One click adds the line. Stats per line.
-- [ ] **6. Polish**: Stockfish WASM, conflict resolver UI, search/jump to position, mobile
+- [ ] **6. Polish**: Stockfish WASM, search/jump to position, mobile
   layout, PWA, sharing a repertoire with a friend (read-only link / copy).
 - [ ] **7. Hosting**: deploy (Fly.io / Railway / VPS), backups of the SQLite file.
 

@@ -34,8 +34,6 @@ export function RepertoireEditor({ me }: { me: Me }) {
   const here = rep.movesAt(fen) as StoredMove[];
   const shown = line.slice(0, ply);
   const unsaved = shown.filter((m) => !rep.has(m.fromFen, m.uci));
-  /** Draft moves of my side where the repertoire already has another move. */
-  const replacing = unsaved.filter((m) => rep.isMyTurn(m.fromFen) && rep.movesAt(m.fromFen).length > 0);
 
   const ex = explorerParams(me, speed, range);
   const explorer = useQuery({
@@ -142,7 +140,6 @@ export function RepertoireEditor({ me }: { me: Me }) {
   const myTurn = turnOf(fen) === data.color;
   const last = line[ply - 1];
   const lastStored = last ? storedMove(last) : undefined;
-  const conflicts = rep.conflicts();
 
   return (
     <div className="editor">
@@ -172,9 +169,6 @@ export function RepertoireEditor({ me }: { me: Me }) {
           <span className="muted">({data.color}, {rep.size} moves)</span>
           <a className="button" href={`/api/repertoires/${id}/pgn`}>Export PGN</a>
         </header>
-        {conflicts.length > 0 && (
-          <p className="warning">⚠ {conflicts.length} position(s) where you have several moves prepared.</p>
-        )}
 
         <section className="panel">
           <div className="moves-path">
@@ -199,11 +193,6 @@ export function RepertoireEditor({ me }: { me: Me }) {
                 Save variation ({unsaved.length} new move{unsaved.length > 1 ? 's' : ''})
               </button>
               <button className="small" onClick={discard}>Discard</button>
-              {replacing.length > 0 && (
-                <p className="warning small-text">
-                  ⚠ At {replacing.map((m) => m.san).join(', ')} you already have another move prepared: saving keeps both.
-                </p>
-              )}
             </div>
           )}
           {notice && <p className="muted small-text">{notice}</p>}
@@ -218,7 +207,6 @@ export function RepertoireEditor({ me }: { me: Me }) {
           {here.length === 0 && (
             <p className="muted">Nothing prepared here. Play moves on the board, then “Save variation”.</p>
           )}
-          {myTurn && here.length > 1 && <p className="warning">Several moves prepared for your side here.</p>}
           <ul className="rep-moves">
             {here.map((m) => (
               <li key={m.id}>
@@ -307,7 +295,7 @@ function PgnImport({ repertoireId, onDone }: { repertoireId: string; onDone: () 
         <p>
           {result.games} game(s): {result.added} moves added, {result.duplicates} already known
           {result.unreachable > 0 && `, ${result.unreachable} skipped (not reachable from the initial position)`}
-          {result.conflicts > 0 && `, ${result.conflicts} position(s) with several moves for your side`}.
+          .
           {result.errors.length > 0 && <span className="error"> {result.errors.join('; ')}</span>}
         </p>
       )}

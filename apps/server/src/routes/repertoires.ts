@@ -148,7 +148,7 @@ export async function repertoireRoutes(app: FastifyInstance) {
       rows.push({ ...m, repertoireId: rep.id, isMain, source: 'manual' as const });
     }
     if (rows.length) await db.insert(repMoves).values(rows).onConflictDoNothing();
-    return { added: rows.length, conflicts: graph.conflicts().length };
+    return { added: rows.length };
   });
 
   app.patch<{ Params: MoveParams }>('/api/repertoires/:id/moves/:moveId', async (req, reply) => {
@@ -212,7 +212,6 @@ export async function repertoireRoutes(app: FastifyInstance) {
       duplicates,
       unreachable: fresh.length - toInsert.length,
       errors: parsed.errors.slice(0, 50),
-      conflicts: graph.conflicts().length,
     };
   });
 

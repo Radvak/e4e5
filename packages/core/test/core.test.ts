@@ -50,13 +50,6 @@ describe('PGN import', () => {
 });
 
 describe('repertoire', () => {
-  it('flags positions where I have several moves', () => {
-    const rep = new Repertoire('white', pgnToMoves(ITALIAN).moves);
-    const conflicts = rep.conflicts();
-    expect(conflicts).toHaveLength(1);
-    expect(conflicts[0]!.moves.map((m) => m.san).sort()).toEqual(['Bb5', 'Bc4']);
-  });
-
   it('finds moves orphaned by a deletion', () => {
     const moves = pgnToMoves(ITALIAN).moves.filter((m) => m.san !== 'Nc6');
     const orphans = new Repertoire('white', moves).unreachableMoves();

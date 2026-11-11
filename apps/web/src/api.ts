@@ -55,7 +55,7 @@ export interface RepertoireSummary { id: string; name: string; color: Color; cre
 export interface StoredMove extends RepMove { id: number; source: string }
 export interface RepertoireDetail extends RepertoireSummary { moves: StoredMove[] }
 export interface ImportResult {
-  games: number; added: number; duplicates: number; unreachable: number; errors: string[]; conflicts: number;
+  games: number; added: number; duplicates: number; unreachable: number; errors: string[];
 }
 
 export const api = {
@@ -74,7 +74,7 @@ export const api = {
   deleteRepertoire: (id: string) => request<{ ok: true }>('DELETE', `/api/repertoires/${id}`),
   repertoire: (id: string) => request<RepertoireDetail>('GET', `/api/repertoires/${id}`),
   saveLine: (id: string, ucis: string[]) =>
-    request<{ added: number; conflicts: number }>('POST', `/api/repertoires/${id}/lines`, { ucis }),
+    request<{ added: number }>('POST', `/api/repertoires/${id}/lines`, { ucis }),
   updateMove: (id: string, moveId: number, patch: { comment?: string | null; isMain?: boolean }) =>
     request<StoredMove>('PATCH', `/api/repertoires/${id}/moves/${moveId}`, patch),
   deleteMove: (id: string, moveId: number) => request<{ ok: true; pruned: number }>('DELETE', `/api/repertoires/${id}/moves/${moveId}`),
