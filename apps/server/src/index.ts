@@ -10,6 +10,7 @@ import { runMigrations } from './db/client.js';
 import { env } from './env.js';
 import { explorerRoutes } from './routes/explorer.js';
 import { repertoireRoutes } from './routes/repertoires.js';
+import { trainingRoutes } from './routes/training.js';
 import { importSeeds } from './stats.js';
 
 await runMigrations();
@@ -32,6 +33,7 @@ app.get('/api/health', async () => ({ ok: true }));
 await app.register(authRoutes);
 await app.register(repertoireRoutes);
 await app.register(explorerRoutes);
+await app.register(trainingRoutes);
 
 // In production the server also serves the built web app (single container).
 const webDist = resolve(dirname(fileURLToPath(import.meta.url)), '../../web/dist');

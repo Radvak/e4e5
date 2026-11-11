@@ -102,3 +102,20 @@ describe('explorer buckets', () => {
     expect(bucketsFor(2700)).toEqual([2200, 2500]);
   });
 });
+
+describe('training positions', () => {
+  it('lists my positions line by line, main line first, with their path', async () => {
+    const { trainingPositions } = await import('../src/index.js');
+    const rep = new Repertoire('white', pgnToMoves(ITALIAN).moves);
+    const positions = trainingPositions(rep);
+    const paths = positions.map((p) => p.path.map((m) => m.san).join(' '));
+    // Ends of lines (e.g. after 3. Bb5 a6, nothing prepared for White) are not trained.
+    expect(paths).toEqual(['', 'e4 e5', 'e4 e5 Nf3 Nc6', 'e4 e5 Nf3 Nc6 Bc4 Bc5', 'e4 e5 Nf3 Nc6 Bc4 Nf6']);
+  });
+
+  it('works for Black', async () => {
+    const { trainingPositions } = await import('../src/index.js');
+    const rep = new Repertoire('black', pgnToMoves('1. e4 (1. d4 d5 2. c4 e6) 1... c5 2. Nf3 d6 *').moves);
+    expect(trainingPositions(rep).map((p) => p.path.map((m) => m.san).join(' '))).toEqual(['e4', 'e4 c5 Nf3', 'd4', 'd4 d5 c4']);
+  });
+});

@@ -119,14 +119,15 @@ export function RepertoireEditor({ me }: { me: Me }) {
     const ed = explorer.data?.data;
     const total = ed ? totalGames(ed) : 0;
     const share = new Map((ed?.moves ?? []).map((m) => [m.uci, total ? totalGames(m) / total : 0]));
-    const width = (s: number) => Math.round(4 + 12 * s);
+    // Thicker = played more often; repertoire arrows never get thinner than 9.
+    const width = (s: number, min = 5) => Math.max(min, Math.round(5 + 11 * s));
     const arrow = (uci: string, brush: ArrowKind, lineWidth: number): DrawShape => ({
       orig: uci.slice(0, 2) as Key,
       dest: uci.slice(2, 4) as Key,
       brush,
       modifiers: { lineWidth },
     });
-    const out = here.map((m) => arrow(m.uci, 'repertoire', width(share.get(m.uci) ?? 0)));
+    const out = here.map((m) => arrow(m.uci, 'repertoire', width(share.get(m.uci) ?? 0, 9)));
     for (const m of ed?.moves.slice(0, 6) ?? []) {
       const s = share.get(m.uci) ?? 0;
       if (s >= 0.03 && !rep.has(fen, m.uci)) out.push(arrow(m.uci, 'popular', width(s)));
@@ -167,6 +168,7 @@ export function RepertoireEditor({ me }: { me: Me }) {
           <Link to="/">← Repertoires</Link>
           <h2>{data.name}</h2>
           <span className="muted">({data.color}, {rep.size} moves)</span>
+          <Link className="button primary" to={`/r/${id}/train`}>Train</Link>
           <a className="button" href={`/api/repertoires/${id}/pgn`}>Export PGN</a>
         </header>
 

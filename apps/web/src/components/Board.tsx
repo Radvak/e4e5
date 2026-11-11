@@ -18,11 +18,13 @@ interface Props {
   shapes?: DrawShape[];
   /** Called with the UCI of a move played on the board (promotion: queen). */
   onMove?: (uci: string) => void;
+  /** Change it to put the pieces back on `fen` (e.g. after a rejected move). */
+  resetKey?: number;
 }
 
 const NO_SHAPES: DrawShape[] = [];
 
-export function Board({ fen, orientation, lastMove, shapes = NO_SHAPES, onMove }: Props) {
+export function Board({ fen, orientation, lastMove, shapes = NO_SHAPES, onMove, resetKey = 0 }: Props) {
   const el = useRef<HTMLDivElement>(null);
   const cg = useRef<Api | null>(null);
   const onMoveRef = useRef(onMove);
@@ -61,7 +63,7 @@ export function Board({ fen, orientation, lastMove, shapes = NO_SHAPES, onMove }
       },
       drawable: { autoShapes: shapes },
     });
-  }, [fen, orientation, lastMove, shapes, !!onMove]);
+  }, [fen, orientation, lastMove, shapes, !!onMove, resetKey]);
 
   return <div ref={el} className="board" />;
 }

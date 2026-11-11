@@ -20,6 +20,9 @@ interface Settings {
   /** null: automatic, from the user's own rating. */
   range: RatingRange | null;
   setRange: (r: RatingRange | null) => void;
+  /** New positions to learn per day and per repertoire. */
+  newPerDay: number;
+  setNewPerDay: (n: number) => void;
 }
 
 const Ctx = createContext<Settings | null>(null);
@@ -49,7 +52,14 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     persist('ratingRange', r);
     setRangeState(r);
   };
-  return <Ctx.Provider value={{ speed, setSpeed, range, setRange }}>{children}</Ctx.Provider>;
+  const [newPerDay, setNewPerDayState] = useState<number>(() => stored('newPerDay', 10));
+  const setNewPerDay = (n: number) => {
+    persist('newPerDay', n);
+    setNewPerDayState(n);
+  };
+  return (
+    <Ctx.Provider value={{ speed, setSpeed, range, setRange, newPerDay, setNewPerDay }}>{children}</Ctx.Provider>
+  );
 }
 
 export function useSettings(): Settings {
@@ -96,4 +106,11 @@ export function explorerParams(me: Me, speed: SpeedChoice, range: RatingRange | 
     ? RATING_BUCKETS.filter((b) => b >= range[0] && b <= range[1])
     : bucketsFor(rating);
   return { rating, source, speeds: SPEEDS[speed], ratings, auto: range === null };
+}
+
+/** Local midnight (ms): new positions are counted per local day. */
+export function dayStart(now = new Date()): number {
+  const d = new Date(now);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
 }

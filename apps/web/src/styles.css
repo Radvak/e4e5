@@ -90,3 +90,9 @@ details.panel summary { cursor: pointer; font-weight: bold; }
 .draft { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
 .draft .warning { flex-basis: 100%; margin: 0; }
 button.primary { background: var(--accent); border-color: var(--accent); }
+
+.success { color: var(--accent); font-weight: bold; font-size: 1.2em; }
+.training .done { max-width: 480px; }
+.button.small { font-size: 0.85em; padding: 2px 8px; }
+.button.train { background: var(--accent); border-color: var(--accent); color: var(--text); }
+.button.primary { background: var(--accent); border-color: var(--accent); }

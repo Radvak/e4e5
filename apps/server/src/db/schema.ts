@@ -69,6 +69,26 @@ export const repMoves = sqliteTable(
 );
 
 /**
+ * Spaced-repetition state (FSRS) of a position to train: a position of the repertoire where it
+ * is the user's turn. Positions without a row are "new".
+ */
+export const reviewCards = sqliteTable(
+  'review_cards',
+  {
+    repertoireId: text('repertoire_id').notNull().references(() => repertoires.id, { onDelete: 'cascade' }),
+    fen: text('fen').notNull(),
+    /** ts-fsrs Card, as JSON. */
+    card: text('card', { mode: 'json' }).$type<Record<string, unknown>>().notNull(),
+    due: integer('due', { mode: 'timestamp_ms' }).notNull(),
+    reps: integer('reps').notNull().default(0),
+    lapses: integer('lapses').notNull().default(0),
+    createdAt: createdAt(),
+    lastReview: integer('last_review', { mode: 'timestamp_ms' }),
+  },
+  (t) => [primaryKey({ columns: [t.repertoireId, t.fen] }), index('review_cards_due').on(t.repertoireId, t.due)],
+);
+
+/**
  * Lichess explorer statistics of a position for one combination of speeds and rating buckets,
  * shared by all users. Filled by live explorer requests and by imported seeds; it only grows.
  */

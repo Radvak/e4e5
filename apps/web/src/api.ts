@@ -54,6 +54,9 @@ export interface Me {
 export interface RepertoireSummary { id: string; name: string; color: Color; createdAt: string }
 export interface StoredMove extends RepMove { id: number; source: string }
 export interface RepertoireDetail extends RepertoireSummary { moves: StoredMove[] }
+export type Grade = 'again' | 'hard' | 'good' | 'easy';
+export interface ReviewCard { fen: string; due: string; reps: number; lapses: number; createdAt: string }
+export interface TrainingSummary { repertoireId: string; total: number; due: number; new: number }
 export interface ImportResult {
   games: number; added: number; duplicates: number; unreachable: number; errors: string[];
 }
@@ -79,6 +82,10 @@ export const api = {
     request<StoredMove>('PATCH', `/api/repertoires/${id}/moves/${moveId}`, patch),
   deleteMove: (id: string, moveId: number) => request<{ ok: true; pruned: number }>('DELETE', `/api/repertoires/${id}/moves/${moveId}`),
   importPgn: (id: string, pgn: string) => request<ImportResult>('POST', `/api/repertoires/${id}/import-pgn`, { pgn }),
+  cards: (id: string) => request<ReviewCard[]>('GET', `/api/repertoires/${id}/cards`),
+  review: (id: string, fen: string, grade: Grade) => request<ReviewCard>('POST', `/api/repertoires/${id}/review`, { fen, grade }),
+  trainingSummary: (dayStart: number, newPerDay: number) =>
+    request<TrainingSummary[]>('GET', `/api/training/summary?${new URLSearchParams({ dayStart: String(dayStart), newPerDay: String(newPerDay) })}`),
   explorer: (fen: string, speeds: string[], ratings: number[]) =>
     request<Stats>(
       'GET',

@@ -3,11 +3,18 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api';
+import { dayStart, useSettings } from '../settings';
 
 export function RepertoireList() {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const { data = [], isLoading } = useQuery({ queryKey: ['repertoires'], queryFn: api.repertoires });
+  const { newPerDay } = useSettings();
+  const summary = useQuery({
+    queryKey: ['training-summary', newPerDay],
+    queryFn: () => api.trainingSummary(dayStart(), newPerDay),
+  });
+  const counts = new Map((summary.data ?? []).map((s) => [s.repertoireId, s]));
   const [name, setName] = useState('');
   const [color, setColor] = useState<Color>('white');
 
@@ -33,6 +40,14 @@ export function RepertoireList() {
           <li key={r.id}>
             <span className={`dot ${r.color}`} />
             <Link to={`/r/${r.id}`}>{r.name}</Link>
+            {counts.get(r.id) && counts.get(r.id)!.total > 0 && (
+              <Link className="button small train" to={`/r/${r.id}/train`}>
+                Train
+                {counts.get(r.id)!.due + counts.get(r.id)!.new > 0
+                  ? ` (${counts.get(r.id)!.due} due, ${counts.get(r.id)!.new} new)`
+                  : ' ✓'}
+              </Link>
+            )}
             <button
               className="small danger"
               onClick={() => confirm(`Delete the repertoire "${r.name}"?`) && remove.mutate(r.id)}

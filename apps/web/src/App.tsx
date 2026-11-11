@@ -5,6 +5,7 @@ import { Login } from './pages/Login';
 import { RepertoireEditor } from './pages/RepertoireEditor';
 import { RepertoireList } from './pages/RepertoireList';
 import { Settings } from './pages/Settings';
+import { Training } from './pages/Training';
 import { useSettings, type SpeedChoice } from './settings';
 
 export function App() {
@@ -49,6 +50,7 @@ export function App() {
         <Routes>
           <Route path="/" element={<RepertoireList />} />
           <Route path="/r/:id" element={<RepertoireEditor me={me.data} />} />
+          <Route path="/r/:id/train" element={<Training />} />
           <Route path="/settings" element={<Settings me={me.data} />} />
         </Routes>
       </main>

@@ -63,8 +63,12 @@ Planned: `review_cards` (FSRS state per user move), `game_syncs`, `inbox_items`.
 - [ ] **3f. Grow the statistics**: background prefetch of repertoire positions (by reach
   probability) for the common ranges, and periodic seed exports.
 - [ ] **3d. Chess.com OAuth**: apply for an app (once deployed publicly), then add "Login with Chess.com".
-- [ ] **2. Training**: drill mode with FSRS (`ts-fsrs`). The app plays the opponent, choosing
-  replies weighted by explorer frequency. Modes: due cards / one line / new lines.
+- [x] **2. Training v1**: one FSRS card (`ts-fsrs`) per position where it is the user's turn; any
+  repertoire move there is accepted. Drill = replay of the line, then the question. New
+  positions are shown with the answer first, then asked again after the learning steps. Up to
+  N new positions per day and per repertoire, learnt line by line (main line first).
+- [ ] **2b. Training v2**: "play the line" mode where the app plays the opponent, choosing replies
+  weighted by explorer frequency; train one line / all repertoires; stats and leeches.
 - [ ] **4. Gap finder**: probability of reaching each position (product of opponent move
   frequencies), a "top holes" list, and a coverage score per repertoire. Explorer calls are
   bounded by a probability cutoff and run in a background queue.
