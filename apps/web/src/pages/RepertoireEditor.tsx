@@ -12,7 +12,7 @@ import { explorerParams, useSettings } from '../settings';
 export function RepertoireEditor({ me }: { me: Me }) {
   const { id = '' } = useParams();
   const qc = useQueryClient();
-  const { speed } = useSettings();
+  const { speed, range } = useSettings();
   const { data, isLoading, error } = useQuery({ queryKey: ['repertoire', id], queryFn: () => api.repertoire(id) });
   const [path, setPath] = useState<StoredMove[]>([]);
 
@@ -28,7 +28,7 @@ export function RepertoireEditor({ me }: { me: Me }) {
     if (firstMissing >= 0) setPath(path.slice(0, firstMissing));
   }, [data, path]);
 
-  const ex = explorerParams(me.perfs, speed);
+  const ex = explorerParams(me.perfs, speed, range);
   const explorer = useQuery({
     queryKey: ['explorer', fen, ex.speeds, ex.ratings],
     queryFn: () => api.explorer(fen, ex.speeds, ex.ratings),
@@ -175,7 +175,12 @@ export function RepertoireEditor({ me }: { me: Me }) {
           data={explorer.data}
           error={explorer.error}
           loading={explorer.isLoading}
-          label={`${ex.ratings.join('/')} (${ex.speeds.join('+')}, you: ${ex.rating})`}
+          ratings={ex.ratings}
+          note={
+            ex.auto
+              ? `Default: around your Lichess ${ex.speeds.join('+')} rating (${ex.rating}).`
+              : `Custom range, ${ex.speeds.join('+')} games.`
+          }
           onPick={play}
         />}
 

@@ -1,5 +1,6 @@
 import { totalGames, type ExplorerResponse, type Repertoire } from '@prepa-cahier/core';
 import { ApiError } from '../api';
+import { RatingRange } from './RatingRange';
 
 interface Props {
   fen: string;
@@ -7,7 +8,9 @@ interface Props {
   data: ExplorerResponse | undefined;
   error: unknown;
   loading: boolean;
-  label: string;
+  ratings: number[];
+  /** Explains where the default range comes from. */
+  note: string;
   onPick: (uci: string) => void;
 }
 
@@ -16,14 +19,19 @@ function pct(n: number, total: number) {
 }
 
 /** Moves played at the user's level in this position, marked when in the repertoire. */
-export function ExplorerPanel({ fen, rep, data, error, loading, label, onPick }: Props) {
+export function ExplorerPanel({ fen, rep, data, error, loading, ratings, note, onPick }: Props) {
   const total = data ? totalGames(data) : 0;
   return (
     <section className="panel">
       <h3>
-        Lichess players {label}
+        Lichess statistics
         {data?.opening && <small> · {data.opening.eco} {data.opening.name}</small>}
       </h3>
+      <RatingRange current={ratings} />
+      <p className="muted small-text">
+        {note} Ratings differ between sites (Chess.com ratings are usually lower than Lichess ones at
+        the same strength): adjust the range to match your opponents.
+      </p>
       {loading && <p className="muted">Loading…</p>}
       {error instanceof ApiError && error.status === 503 && <p className="muted">Lichess rate limit, retry in a minute.</p>}
       {Boolean(error) && !(error instanceof ApiError && error.status === 503) && <p className="error">{String(error)}</p>}

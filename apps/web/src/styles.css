@@ -74,3 +74,6 @@ details.panel summary { cursor: pointer; font-weight: bold; }
 .bar .b { background: #222; }
 .guest { margin-top: 32px; }
 .guest .row { justify-content: center; }
+.rating-range { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
+.rating-range input[type='range'] { width: 110px; padding: 0; }
+.small-text { font-size: 0.8em; margin: 2px 0 8px; }

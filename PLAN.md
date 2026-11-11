@@ -7,11 +7,12 @@ with their Lichess account.
 
 | Topic | Decision |
 |---|---|
-| Users | Multi-user (friends). Login with Lichess only (OAuth2 PKCE, no passwords) |
+| Users | Multi-user (friends). Login with Lichess (OAuth2 PKCE). Guest login (name only) for testing, on by default in dev only |
+| Chess.com | First-class for games and ratings (public API). Login with Chess.com needs an approved OAuth app: apply, and plug it in next to Lichess once approved. Until then Chess.com-only users need another login (to decide) |
 | Stack | TypeScript monorepo (pnpm): React + Vite + chessground / Fastify / SQLite (Drizzle + libsql) |
 | Chess logic | `chessops` in a shared `packages/core` (used by server and browser) |
 | License | GPL-3.0 is acceptable (chessground, chessops) |
-| Lichess stats | Speed selector in the UI: blitz, rapid, or both. Rating buckets derived from the user's rating |
+| Statistics | Always the **Lichess** explorer, clearly labelled "Lichess players rated X–Y". A slider picks the range, defaulting to the buckets around the user's Lichess rating. No automatic Chess.com→Lichess conversion: users know the gap and adjust the slider. Speed selector: blitz, rapid, or both |
 | Deployment | One Docker container (API + static web), SQLite file on a volume |
 
 ## Data model
@@ -34,6 +35,13 @@ Planned: `review_cards` (FSRS state per user move), `game_syncs`, `inbox_items`.
   a 7-day shared cache.
 - Games: `/api/games/user/{name}?since=…&perfType=blitz,rapid` as ndjson.
 
+## Chess.com integration
+
+- Public read-only API, no auth: `/pub/player/{u}/stats` (ratings), `/pub/player/{u}/games/archives`
+  and `/pub/player/{u}/games/{YYYY}/{MM}` (games with PGN). Serial requests, or it answers 429.
+- No position statistics / opening explorer in the API, so statistics come from Lichess.
+- OAuth ("Sign in with Chess.com") exists for approved developers only.
+
 ## Phases
 
 - [x] **0. Setup**: monorepo, configs, schema, Docker.
@@ -41,12 +49,17 @@ Planned: `review_cards` (FSRS state per user move), `game_syncs`, `inbox_items`.
   PGN import (merge, conflicts, orphans) and export. Unit tests in `packages/core`.
 - [x] **3a. Lichess login + explorer overlay**: arrows (green = prepared, yellow = popular but
   not prepared, blue = prepared but rare), explorer table, speed selector.
+- [x] **3b. Guest login + rating range slider**.
+- [ ] **3c. Chess.com**: Chess.com username in the profile, ratings from `/pub/player/{u}/stats`;
+  a server-wide Lichess token so users without a linked Lichess account still get statistics;
+  apply for Chess.com OAuth.
 - [ ] **2. Training**: drill mode with FSRS (`ts-fsrs`). The app plays the opponent, choosing
   replies weighted by explorer frequency. Modes: due cards / one line / new lines.
 - [ ] **4. Gap finder**: probability of reaching each position (product of opponent move
   frequencies), a "top holes" list, and a coverage score per repertoire. Explorer calls are
   bounded by a probability cutoff and run in a background queue.
-- [ ] **5. Game sync**: fetch new games and match each to the best repertoire
+- [ ] **5. Game sync** (Lichess and Chess.com): fetch new games (Chess.com: monthly archives
+  `/pub/player/{u}/games/{YYYY}/{MM}`, one request at a time) and match each to the best repertoire
   (`bestRepertoire`), then classify with `analyzeGame`:
   - my deviation: schedule that card for early review
   - opponent novelty: inbox item; suggest my game reply, the most played reply, or the engine move
