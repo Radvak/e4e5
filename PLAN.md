@@ -85,7 +85,9 @@ Planned: `review_cards` (FSRS state per user move), `game_syncs`, `inbox_items`.
   - end of prep: offer to extend the line
 
   One click adds the line. Stats per line.
-- [ ] **6. Polish**: Stockfish WASM, search/jump to position, mobile
+- [x] **6a. Engine + search**: Stockfish 19 lite (WASM worker, 3 lines, best-move arrow, click to
+  play a line as a draft); search box (moves, FEN, comment text) with `/` shortcut.
+- [ ] **6. Polish**: search/jump to position, mobile
   layout, PWA, sharing a repertoire with a friend (read-only link / copy).
 - [ ] **7. Hosting**: deploy (Fly.io / Railway / VPS), backups of the SQLite file.
 

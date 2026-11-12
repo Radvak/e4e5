@@ -2,6 +2,7 @@
 export const ARROWS = {
   repertoire: { color: '#3fb950', label: 'in your repertoire' },
   popular: { color: '#f0883e', label: 'popular, not in your repertoire' },
+  engine: { color: '#58a6ff', label: "engine's best move" },
 } as const;
 
 export type ArrowKind = keyof typeof ARROWS;

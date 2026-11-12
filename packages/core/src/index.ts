@@ -4,3 +4,4 @@ export * from './pgn.js';
 export * from './games.js';
 export * from './explorer.js';
 export * from './training.js';
+export * from './engine.js';

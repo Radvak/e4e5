@@ -2,10 +2,13 @@ import { playUci, Repertoire, START_FEN, totalGames, pathTo, turnOf, type Played
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { DrawShape } from 'chessground/draw';
 import type { Key } from 'chessground/types';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { api, type ImportResult, type Me, type StoredMove } from '../api';
 import { ARROWS, type ArrowKind } from '../components/arrows';
+import { EnginePanel } from '../components/EnginePanel';
+import { JumpBox } from '../components/JumpBox';
+import { useEngine } from '../engine/useEngine';
 import { Board } from '../components/Board';
 import { ExplorerPanel } from '../components/ExplorerPanel';
 import { explorerParams, useSettings } from '../settings';
@@ -103,9 +106,34 @@ export function RepertoireEditor({ me }: { me: Me }) {
     setPly(Math.min(ply, firstUnsaved));
   };
 
+  /** Plays several moves from the cursor (engine line), following the current line if it matches. */
+  const playMoves = (moves: PlayedMove[]) => {
+    setNotice(null);
+    const follows = moves.every((m, i) => line[ply + i]?.uci === m.uci);
+    if (!follows) setLine([...line.slice(0, ply), ...moves]);
+    setPly(ply + moves.length);
+  };
+  const jumpTo = (moves: PlayedMove[]) => {
+    setNotice(null);
+    setLine(moves);
+    setPly(moves.length);
+  };
+
+  const [engineOn, setEngineOn] = useState(() => localStorage.getItem('engine') === 'on');
+  const toggleEngine = (on: boolean) => {
+    localStorage.setItem('engine', on ? 'on' : 'off');
+    setEngineOn(on);
+  };
+  const engine = useEngine(fen, engineOn);
+  const searchRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.target as HTMLElement).closest('textarea, input')) return;
+      if (e.key === '/') {
+        e.preventDefault();
+        searchRef.current?.focus();
+      }
       if (e.key === 'ArrowLeft') goTo(ply - 1);
       if (e.key === 'ArrowRight') forward();
       if (e.key === 'Home') goTo(0);
@@ -145,8 +173,10 @@ export function RepertoireEditor({ me }: { me: Me }) {
       const s = share.get(m.uci) ?? 0;
       if (s >= 0.03 && !rep.has(fen, m.uci)) out.push(arrow(m.uci, 'popular', width(s)));
     }
+    const best = engineOn ? engine.lines[0]?.pv[0] : undefined;
+    if (best) out.push(arrow(best.uci, 'engine', 6));
     return out;
-  }, [explorer.data, rep, fen, here]);
+  }, [explorer.data, rep, fen, here, engineOn, engine.lines[0]?.pv[0]?.uci]);
 
   if (isLoading) return <p>Loading…</p>;
   if (error || !data) return <p className="error">Could not load the repertoire.</p>;
@@ -166,7 +196,7 @@ export function RepertoireEditor({ me }: { me: Me }) {
           <button onClick={() => goTo(line.length)} title="End of the line (End)">⏭</button>
         </div>
         <p className="legend muted">
-          {(Object.keys(ARROWS) as ArrowKind[]).map((k) => (
+          {(Object.keys(ARROWS) as ArrowKind[]).filter((k) => k !== 'engine' || engineOn).map((k) => (
             <span key={k} className="legend-item">
               <span className="swatch" style={{ background: ARROWS[k].color }} />
               {ARROWS[k].label}
@@ -194,6 +224,7 @@ export function RepertoireEditor({ me }: { me: Me }) {
         </header>
 
         <section className="panel">
+          <JumpBox ref={searchRef} rep={rep} onJump={jumpTo} />
           <div className="moves-path">
             <button className={`link ${ply === 0 ? 'current' : ''}`} onClick={() => goTo(0)}>Start</button>
             {line.map((m, i) => (
@@ -248,6 +279,16 @@ export function RepertoireEditor({ me }: { me: Me }) {
             ))}
           </ul>
         </section>
+
+        <EnginePanel
+          enabled={engineOn}
+          onToggle={toggleEngine}
+          lines={engine.lines}
+          depth={engine.depth}
+          maxDepth={engine.maxDepth}
+          firstMoveNumber={ply}
+          onPlay={playMoves}
+        />
 
         <ExplorerPanel
           fen={fen}

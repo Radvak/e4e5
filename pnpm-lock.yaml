@@ -76,6 +76,9 @@ importers:
       react-router-dom:
         specifier: ^7.0.0
         version: 7.18.5(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      stockfish:
+        specifier: ^19.0.1
+        version: 19.0.1
     devDependencies:
       '@types/react':
         specifier: ^19.0.0
@@ -1602,6 +1605,10 @@ packages:
   std-env@3.10.0:
     resolution: {integrity: sha512-5GS12FdOZNliM5mAOxFRg7Ir0pWz8MdpYm6AY6VPkGpbA7ZzmbzNcBJQ0GPvvyWgcY7QAhCgf9Uy89I03faLkg==}
 
+  stockfish@19.0.1:
+    resolution: {integrity: sha512-bTwsO4e9HAwPBKls1+szcfibmaWRNzTF20rQE/XPdB3LOSoT6XTZDr1zYwriwSRRFT5MkvqrglPmJrKEVXGnyQ==}
+    hasBin: true
+
   strip-literal@3.1.0:
     resolution: {integrity: sha512-8r3mkIM/2+PpjHoOtiAW8Rg3jJLHaV7xPwG+YRGrv6FP0wwk/toTpATxWYOW0BKdWwl82VT2tFYi5DlROa0Mxg==}
 
@@ -2995,6 +3002,8 @@ snapshots:
   statuses@2.0.2: {}
 
   std-env@3.10.0: {}
+
+  stockfish@19.0.1: {}
 
   strip-literal@3.1.0:
     dependencies:

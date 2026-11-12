@@ -136,3 +136,15 @@ button.primary { background: var(--accent); border-color: var(--accent); }
 .weakest { margin: 0; padding-left: 18px; }
 .topbar a { color: var(--text); text-decoration: none; }
 .topbar a:hover { text-decoration: underline; }
+
+.jump { margin-bottom: 8px; }
+.jump input { flex: 1; min-width: 200px; }
+.hits { margin: 6px 0 0; padding-left: 18px; font-size: 0.9em; }
+.engine .row h3 { margin: 0; }
+.switch { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+.engine-line { display: flex; gap: 10px; align-items: baseline; padding: 3px 0; border-top: 1px solid #3a3835; font-size: 0.9em; }
+.engine-line .eval { min-width: 52px; text-align: center; font-weight: 600; border-radius: 3px; padding: 1px 4px; }
+.engine-line .eval.w { background: #e8e6e3; color: #161512; }
+.engine-line .eval.b { background: #0b0b0b; color: #e8e6e3; border: 1px solid #6a6764; }
+.engine-line .pv { line-height: 1.6; }
+.engine-line .pv button.link { padding: 0 2px; }

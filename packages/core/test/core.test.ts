@@ -162,3 +162,21 @@ describe('pathTo', () => {
     expect(pathTo(rep, 'rnbqkbnr/pppppppp/8/8/8/7P/PPPPPPP1/RNBQKBNR b KQkq -')).toBeNull();
   });
 });
+
+describe('engine output', () => {
+  it('parses info lines from White\'s point of view', async () => {
+    const { parseInfo, formatScore, uciFen } = await import('../src/index.js');
+    const afterE4 = 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq -';
+    const l = parseInfo('info depth 18 seldepth 25 multipv 2 score cp 31 nodes 1 nps 1 pv c7c5 g1f3 d7d6', afterE4)!;
+    expect(l.multipv).toBe(2);
+    expect(l.depth).toBe(18);
+    expect(l.score).toEqual({ cp: -31 }); // Black to move: +31 for Black = -0.31 for White
+    expect(l.pv.map((m) => m.san)).toEqual(['c5', 'Nf3', 'd6']);
+    expect(formatScore(l.score)).toBe('-0.31');
+    expect(formatScore({ mate: 3 })).toBe('#3');
+    expect(formatScore({ mate: -2 })).toBe('-#2');
+    expect(parseInfo('info depth 10 score cp 20 lowerbound pv e2e4', START_FEN)).toBeNull();
+    expect(parseInfo('bestmove e2e4', START_FEN)).toBeNull();
+    expect(uciFen(START_FEN)).toBe(`${START_FEN} 0 1`);
+  });
+});
