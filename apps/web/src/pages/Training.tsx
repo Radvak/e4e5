@@ -93,6 +93,7 @@ export function Training({ me }: { me: Me }) {
         <ReviewMode
           sources={sources}
           newPerDay={newPerDay}
+          noNewLimit={!!from}
           onReview={onReview}
           onCounts={onCounts}
           idle={<Progress sources={sources} />}

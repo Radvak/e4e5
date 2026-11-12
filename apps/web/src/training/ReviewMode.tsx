@@ -27,7 +27,8 @@ const same = (a: Item, b: Item) => a.source.id === b.source.id && a.target.fen =
 
 /**
  * Spaced-repetition review: positions due first (oldest first), then new ones, following the
- * line when the opponent's reply leads to another position waiting to be asked.
+ * line when the opponent's reply leads to another position waiting to be asked. On demand,
+ * "review ahead" continues with learnt positions that are not due yet (soonest first).
  */
 export function ReviewMode({
   sources,
@@ -35,15 +36,21 @@ export function ReviewMode({
   onReview,
   onCounts,
   idle,
+  noNewLimit = false,
 }: {
   sources: Source[];
   newPerDay: number;
+  /** All unseen positions are available (e.g. training a chosen subtree). */
+  noNewLimit?: boolean;
   onReview: (source: Source, fen: string, grade: Grade) => void;
   onCounts: (c: { due: number; fresh: number; reviewed: number; firstTry: number }) => void;
   /** Shown when nothing is left to review. */
   idle: React.ReactNode;
 }) {
   const [extraNew, setExtraNew] = useState(0);
+  const [ahead, setAhead] = useState(false);
+  /** Positions answered in this session (not asked again when reviewing ahead). */
+  const answered = useRef(new Set<string>());
   const [stats, setStats] = useState({ reviewed: 0, firstTry: 0 });
   const [now, setNow] = useState(() => Date.now());
   const [current, setCurrent] = useState<Question | null>(null);
@@ -64,24 +71,27 @@ export function ReviewMode({
     const today = dayStart();
     const due: (Item & { at: number })[] = [];
     const fresh: Item[] = [];
-    const upcoming: number[] = [];
+    const upcoming: (Item & { at: number })[] = [];
     let unseen = 0;
     for (const source of sources) {
       const learntToday = source.cardList.filter((c) => Date.parse(c.createdAt) >= today).length;
-      let allowed = Math.max(0, newPerDay + extraNew - learntToday);
+      let allowed = noNewLimit ? Infinity : Math.max(0, newPerDay + extraNew - learntToday);
       for (const target of source.positions) {
         const card: ReviewCard | undefined = source.cards.get(target.fen);
         if (!card) {
           unseen++;
           if (allowed-- > 0) fresh.push({ source, target });
         } else if (Date.parse(card.due) <= now) due.push({ source, target, at: Date.parse(card.due) });
-        else upcoming.push(Date.parse(card.due));
+        else upcoming.push({ source, target, at: Date.parse(card.due) });
       }
     }
     due.sort((a, b) => a.at - b.at);
-    const nextDue = upcoming.length ? new Date(Math.min(...upcoming)) : undefined;
-    return { due, fresh, items: [...due, ...fresh] as Item[], unseen, nextDue };
-  }, [sources, now, newPerDay, extraNew]);
+    upcoming.sort((a, b) => a.at - b.at);
+    const nextDue = upcoming[0] ? new Date(upcoming[0].at) : undefined;
+    const early = upcoming.filter((p) => !answered.current.has(`${p.source.id}|${p.target.fen}`));
+    const items: Item[] = [...due, ...fresh, ...(ahead ? early : [])];
+    return { due, fresh, items, unseen, nextDue, early: early.length };
+  }, [sources, now, newPerDay, extraNew, noNewLimit, ahead]);
 
   useEffect(() => {
     onCounts({ due: queue.due.length, fresh: queue.fresh.length, ...stats });
@@ -112,6 +122,7 @@ export function ReviewMode({
   };
 
   const onAnswered = (q: Question, played: RepMove, grade: Grade, clean: boolean) => {
+    answered.current.add(`${q.source.id}|${q.target.fen}`);
     onReview(q.source, q.target.fen, grade);
     setStats((s) => ({ reviewed: s.reviewed + 1, firstTry: s.firstTry + (clean ? 1 : 0) }));
     setFeedback({ played, others: q.source.rep.movesAt(q.target.fen).filter((m) => m.uci !== played.uci), clean });
@@ -127,14 +138,28 @@ export function ReviewMode({
   if (!current) {
     return (
       <div className="panel done">
-        <h3>{queue.unseen + queue.items.length === 0 && !queue.nextDue ? 'Nothing to train yet' : 'All done for now 🎉'}</h3>
-        {queue.nextDue && <p>Next review {inTime(queue.nextDue)}.</p>}
-        {queue.unseen > 0 && (
-          <p>
-            {queue.unseen} position(s) not learnt yet.{' '}
-            <button onClick={() => setExtraNew((n) => n + 10)}>Learn 10 more</button>
-          </p>
+        <h3>{sources.every((s) => s.positions.length === 0) ? 'Nothing to train here' : 'All done for now 🎉'}</h3>
+        {sources.every((s) => s.positions.length === 0) && (
+          <p className="muted">No position where it is your turn in these lines: add (and save) moves for your side first.</p>
         )}
+        {queue.nextDue && <p>Next review {inTime(queue.nextDue)}.</p>}
+        <div className="row">
+          {queue.unseen > 0 && (
+            <button className="primary" onClick={() => setExtraNew((n) => n + 10)}>
+              Learn {Math.min(10, queue.unseen)} new position(s) ({queue.unseen} not learnt yet)
+            </button>
+          )}
+          {queue.early > 0 && (
+            <button
+              onClick={() => {
+                setAhead(true);
+                setNow(Date.now());
+              }}
+            >
+              Review ahead ({queue.early} learnt, not due yet)
+            </button>
+          )}
+        </div>
         {idle}
       </div>
     );

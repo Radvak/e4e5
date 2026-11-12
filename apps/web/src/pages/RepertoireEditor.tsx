@@ -182,11 +182,14 @@ export function RepertoireEditor({ me }: { me: Me }) {
           <h2>{data.name}</h2>
           <span className="muted">({data.color}, {rep.size} moves)</span>
           <Link className="button primary" to={`/r/${id}/train`}>Train</Link>
-          {ply > 0 && (
-            <Link className="button" to={`/r/${id}/train?from=${encodeURIComponent(fen)}`} title="Train only the lines after this position">
-              Train from here
-            </Link>
-          )}
+          {ply > 0 &&
+            (unsaved.length === 0 ? (
+              <Link className="button" to={`/r/${id}/train?from=${encodeURIComponent(fen)}`} title="Train only the lines after this position">
+                Train from here
+              </Link>
+            ) : (
+              <button disabled title="Save the variation first">Train from here</button>
+            ))}
           <a className="button" href={`/api/repertoires/${id}/pgn`}>Export PGN</a>
         </header>
 
