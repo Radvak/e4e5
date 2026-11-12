@@ -157,3 +157,8 @@ button.primary { background: var(--accent); border-color: var(--accent); }
 kbd { display: inline-block; min-width: 18px; padding: 0 4px; margin: 0 1px; border: 1px solid #5a5856; border-radius: 3px; background: #2f2d2a; font-size: 0.9em; text-align: center; }
 
 .swatch.outlined { box-shadow: 0 0 0 1px #fff; }
+
+/* Next-move outline: the white "outline" arrow outlines the shaft only (no head of its own,
+   which would be scaled up); the green head gets a thin white edge of the same thickness. */
+.cg-wrap line[marker-end^='url(#arrowhead-outline'] { marker-end: none; }
+.cg-wrap marker[id^='arrowhead-next'] path { stroke: #fff; stroke-width: 0.15; stroke-linejoin: round; paint-order: stroke; }
