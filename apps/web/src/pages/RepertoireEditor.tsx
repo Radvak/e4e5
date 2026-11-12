@@ -188,15 +188,19 @@ export function RepertoireEditor({ me }: { me: Me }) {
       brush,
       modifiers: { lineWidth },
     });
-    const out = here.map((m) => arrow(m.uci, 'repertoire', width(share.get(m.uci) ?? 0, 9)));
+    // The move → plays is drawn lighter and a bit thicker, so the keyboard choice is visible.
+    const next = options[selected];
+    // Drawn first (underneath): an arrow on the same line stays visible on top of it.
+    const out = next ? [arrow(next.uci, 'next', width(share.get(next.uci) ?? 0, 9) + 3)] : [];
+    for (const m of here) if (m.uci !== next?.uci) out.push(arrow(m.uci, 'repertoire', width(share.get(m.uci) ?? 0, 9)));
     for (const m of ed?.moves.slice(0, 6) ?? []) {
       const s = share.get(m.uci) ?? 0;
-      if (s >= 0.03 && !rep.has(fen, m.uci)) out.push(arrow(m.uci, 'popular', width(s)));
+      if (s >= 0.03 && !rep.has(fen, m.uci) && m.uci !== next?.uci) out.push(arrow(m.uci, 'popular', width(s)));
     }
     const best = engineOn ? engine.lines[0]?.pv[0] : undefined;
     if (best) out.push(arrow(best.uci, 'engine', 6));
     return out;
-  }, [explorer.data, rep, fen, here, engineOn, engine.lines[0]?.pv[0]?.uci]);
+  }, [explorer.data, rep, fen, here, engineOn, engine.lines[0]?.pv[0]?.uci, options, selected]);
 
   if (isLoading) return <p>Loading…</p>;
   if (error || !data) return <p className="error">Could not load the repertoire.</p>;
