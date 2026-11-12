@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, type Grade } from '../api';
 import { Board } from '../components/Board';
 import { answerArrows, lineText, REPLY_MS } from './common';
-import { FeedbackPanel } from './ReviewMode';
+import { FeedbackPanel, outcomeOf, type Feedback } from './Feedback';
 import type { Source } from './useTrainingSources';
 
 /** Waiting time for statistics before choosing a reply without them. */
@@ -46,8 +46,8 @@ export function PlayMode({
   const playable = useMemo(() => sources.filter((s) => s.positions.length > 0), [sources]);
   const [line, setLine] = useState<LineState | null>(null);
   const [resetKey, setResetKey] = useState(0);
-  const [score, setScore] = useState({ lines: 0, moves: 0, clean: 0 });
-  const [feedback, setFeedback] = useState<{ played: RepMove; others: RepMove[]; clean: boolean } | null>(null);
+  const [score, setScore] = useState({ lines: 0, moves: 0, asked: 0, clean: 0 });
+  const [feedback, setFeedback] = useState<Feedback | null>(null);
   const token = useRef(0);
 
   const statsQuery = useCallback(
@@ -140,13 +140,18 @@ export function PlayMode({
       return;
     }
     const card = line.source.cards.get(line.fen);
-    const clean = !!card && !line.revealed && line.mistakes === 0;
+    const outcome = outcomeOf(!card, line.mistakes, line.revealed);
     let grade: Grade | null = null;
-    if (!clean) grade = 'again'; // new, helped or wrong
-    else if (Date.parse(card.due) <= Date.now()) grade = 'good';
+    if (outcome !== 'correct') grade = 'again'; // new, helped or wrong
+    else if (card && Date.parse(card.due) <= Date.now()) grade = 'good';
     if (grade) onReview(line.source, line.fen, grade);
-    setScore((s) => ({ ...s, moves: s.moves + 1, clean: s.clean + (clean ? 1 : 0) }));
-    setFeedback({ played: answer, others: answers.filter((m) => m.uci !== answer.uci), clean });
+    setScore((s) => ({
+      ...s,
+      moves: s.moves + 1,
+      asked: s.asked + (outcome === 'new' ? 0 : 1),
+      clean: s.clean + (outcome === 'correct' ? 1 : 0),
+    }));
+    setFeedback({ played: answer, others: answers.filter((m) => m.uci !== answer.uci), outcome });
     setLine({ ...line, fen: answer.toFen, history: [...line.history, answer], phase: after(line.source, answer.toFen) });
   };
 
@@ -192,7 +197,7 @@ export function PlayMode({
           {line?.phase === 'end' && <p className="success">✓ End of the line</p>}
           <p className="muted small-text">
             {score.lines} line(s) · {score.moves} move(s)
-            {score.moves > 0 && ` · ${Math.round((100 * score.clean) / score.moves)}% first try`} · opponent moves
+            {score.asked > 0 && ` · ${Math.round((100 * score.clean) / score.asked)}% first try`} · opponent moves
             weighted by Lichess {speeds.join('+')} games
           </p>
         </section>

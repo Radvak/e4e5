@@ -41,7 +41,7 @@ export function Training({ me }: { me: Me }) {
     localStorage.setItem('trainingMode', m);
     setModeState(m);
   };
-  const [counts, setCounts] = useState({ due: 0, fresh: 0, reviewed: 0, firstTry: 0 });
+  const [counts, setCounts] = useState({ due: 0, fresh: 0, reviewed: 0, asked: 0, firstTry: 0 });
   const onCounts = useCallback((c: typeof counts) => setCounts(c), []);
   const onReview = (source: Source, fen: string, grade: Grade) => review.mutate({ source, fen, grade });
 
@@ -68,7 +68,7 @@ export function Training({ me }: { me: Me }) {
           <>
             <span className="muted">
               {counts.due} due · {counts.fresh} new · {counts.reviewed} done
-              {counts.reviewed > 0 && ` (${Math.round((100 * counts.firstTry) / counts.reviewed)}% first try)`}
+              {counts.asked > 0 && ` (${Math.round((100 * counts.firstTry) / counts.asked)}% first try)`}
             </span>
             <label className="muted">
               New per day{' '}

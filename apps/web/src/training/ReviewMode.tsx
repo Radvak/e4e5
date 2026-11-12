@@ -4,6 +4,7 @@ import type { Grade, ReviewCard } from '../api';
 import { Board } from '../components/Board';
 import { dayStart } from '../settings';
 import { answerArrows, inTime, JUMP_MS, lineText, REPLAY_MS, REPLAYED_PLIES, REPLY_MS } from './common';
+import { FeedbackPanel, outcomeOf, type Feedback, type Outcome } from './Feedback';
 import type { Source } from './useTrainingSources';
 
 interface Item {
@@ -15,12 +16,6 @@ interface Question extends Item {
   isNew: boolean;
   /** When the line continues: my last move, then the opponent's reply leading to `target`. */
   lead?: { mine: RepMove; reply: RepMove };
-}
-
-interface Feedback {
-  played: RepMove;
-  others: RepMove[];
-  clean: boolean;
 }
 
 const same = (a: Item, b: Item) => a.source.id === b.source.id && a.target.fen === b.target.fen;
@@ -43,7 +38,7 @@ export function ReviewMode({
   /** All unseen positions are available (e.g. training a chosen subtree). */
   noNewLimit?: boolean;
   onReview: (source: Source, fen: string, grade: Grade) => void;
-  onCounts: (c: { due: number; fresh: number; reviewed: number; firstTry: number }) => void;
+  onCounts: (c: { due: number; fresh: number; reviewed: number; asked: number; firstTry: number }) => void;
   /** Shown when nothing is left to review. */
   idle: React.ReactNode;
 }) {
@@ -51,7 +46,8 @@ export function ReviewMode({
   const [ahead, setAhead] = useState(false);
   /** Positions answered in this session (not asked again when reviewing ahead). */
   const answered = useRef(new Set<string>());
-  const [stats, setStats] = useState({ reviewed: 0, firstTry: 0 });
+  /** reviewed: all answers; asked: positions already learnt; firstTry: asked and right first time. */
+  const [stats, setStats] = useState({ reviewed: 0, asked: 0, firstTry: 0 });
   const [now, setNow] = useState(() => Date.now());
   const [current, setCurrent] = useState<Question | null>(null);
   const [round, setRound] = useState(0);
@@ -121,11 +117,16 @@ export function ReviewMode({
     return items[0] ? question(items[0]) : null;
   };
 
-  const onAnswered = (q: Question, played: RepMove, grade: Grade, clean: boolean) => {
+  const onAnswered = (q: Question, played: RepMove, outcome: Outcome) => {
+    const grade: Grade = outcome === 'correct' ? 'good' : 'again';
     answered.current.add(`${q.source.id}|${q.target.fen}`);
     onReview(q.source, q.target.fen, grade);
-    setStats((s) => ({ reviewed: s.reviewed + 1, firstTry: s.firstTry + (clean ? 1 : 0) }));
-    setFeedback({ played, others: q.source.rep.movesAt(q.target.fen).filter((m) => m.uci !== played.uci), clean });
+    setStats((s) => ({
+      reviewed: s.reviewed + 1,
+      asked: s.asked + (outcome === 'new' ? 0 : 1),
+      firstTry: s.firstTry + (outcome === 'correct' ? 1 : 0),
+    }));
+    setFeedback({ played, others: q.source.rep.movesAt(q.target.fen).filter((m) => m.uci !== played.uci), outcome });
     const next = nextAfter(q, played);
     if (next?.lead) return ask(next);
     jumpTimer.current = setTimeout(() => {
@@ -171,7 +172,7 @@ export function ReviewMode({
       question={current}
       feedback={feedback}
       showName={sources.length > 1}
-      onAnswered={(played, grade, clean) => onAnswered(current, played, grade, clean)}
+      onAnswered={(played, outcome) => onAnswered(current, played, outcome)}
     />
   );
 }
@@ -192,7 +193,7 @@ function Drill({
   question: Question;
   feedback: Feedback | null;
   showName: boolean;
-  onAnswered: (played: RepMove, grade: Grade, clean: boolean) => void;
+  onAnswered: (played: RepMove, outcome: Outcome) => void;
 }) {
   const { source, target, isNew, lead } = question;
   const plies = target.path.length;
@@ -236,9 +237,8 @@ function Drill({
       return;
     }
     update({ played: answer });
-    const clean = !isNew && !revealed && mistakes === 0;
     // New or helped: asked again soon. Right first time: good.
-    onAnswered(answer, clean ? 'good' : 'again', clean);
+    onAnswered(answer, outcomeOf(isNew, mistakes, revealed));
   };
 
   let boardFen: string;
@@ -291,14 +291,3 @@ function Drill({
   );
 }
 
-export function FeedbackPanel({ played, others, clean }: Feedback) {
-  return (
-    <section className="panel feedback">
-      <p>
-        <span className={clean ? 'success' : 'warning'}>{clean ? '✓' : '↻'} {played.san}</span>
-        {others.length > 0 && <span className="muted"> · also in your repertoire: {others.map((m) => m.san).join(', ')}</span>}
-      </p>
-      {played.comment && <p className="comment">{played.comment}</p>}
-    </section>
-  );
-}
