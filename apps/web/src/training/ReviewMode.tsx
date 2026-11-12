@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Grade, ReviewCard } from '../api';
 import { Board } from '../components/Board';
 import { dayStart } from '../settings';
-import { answerArrows, inTime, JUMP_MS, lineText, REPLY_MS } from './common';
+import { answerArrows, inTime, JUMP_MS, lineText, REPLAY_MS, REPLAYED_PLIES, REPLY_MS } from './common';
 import type { Source } from './useTrainingSources';
 
 interface Item {
@@ -170,12 +170,21 @@ function Drill({
   onAnswered: (played: RepMove, grade: Grade, clean: boolean) => void;
 }) {
   const { source, target, isNew, lead } = question;
-  const fresh = () => ({ round, replied: !lead, mistakes: 0, revealed: isNew, played: null as RepMove | null });
+  const plies = target.path.length;
+  const fresh = () => ({
+    round,
+    replied: !lead,
+    // Jump to another line: replay its last moves; following the line: no replay.
+    shown: lead ? plies : Math.max(0, plies - REPLAYED_PLIES),
+    mistakes: 0,
+    revealed: isNew,
+    played: null as RepMove | null,
+  });
   const [state, setState] = useState(fresh);
   // New question: reset the state during render (keeps the board mounted, no flash).
   const current = state.round === round ? state : fresh();
   if (state.round !== round) setState(current);
-  const { replied, mistakes, revealed, played } = current;
+  const { replied, shown, mistakes, revealed, played } = current;
   const update = (patch: Partial<typeof current>) => setState((s) => ({ ...s, ...patch }));
   const [resetKey, setResetKey] = useState(0);
   const answers = source.rep.movesAt(target.fen);
@@ -186,7 +195,13 @@ function Drill({
     return () => clearTimeout(t);
   }, [replied, round]);
 
-  const asking = replied && !played;
+  useEffect(() => {
+    if (shown >= plies) return;
+    const t = setTimeout(() => update({ shown: shown + 1 }), REPLAY_MS);
+    return () => clearTimeout(t);
+  }, [shown, plies, round]);
+
+  const asking = replied && shown >= plies && !played;
   const play = (uci: string) => {
     if (!asking) return;
     const answer = answers.find((m) => m.uci === uci);
@@ -205,6 +220,7 @@ function Drill({
   let lastMove: string | undefined;
   if (played) [boardFen, lastMove] = [played.toFen, played.uci];
   else if (!replied && lead) [boardFen, lastMove] = [lead.mine.toFen, lead.mine.uci];
+  else if (shown < plies) [boardFen, lastMove] = [target.path[shown - 1]?.toFen ?? START_FEN, target.path[shown - 1]?.uci];
   else [boardFen, lastMove] = [target.fen, (lead?.reply ?? target.path.at(-1))?.uci];
 
   const shapes = useMemo(() => (revealed && asking ? answerArrows(answers) : []), [revealed, asking, answers]);
@@ -224,9 +240,11 @@ function Drill({
       <div className="editor-side">
         <section className="panel">
           {showName && <p className="muted small-text">{source.name}</p>}
-          <p className="muted">{lineText(target.path) || 'Initial position'}</p>
+          <p className="muted">{lineText(target.path.slice(0, shown)) || 'Initial position'}</p>
           {played ? (
             <p className="success">✓ {played.san}</p>
+          ) : !asking ? (
+            <p className="muted">…</p>
           ) : isNew ? (
             <p>
               <strong>New position.</strong> Play the move shown{answers.length > 1 ? ' (any of them)' : ''}:{' '}

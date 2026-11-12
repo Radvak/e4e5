@@ -6,6 +6,9 @@ import type { Key } from 'chessground/types';
 export const REPLY_MS = 300;
 /** Pause on a correct answer before jumping to another line. */
 export const JUMP_MS = 350;
+/** After a jump to another line, its last moves are replayed quickly for context. */
+export const REPLAYED_PLIES = 4;
+export const REPLAY_MS = 200;
 /** A position failed this many times after being learnt is a "leech". */
 export const LEECH_LAPSES = 3;
 /** Interval (days) from which a position counts as well known. */
