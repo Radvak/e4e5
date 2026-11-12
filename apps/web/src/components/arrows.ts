@@ -9,6 +9,13 @@ export const ARROWS = {
 export type ArrowKind = keyof typeof ARROWS;
 
 /** chessground brushes for the arrow kinds. */
-export const BRUSHES = Object.fromEntries(
-  Object.entries(ARROWS).map(([key, a]) => [key, { key, color: a.color, opacity: 0.85, lineWidth: 10 }]),
-);
+export const BRUSHES = {
+  ...Object.fromEntries(
+    Object.entries(ARROWS).map(([key, a]) => [key, { key, color: a.color, opacity: key === 'next' ? 1 : 0.85, lineWidth: 10 }]),
+  ),
+  /** White arrow drawn just under the next move, slightly wider: a thin outline. */
+  outline: { key: 'outline', color: '#ffffff', opacity: 1, lineWidth: 10 },
+};
+
+/** Extra width (chessground lineWidth units) of the outline around the next move. */
+export const OUTLINE_EXTRA = 1.3;

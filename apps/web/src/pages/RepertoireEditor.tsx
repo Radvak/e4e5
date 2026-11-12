@@ -5,7 +5,7 @@ import type { Key } from 'chessground/types';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { api, type ImportResult, type Me, type StoredMove } from '../api';
-import { ARROWS, type ArrowKind } from '../components/arrows';
+import { ARROWS, OUTLINE_EXTRA, type ArrowKind } from '../components/arrows';
 import { EnginePanel } from '../components/EnginePanel';
 import { JumpBox } from '../components/JumpBox';
 import { useEngine } from '../engine/useEngine';
@@ -182,11 +182,11 @@ export function RepertoireEditor({ me }: { me: Me }) {
     const share = new Map((ed?.moves ?? []).map((m) => [m.uci, total ? totalGames(m) / total : 0]));
     // Thicker = played more often; repertoire arrows never get thinner than 9.
     const width = (s: number, min = 5) => Math.max(min, Math.round(5 + 11 * s));
-    const arrow = (uci: string, brush: ArrowKind, lineWidth: number, hilite = false): DrawShape => ({
+    const arrow = (uci: string, brush: ArrowKind | 'outline', lineWidth: number): DrawShape => ({
       orig: uci.slice(0, 2) as Key,
       dest: uci.slice(2, 4) as Key,
       brush,
-      modifiers: { lineWidth, hilite },
+      modifiers: { lineWidth },
     });
     // The move → plays gets a thin white outline (same colour and width: width encodes popularity).
     const next = options[selected];
@@ -194,7 +194,10 @@ export function RepertoireEditor({ me }: { me: Me }) {
       .filter((m) => m.uci !== next?.uci)
       .map((m) => arrow(m.uci, 'repertoire', width(share.get(m.uci) ?? 0, 9)));
     // Drawn last, so its outline stays visible over an arrow on the same line.
-    if (next) out.push(arrow(next.uci, 'next', width(share.get(next.uci) ?? 0, 9), true));
+    if (next) {
+      const w = width(share.get(next.uci) ?? 0, 9);
+      out.push(arrow(next.uci, 'outline', w + OUTLINE_EXTRA), arrow(next.uci, 'next', w));
+    }
     for (const m of ed?.moves.slice(0, 6) ?? []) {
       const s = share.get(m.uci) ?? 0;
       if (s >= 0.03 && !rep.has(fen, m.uci) && m.uci !== next?.uci) out.push(arrow(m.uci, 'popular', width(s)));
