@@ -173,7 +173,7 @@ export function Training() {
 
       {current ? (
         <Drill
-          key={round}
+          round={round}
           rep={rep}
           question={current}
           feedback={feedback}
@@ -202,41 +202,46 @@ export function Training() {
  * the opponent's reply. New positions show the answer; two wrong tries reveal it.
  */
 function Drill({
+  round,
   rep,
   question,
   feedback,
   onAnswered,
 }: {
+  /** Changes with each question. Not used as a React key: the board must stay mounted. */
+  round: number;
   rep: Repertoire;
   question: Question;
   feedback: Feedback | null;
   onAnswered: (played: RepMove, grade: Grade, clean: boolean) => void;
 }) {
   const { target, isNew, lead } = question;
-  const [replied, setReplied] = useState(!lead);
-  const [mistakes, setMistakes] = useState(0);
-  const [revealed, setRevealed] = useState(isNew);
+  const fresh = () => ({ round, replied: !lead, mistakes: 0, revealed: isNew, played: null as RepMove | null });
+  const [state, setState] = useState(fresh);
+  // New question: reset the state during render (keeps the board mounted, no flash).
+  const current = state.round === round ? state : fresh();
+  if (state.round !== round) setState(current);
+  const { replied, mistakes, revealed, played } = current;
+  const update = (patch: Partial<typeof current>) => setState((s) => ({ ...s, ...patch }));
   const [resetKey, setResetKey] = useState(0);
-  const [played, setPlayed] = useState<RepMove | null>(null);
   const answers = rep.movesAt(target.fen);
 
   useEffect(() => {
     if (replied) return;
-    const t = setTimeout(() => setReplied(true), REPLY_MS);
+    const t = setTimeout(() => update({ replied: true }), REPLY_MS);
     return () => clearTimeout(t);
-  }, [replied]);
+  }, [replied, round]);
 
   const asking = replied && !played;
   const play = (uci: string) => {
     if (!asking) return;
     const answer = answers.find((m) => m.uci === uci);
     if (!answer) {
-      setMistakes((n) => n + 1);
-      if (mistakes + 1 >= 2) setRevealed(true);
+      update({ mistakes: mistakes + 1, revealed: revealed || mistakes + 1 >= 2 });
       setResetKey((k) => k + 1);
       return;
     }
-    setPlayed(answer);
+    update({ played: answer });
     const clean = !isNew && !revealed && mistakes === 0;
     // New or helped: asked again soon. Right first time: good.
     onAnswered(answer, clean ? 'good' : 'again', clean);
@@ -285,7 +290,7 @@ function Drill({
             <p className="error">✗ Not in your repertoire.{revealed ? ' Play the move shown.' : ' Try again.'}</p>
           )}
           {asking && !revealed && (
-            <button className="small" onClick={() => setRevealed(true)}>Show the answer</button>
+            <button className="small" onClick={() => update({ revealed: true })}>Show the answer</button>
           )}
         </section>
 
