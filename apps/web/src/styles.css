@@ -155,3 +155,7 @@ button.primary { background: var(--accent); border-color: var(--accent); }
 .rep-moves .unsaved { color: var(--warn); font-style: italic; }
 .keys { margin: 6px 0 0; }
 kbd { display: inline-block; min-width: 18px; padding: 0 4px; margin: 0 1px; border: 1px solid #5a5856; border-radius: 3px; background: #2f2d2a; font-size: 0.9em; text-align: center; }
+
+/* Next-move arrow (brush "next"): dashed. Lengths are in board squares. */
+.cg-wrap line[marker-end^='url(#arrowhead-next'] { stroke-dasharray: 0.2 0.13; stroke-linecap: butt; }
+.swatch.dashed { background: repeating-linear-gradient(90deg, var(--c) 0 5px, transparent 5px 9px); }

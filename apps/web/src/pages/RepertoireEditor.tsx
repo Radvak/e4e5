@@ -188,7 +188,7 @@ export function RepertoireEditor({ me }: { me: Me }) {
       brush,
       modifiers: { lineWidth },
     });
-    // The move → plays is drawn in a lighter green (same width: width encodes popularity).
+    // The move → plays is drawn dashed (same colour and width: width encodes popularity).
     const next = options[selected];
     // Drawn first (underneath): an arrow on the same line stays visible on top of it.
     const out = next ? [arrow(next.uci, 'next', width(share.get(next.uci) ?? 0, 9))] : [];
@@ -222,7 +222,7 @@ export function RepertoireEditor({ me }: { me: Me }) {
         <p className="legend muted">
           {(Object.keys(ARROWS) as ArrowKind[]).filter((k) => k !== 'engine' || engineOn).map((k) => (
             <span key={k} className="legend-item">
-              <span className="swatch" style={{ background: ARROWS[k].color }} />
+              <span className={`swatch ${k === 'next' ? 'dashed' : ''}`} style={{ '--c': ARROWS[k].color, background: k === 'next' ? undefined : ARROWS[k].color } as React.CSSProperties} />
               {ARROWS[k].label}
             </span>
           ))}
