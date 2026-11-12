@@ -96,3 +96,12 @@ button.primary { background: var(--accent); border-color: var(--accent); }
 .button.small { font-size: 0.85em; padding: 2px 8px; }
 .button.train { background: var(--accent); border-color: var(--accent); color: var(--text); }
 .button.primary { background: var(--accent); border-color: var(--accent); }
+
+.tabs.inline { display: inline-flex; }
+.tabs.inline button { flex: none; }
+.from { margin: 4px 0 0; }
+.progress table { border-collapse: collapse; width: 100%; font-size: 0.9em; }
+.progress th, .progress td { padding: 3px 8px; text-align: right; }
+.progress th:first-child, .progress td:first-child { text-align: left; }
+.progress h4 { margin: 12px 0 4px; font-size: 0.95em; }
+.leeches ul { margin: 0; padding-left: 18px; }

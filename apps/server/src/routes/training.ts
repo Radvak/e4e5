@@ -27,6 +27,8 @@ const publicCard = (c: CardRow) => ({
   due: c.due.toISOString(),
   reps: c.reps,
   lapses: c.lapses,
+  /** Current interval in days (0 while learning). */
+  interval: Number(c.card.scheduled_days ?? 0),
   createdAt: c.createdAt.toISOString(),
 });
 

@@ -119,3 +119,34 @@ describe('training positions', () => {
     expect(trainingPositions(rep).map((p) => p.path.map((m) => m.san).join(' '))).toEqual(['e4', 'e4 c5 Nf3', 'd4', 'd4 d5 c4']);
   });
 });
+
+describe('play mode helpers', () => {
+  it('restricts training to a subtree', async () => {
+    const { trainingPositionsFrom } = await import('../src/index.js');
+    const moves = pgnToMoves(ITALIAN).moves;
+    const rep = new Repertoire('white', moves);
+    const afterNc6 = moves.find((m) => m.san === 'Nc6')!.toFen;
+    const paths = trainingPositionsFrom(rep, afterNc6).map((p) => p.path.map((m) => m.san).join(' '));
+    expect(paths).toEqual(['e4 e5 Nf3 Nc6', 'e4 e5 Nf3 Nc6 Bc4 Bc5', 'e4 e5 Nf3 Nc6 Bc4 Nf6']);
+    expect(trainingPositionsFrom(rep, START_FEN)).toHaveLength(5);
+  });
+
+  it('weights replies by games, with a floor for unplayed ones', async () => {
+    const { replyWeights, chooseReply } = await import('../src/index.js');
+    const rep = new Repertoire('white', pgnToMoves(ITALIAN).moves);
+    const afterBc4 = [...rep.all()].find((m) => m.san === 'Bc4')!.toFen;
+    const replies = rep.movesAt(afterBc4); // Bc5 (main), Nf6
+    const stats = {
+      white: 0, draws: 0, black: 0,
+      moves: [
+        { uci: replies[0]!.uci, san: 'Bc5', white: 600, draws: 0, black: 0 },
+        { uci: 'd7d6', san: 'd6', white: 400, draws: 0, black: 0 },
+      ],
+    };
+    expect(replyWeights(replies, stats)).toEqual([600, 12]);
+    expect(replyWeights(replies, null)).toEqual([2, 1]);
+    expect(chooseReply(replies, stats, () => 0.99)?.san).toBe('Nf6');
+    expect(chooseReply(replies, stats, () => 0.5)?.san).toBe('Bc5');
+    expect(chooseReply([], stats)).toBeUndefined();
+  });
+});

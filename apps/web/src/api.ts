@@ -55,7 +55,7 @@ export interface RepertoireSummary { id: string; name: string; color: Color; cre
 export interface StoredMove extends RepMove { id: number; source: string }
 export interface RepertoireDetail extends RepertoireSummary { moves: StoredMove[] }
 export type Grade = 'again' | 'hard' | 'good' | 'easy';
-export interface ReviewCard { fen: string; due: string; reps: number; lapses: number; createdAt: string }
+export interface ReviewCard { fen: string; due: string; reps: number; lapses: number; interval: number; createdAt: string }
 export interface TrainingSummary { repertoireId: string; total: number; due: number; new: number }
 export interface ImportResult {
   games: number; added: number; duplicates: number; unreachable: number; errors: string[];

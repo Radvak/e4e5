@@ -1,9 +1,9 @@
-import { playUci, Repertoire, START_FEN, totalGames, turnOf, type PlayedMove } from '@prepa-cahier/core';
+import { playUci, Repertoire, START_FEN, totalGames, trainingPositions, turnOf, type PlayedMove } from '@prepa-cahier/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { DrawShape } from 'chessground/draw';
 import type { Key } from 'chessground/types';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { api, type ImportResult, type Me, type StoredMove } from '../api';
 import { ARROWS, type ArrowKind } from '../components/arrows';
 import { Board } from '../components/Board';
@@ -28,6 +28,19 @@ export function RepertoireEditor({ me }: { me: Me }) {
   const [notice, setNotice] = useState<string | null>(null);
 
   const rep = useMemo(() => new Repertoire(data?.color ?? 'white', data?.moves ?? []), [data]);
+
+  // ?fen=<position>: open the editor on that position (e.g. from the training progress).
+  const [params, setParams] = useSearchParams();
+  const openFen = params.get('fen');
+  useEffect(() => {
+    if (!openFen || !data) return;
+    const target = trainingPositions(rep).find((p) => p.fen === openFen);
+    if (target) {
+      setLine(target.path);
+      setPly(target.path.length);
+    }
+    setParams({}, { replace: true });
+  }, [openFen, data]);
   const stored = useMemo(() => new Map((data?.moves ?? []).map((m) => [`${m.fromFen} ${m.uci}`, m])), [data]);
   const storedMove = (m: LineMove) => stored.get(`${m.fromFen} ${m.uci}`);
   const fen = line[ply - 1]?.toFen ?? START_FEN;
@@ -169,6 +182,11 @@ export function RepertoireEditor({ me }: { me: Me }) {
           <h2>{data.name}</h2>
           <span className="muted">({data.color}, {rep.size} moves)</span>
           <Link className="button primary" to={`/r/${id}/train`}>Train</Link>
+          {ply > 0 && (
+            <Link className="button" to={`/r/${id}/train?from=${encodeURIComponent(fen)}`} title="Train only the lines after this position">
+              Train from here
+            </Link>
+          )}
           <a className="button" href={`/api/repertoires/${id}/pgn`}>Export PGN</a>
         </header>
 

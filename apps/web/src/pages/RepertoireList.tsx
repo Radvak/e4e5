@@ -32,7 +32,19 @@ export function RepertoireList() {
 
   return (
     <div className="list">
-      <h2>Your repertoires</h2>
+      <div className="row">
+        <h2>Your repertoires</h2>
+        {(() => {
+          const s = summary.data ?? [];
+          const due = s.reduce((n, x) => n + x.due, 0);
+          const fresh = s.reduce((n, x) => n + x.new, 0);
+          return s.some((x) => x.total > 0) ? (
+            <Link className="button train" to="/train">
+              Train all{due + fresh > 0 ? ` (${due} due, ${fresh} new)` : ' ✓'}
+            </Link>
+          ) : null;
+        })()}
+      </div>
       {isLoading && <p>Loading…</p>}
       {!isLoading && data.length === 0 && <p className="muted">No repertoire yet: create one below.</p>}
       <ul className="repertoires">

@@ -1,5 +1,6 @@
 /** Which positions of a repertoire are trained, and the line leading to each. */
 import { START_FEN } from './position.js';
+import { totalGames, type ExplorerResponse } from './explorer.js';
 import type { Repertoire, RepMove } from './repertoire.js';
 
 export interface TrainingPosition {
@@ -30,4 +31,41 @@ export function trainingPositions(rep: Repertoire): TrainingPosition[] {
     }
   }
   return out;
+}
+
+/** Training positions in the part of the repertoire reachable from `root`. */
+export function trainingPositionsFrom(rep: Repertoire, root: string): TrainingPosition[] {
+  if (root === START_FEN) return trainingPositions(rep);
+  const reach = rep.reachable(root);
+  return trainingPositions(rep).filter((p) => reach.has(p.fen));
+}
+
+/**
+ * Weight of each repertoire reply of the opponent: number of games in the explorer statistics.
+ * Replies missing from the statistics still get a small weight (2% of the known games) so they
+ * are played sometimes. Without statistics: main line 2, others 1.
+ */
+export function replyWeights(replies: RepMove[], stats: ExplorerResponse | null | undefined): number[] {
+  const games = new Map((stats?.moves ?? []).map((m) => [m.uci, totalGames(m)]));
+  const known = replies.map((m) => games.get(m.uci) ?? 0);
+  const sum = known.reduce((a, b) => a + b, 0);
+  if (sum === 0) return replies.map((m) => (m.isMain ? 2 : 1));
+  const floor = Math.max(1, 0.02 * sum);
+  return known.map((g) => (g > 0 ? g : floor));
+}
+
+/** Picks an opponent reply at random, weighted by `replyWeights`. */
+export function chooseReply(
+  replies: RepMove[],
+  stats: ExplorerResponse | null | undefined,
+  random: () => number = Math.random,
+): RepMove | undefined {
+  if (!replies.length) return undefined;
+  const weights = replyWeights(replies, stats);
+  let r = random() * weights.reduce((a, b) => a + b, 0);
+  for (let i = 0; i < replies.length; i++) {
+    r -= weights[i]!;
+    if (r < 0) return replies[i];
+  }
+  return replies.at(-1);
 }

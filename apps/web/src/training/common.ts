@@ -1,0 +1,29 @@
+import type { RepMove } from '@prepa-cahier/core';
+import type { DrawShape } from 'chessground/draw';
+import type { Key } from 'chessground/types';
+
+/** Pause before the opponent's reply. */
+export const REPLY_MS = 300;
+/** Pause on a correct answer before jumping to another line. */
+export const JUMP_MS = 350;
+/** A position failed this many times after being learnt is a "leech". */
+export const LEECH_LAPSES = 3;
+/** Interval (days) from which a position counts as well known. */
+export const MATURE_DAYS = 21;
+
+export function lineText(path: RepMove[]): string {
+  return path.map((m, i) => `${i % 2 === 0 ? `${i / 2 + 1}. ` : ''}${m.san}`).join(' ');
+}
+
+/** Short "in 3 min" / "in 2 h" / "in 4 days". */
+export function inTime(date: Date): string {
+  const min = Math.max(1, Math.round((date.getTime() - Date.now()) / 60_000));
+  if (min < 60) return `in ${min} min`;
+  if (min < 48 * 60) return `in ${Math.round(min / 60)} h`;
+  return `in ${Math.round(min / 1440)} days`;
+}
+
+/** Green arrows showing the expected moves. */
+export function answerArrows(moves: RepMove[]): DrawShape[] {
+  return moves.map((m) => ({ orig: m.uci.slice(0, 2) as Key, dest: m.uci.slice(2, 4) as Key, brush: 'repertoire' }));
+}

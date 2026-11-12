@@ -67,8 +67,10 @@ Planned: `review_cards` (FSRS state per user move), `game_syncs`, `inbox_items`.
   repertoire move there is accepted. Drill = replay of the line, then the question. New
   positions are shown with the answer first, then asked again after the learning steps. Up to
   N new positions per day and per repertoire, learnt line by line (main line first).
-- [ ] **2b. Training v2**: "play the line" mode where the app plays the opponent, choosing replies
-  weighted by explorer frequency; train one line / all repertoires; stats and leeches.
+- [x] **2b. Training v2**: "Play lines" mode (the app plays the opponent, replies weighted by
+  Lichess frequencies at the selected level; reviews recorded only for mistakes, new positions
+  and due positions); "Train from here" (subtree); "Train all" repertoires; progress table and
+  leeches (forgotten 3+ times) with links to the editor.
 - [ ] **4. Gap finder**: probability of reaching each position (product of opponent move
   frequencies), a "top holes" list, and a coverage score per repertoire. Explorer calls are
   bounded by a probability cutoff and run in a background queue.

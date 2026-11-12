@@ -50,7 +50,8 @@ export function App() {
         <Routes>
           <Route path="/" element={<RepertoireList />} />
           <Route path="/r/:id" element={<RepertoireEditor me={me.data} />} />
-          <Route path="/r/:id/train" element={<Training />} />
+          <Route path="/r/:id/train" element={<Training me={me.data} />} />
+          <Route path="/train" element={<Training me={me.data} />} />
           <Route path="/settings" element={<Settings me={me.data} />} />
         </Routes>
       </main>
