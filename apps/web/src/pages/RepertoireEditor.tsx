@@ -192,7 +192,7 @@ export function RepertoireEditor({ me }: { me: Me }) {
     const next = options[selected];
     const out = here
       .filter((m) => m.uci !== next?.uci)
-      .map((m) => arrow(m.uci, 'repertoire', width(share.get(m.uci) ?? 0, 9)));
+      .map((m) => arrow(m.uci, 'repertoire', width(share.get(m.uci) ?? 0, 6)));
     // Drawn last, so the solid next move stays on top of dashed ones on the same line.
     if (next) out.push(arrow(next.uci, 'next', width(share.get(next.uci) ?? 0, 9)));
     for (const m of ed?.moves.slice(0, 6) ?? []) {
