@@ -150,3 +150,8 @@ button.primary { background: var(--accent); border-color: var(--accent); }
 .engine-line .pv button.link { padding: 0 2px; }
 
 .opponent-comment { margin: 4px 0 8px; padding: 6px 10px; background: #1e1d1b; border-left: 3px solid #58a6ff; border-radius: 3px; }
+
+.rep-moves li.selected { background: #3a3835; border-radius: 4px; box-shadow: inset 3px 0 0 var(--accent); padding-left: 6px; }
+.rep-moves .unsaved { color: var(--warn); font-style: italic; }
+.keys { margin: 6px 0 0; }
+kbd { display: inline-block; min-width: 18px; padding: 0 4px; margin: 0 1px; border: 1px solid #5a5856; border-radius: 3px; background: #2f2d2a; font-size: 0.9em; text-align: center; }

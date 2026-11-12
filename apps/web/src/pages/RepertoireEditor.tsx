@@ -93,10 +93,27 @@ export function RepertoireEditor({ me }: { me: Me }) {
   );
 
   /** Next move: the line's, else the repertoire main line. */
+  /**
+   * Next moves to choose from with the keyboard: the line's next move if it is not saved yet,
+   * then the repertoire moves (main first). ↑/↓ change the choice, → plays it.
+   */
+  const options: PlayedMove[] = useMemo(() => {
+    const next = line[ply];
+    const draft = next && !here.some((m) => m.uci === next.uci) ? [next] : [];
+    return [...draft, ...here];
+  }, [line, ply, here]);
+  const [choice, setChoice] = useState<{ fen: string; index: number } | null>(null);
+  const defaultChoice = Math.max(0, options.findIndex((m) => m.uci === line[ply]?.uci));
+  const selected = choice && choice.fen === fen ? Math.min(choice.index, options.length - 1) : defaultChoice;
+  const choose = (delta: number) => {
+    if (options.length < 2) return;
+    setChoice({ fen, index: (selected + delta + options.length) % options.length });
+  };
+
   const forward = useCallback(() => {
-    if (line[ply]) return setPly(ply + 1);
-    if (here[0]) play(here[0].uci);
-  }, [line, ply, here, play]);
+    const move = options[selected];
+    if (move) play(move.uci);
+  }, [options, selected, play]);
 
   /** Drops the unsaved moves: back to the longest saved part of the line. */
   const discard = () => {
@@ -134,8 +151,11 @@ export function RepertoireEditor({ me }: { me: Me }) {
         e.preventDefault();
         searchRef.current?.focus();
       }
+      if (e.key.startsWith('Arrow')) e.preventDefault(); // no page scroll
       if (e.key === 'ArrowLeft') goTo(ply - 1);
       if (e.key === 'ArrowRight') forward();
+      if (e.key === 'ArrowDown') choose(1);
+      if (e.key === 'ArrowUp') choose(-1);
       if (e.key === 'Home') goTo(0);
       if (e.key === 'End') goTo(line.length);
     };
@@ -262,8 +282,14 @@ export function RepertoireEditor({ me }: { me: Me }) {
             <p className="muted">Nothing prepared here. Play moves on the board, then “Save variation”.</p>
           )}
           <ul className="rep-moves">
+            {options[0] && !rep.has(options[0].fromFen, options[0].uci) && (
+              <li className={selected === 0 ? 'selected' : ''}>
+                <button className="link unsaved" onClick={() => play(options[0]!.uci)}>{options[0].san}</button>
+                <span className="muted"> next in your line, not saved</span>
+              </li>
+            )}
             {here.map((m) => (
-              <li key={m.id}>
+              <li key={m.id} className={options[selected]?.uci === m.uci ? 'selected' : ''}>
                 <button className="link" onClick={() => play(m.uci)}>{m.san}</button>
                 {m.isMain ? <span className="muted"> main</span> : (
                   <button className="small" onClick={() => setMain.mutate(m)}>make main</button>
@@ -278,6 +304,12 @@ export function RepertoireEditor({ me }: { me: Me }) {
               </li>
             ))}
           </ul>
+          {options.length > 0 && (
+            <p className="muted small-text keys">
+              {options.length > 1 && <><kbd>↑</kbd><kbd>↓</kbd> choose · </>}
+              <kbd>→</kbd> play · <kbd>←</kbd> back · <kbd>/</kbd> search
+            </p>
+          )}
         </section>
 
         <EnginePanel
