@@ -14,9 +14,10 @@ import { api, type Grade, type ReviewCard } from '../api';
 import { Board } from '../components/Board';
 import { dayStart, useSettings } from '../settings';
 
-/** Plies replayed with animation before a question (earlier moves are shown at once). */
-const REPLAYED_PLIES = 4;
-const REPLAY_MS = 450;
+/** Pause before the opponent's reply when the line continues. */
+const REPLY_MS = 300;
+/** Pause on a correct answer before jumping to another line. */
+const JUMP_MS = 350;
 
 function lineText(path: RepMove[]): string {
   return path.map((m, i) => `${i % 2 === 0 ? `${i / 2 + 1}. ` : ''}${m.san}`).join(' ');
@@ -30,6 +31,20 @@ function inTime(date: Date): string {
   return `in ${Math.round(min / 1440)} days`;
 }
 
+interface Question {
+  target: TrainingPosition;
+  isNew: boolean;
+  /** When the line continues: my last move, then the opponent's reply leading to `target`. */
+  lead?: { mine: RepMove; reply: RepMove };
+}
+
+interface Feedback {
+  played: RepMove;
+  /** Other repertoire moves in that position. */
+  others: RepMove[];
+  clean: boolean;
+}
+
 export function Training() {
   const { id = '' } = useParams();
   const qc = useQueryClient();
@@ -37,14 +52,20 @@ export function Training() {
   const repQuery = useQuery({ queryKey: ['repertoire', id], queryFn: () => api.repertoire(id) });
   const cardsQuery = useQuery({ queryKey: ['cards', id], queryFn: () => api.cards(id) });
   const [extraNew, setExtraNew] = useState(0);
-  const [round, setRound] = useState(0);
   const [stats, setStats] = useState({ reviewed: 0, firstTry: 0 });
   const [now, setNow] = useState(() => Date.now());
+  const [current, setCurrent] = useState<Question | null>(null);
+  const [round, setRound] = useState(0);
+  const [feedback, setFeedback] = useState<Feedback | null>(null);
+  const jumpTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // Learning steps are minutes long: re-check what is due regularly.
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 10_000);
-    return () => clearInterval(t);
+    return () => {
+      clearInterval(t);
+      clearTimeout(jumpTimer.current);
+    };
   }, []);
 
   const rep = useMemo(
@@ -54,6 +75,7 @@ export function Training() {
   const positions = useMemo(() => trainingPositions(rep), [rep]);
   const cards = useMemo(() => new Map((cardsQuery.data ?? []).map((c) => [c.fen, c])), [cardsQuery.data]);
 
+  /** Positions to ask, by priority: due (oldest first), then new ones (learning order). */
   const queue = useMemo(() => {
     const due = positions
       .filter((p) => {
@@ -64,12 +86,12 @@ export function Training() {
     const learntToday = (cardsQuery.data ?? []).filter((c) => Date.parse(c.createdAt) >= dayStart()).length;
     const unseen = positions.filter((p) => !cards.has(p.fen));
     const fresh = unseen.slice(0, Math.max(0, newPerDay + extraNew - learntToday));
-    const upcoming = positions
+    const nextDue = positions
       .map((p) => cards.get(p.fen))
       .filter((c): c is ReviewCard => !!c && Date.parse(c.due) > now)
       .map((c) => new Date(c.due))
-      .sort((a, b) => a.getTime() - b.getTime());
-    return { due, fresh, unseen: unseen.length, next: due[0] ?? fresh[0], nextDue: upcoming[0] };
+      .sort((a, b) => a.getTime() - b.getTime())[0];
+    return { due, fresh, items: [...due, ...fresh], unseen: unseen.length, nextDue };
   }, [positions, cards, cardsQuery.data, now, newPerDay, extraNew]);
 
   const putCard = (card: ReviewCard) =>
@@ -89,15 +111,46 @@ export function Training() {
     onError: () => qc.invalidateQueries({ queryKey: ['cards', id] }),
   });
 
-  // The question on screen stays fixed until "next", even when the queue changes meanwhile.
-  const [current, setCurrent] = useState<{ target: TrainingPosition; isNew: boolean } | null>(null);
+  const ask = (q: Question | null) => {
+    setCurrent(q);
+    setRound((r) => r + 1);
+  };
+
+  // First question, and questions becoming due while idle.
   useEffect(() => {
-    if (!current && queue.next) setCurrent({ target: queue.next, isNew: !cards.has(queue.next.fen) });
-  }, [current, queue.next, cards]);
+    if (!current && queue.items[0] && !jumpTimer.current) {
+      ask({ target: queue.items[0], isNew: !cards.has(queue.items[0].fen) });
+    }
+  }, [current, queue.items, cards]);
+
+  /** Next question after answering `answered` with `played`: follow the line if possible. */
+  const nextAfter = (answered: string, played: RepMove): Question | null => {
+    const items = queue.items.filter((p) => p.fen !== answered);
+    const replies = new Map(rep.movesAt(played.toFen).map((m) => [m.toFen, m]));
+    const follow = items.find((p) => replies.has(p.fen));
+    if (follow) {
+      return { target: follow, isNew: !cards.has(follow.fen), lead: { mine: played, reply: replies.get(follow.fen)! } };
+    }
+    const first = items[0];
+    return first ? { target: first, isNew: !cards.has(first.fen) } : null;
+  };
+
+  const onAnswered = (q: Question, played: RepMove, grade: Grade, clean: boolean) => {
+    review.mutate({ fen: q.target.fen, grade });
+    setStats((s) => ({ reviewed: s.reviewed + 1, firstTry: s.firstTry + (clean ? 1 : 0) }));
+    setFeedback({ played, others: rep.movesAt(q.target.fen).filter((m) => m.uci !== played.uci), clean });
+    const next = nextAfter(q.target.fen, played);
+    if (next?.lead) return ask(next);
+    // Jumping elsewhere (or done): leave the correct move on the board for a moment.
+    jumpTimer.current = setTimeout(() => {
+      jumpTimer.current = undefined;
+      setNow(Date.now());
+      ask(next);
+    }, JUMP_MS);
+  };
 
   if (repQuery.isLoading || cardsQuery.isLoading) return <p>Loading…</p>;
   if (!repQuery.data) return <p className="error">Could not load the repertoire.</p>;
-
 
   return (
     <div className="training">
@@ -120,26 +173,16 @@ export function Training() {
 
       {current ? (
         <Drill
-          key={`${current.target.fen}-${round}`}
+          key={round}
           rep={rep}
-          target={current.target}
-          isNew={current.isNew}
-          onAnswered={(grade, firstTry) => {
-            review.mutate({ fen: current.target.fen, grade });
-            setStats((s) => ({ reviewed: s.reviewed + 1, firstTry: s.firstTry + (firstTry ? 1 : 0) }));
-          }}
-          onNext={() => {
-            setNow(Date.now());
-            setRound((r) => r + 1);
-            setCurrent(null);
-          }}
+          question={current}
+          feedback={feedback}
+          onAnswered={(played, grade, clean) => onAnswered(current, played, grade, clean)}
         />
-      ) : queue.next ? null : (
+      ) : (
         <div className="panel done">
           <h3>{positions.length === 0 ? 'Nothing to train yet' : 'All done for now 🎉'}</h3>
-          {positions.length === 0 && (
-            <p className="muted">Add moves for your side to this repertoire first.</p>
-          )}
+          {positions.length === 0 && <p className="muted">Add moves for your side to this repertoire first.</p>}
           {queue.nextDue && <p>Next review {inTime(queue.nextDue)}.</p>}
           {queue.unseen > 0 && (
             <p>
@@ -154,47 +197,38 @@ export function Training() {
   );
 }
 
-type Phase = 'replay' | 'ask' | 'correct';
-
 /**
- * One question: replays the line up to the position, then waits for one of the repertoire
- * moves. New positions show the answer first. Two wrong tries reveal the answer.
+ * One question. When the line continues, the board first shows my previous move, then plays
+ * the opponent's reply. New positions show the answer; two wrong tries reveal it.
  */
 function Drill({
   rep,
-  target,
-  isNew,
+  question,
+  feedback,
   onAnswered,
-  onNext,
 }: {
   rep: Repertoire;
-  target: TrainingPosition;
-  isNew: boolean;
-  onAnswered: (grade: Grade, firstTry: boolean) => void;
-  onNext: () => void;
+  question: Question;
+  feedback: Feedback | null;
+  onAnswered: (played: RepMove, grade: Grade, clean: boolean) => void;
 }) {
-  const { path, fen } = target;
-  const start = Math.max(0, path.length - REPLAYED_PLIES);
-  const [shown, setShown] = useState(start); // plies of the path on the board
-  const [phase, setPhase] = useState<Phase>(path.length > start ? 'replay' : 'ask');
+  const { target, isNew, lead } = question;
+  const [replied, setReplied] = useState(!lead);
   const [mistakes, setMistakes] = useState(0);
   const [revealed, setRevealed] = useState(isNew);
   const [resetKey, setResetKey] = useState(0);
   const [played, setPlayed] = useState<RepMove | null>(null);
-  const answers = rep.movesAt(fen);
-  const next = useRef(onNext);
-  next.current = onNext;
+  const answers = rep.movesAt(target.fen);
 
-  // Replay the last moves of the line.
   useEffect(() => {
-    if (phase !== 'replay') return;
-    if (shown >= path.length) return setPhase('ask');
-    const t = setTimeout(() => setShown((n) => n + 1), REPLAY_MS);
+    if (replied) return;
+    const t = setTimeout(() => setReplied(true), REPLY_MS);
     return () => clearTimeout(t);
-  }, [phase, shown, path.length]);
+  }, [replied]);
 
+  const asking = replied && !played;
   const play = (uci: string) => {
-    if (phase !== 'ask') return;
+    if (!asking) return;
     const answer = answers.find((m) => m.uci === uci);
     if (!answer) {
       setMistakes((n) => n + 1);
@@ -203,84 +237,69 @@ function Drill({
       return;
     }
     setPlayed(answer);
-    setPhase('correct');
-    // New: seen with the answer, asked again in a minute. Otherwise right first time = good.
-    const grade: Grade = isNew || revealed || mistakes > 0 ? 'again' : 'good';
-    onAnswered(grade, !isNew && !revealed && mistakes === 0);
+    const clean = !isNew && !revealed && mistakes === 0;
+    // New or helped: asked again soon. Right first time: good.
+    onAnswered(answer, clean ? 'good' : 'again', clean);
   };
 
-  // After a correct answer: continue automatically, unless there is a comment to read.
-  useEffect(() => {
-    if (phase !== 'correct' || played?.comment) return;
-    const t = setTimeout(() => next.current(), 900);
-    return () => clearTimeout(t);
-  }, [phase, played]);
+  let boardFen: string;
+  let lastMove: string | undefined;
+  if (played) [boardFen, lastMove] = [played.toFen, played.uci];
+  else if (!replied && lead) [boardFen, lastMove] = [lead.mine.toFen, lead.mine.uci];
+  else [boardFen, lastMove] = [target.fen, (lead?.reply ?? target.path.at(-1))?.uci];
 
-  useEffect(() => {
-    if (phase !== 'correct') return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Enter' || e.key === ' ') next.current();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [phase]);
-
-  const boardFen = phase === 'correct' && played ? played.toFen : (path[shown - 1]?.toFen ?? START_FEN);
-  const lastMove = phase === 'correct' && played ? played.uci : path[shown - 1]?.uci;
   const shapes = useMemo<DrawShape[]>(
     () =>
-      revealed && phase === 'ask'
+      revealed && asking
         ? answers.map((m) => ({ orig: m.uci.slice(0, 2) as Key, dest: m.uci.slice(2, 4) as Key, brush: 'repertoire' }))
         : [],
-    [revealed, phase, answers],
+    [revealed, asking, answers],
   );
-  const others = played ? answers.filter((m) => m.uci !== played.uci) : [];
 
   return (
     <div className="editor">
       <div className="editor-board">
         <Board
-          fen={boardFen}
+          fen={boardFen || START_FEN}
           orientation={rep.color}
           lastMove={lastMove}
           shapes={shapes}
-          onMove={phase === 'ask' ? play : undefined}
+          onMove={asking ? play : undefined}
           resetKey={resetKey}
         />
       </div>
       <div className="editor-side">
         <section className="panel">
-          <p className="muted">{lineText(path.slice(0, shown)) || 'Initial position'}</p>
-          {phase === 'replay' && <p>…</p>}
-          {phase === 'ask' && (
-            <>
-              {isNew ? (
-                <p>
-                  <strong>New position.</strong> Play the move shown
-                  {answers.length > 1 ? ' (any of them)' : ''}: {answers.map((m) => m.san).join(' or ')}.
-                </p>
-              ) : (
-                <p><strong>Your move.</strong></p>
-              )}
-              {mistakes > 0 && (
-                <p className="error">
-                  ✗ Not in your repertoire.{revealed ? ' Play the move shown.' : ' Try again.'}
-                </p>
-              )}
-              {!revealed && (
-                <button className="small" onClick={() => setRevealed(true)}>Show the answer</button>
-              )}
-            </>
+          <p className="muted">{lineText(target.path) || 'Initial position'}</p>
+          {played ? (
+            <p className="success">✓ {played.san}</p>
+          ) : isNew ? (
+            <p>
+              <strong>New position.</strong> Play the move shown{answers.length > 1 ? ' (any of them)' : ''}:{' '}
+              {answers.map((m) => m.san).join(' or ')}.
+            </p>
+          ) : (
+            <p><strong>Your move.</strong></p>
           )}
-          {phase === 'correct' && played && (
-            <>
-              <p className="success">✓ {played.san}</p>
-              {others.length > 0 && <p className="muted">Also in your repertoire: {others.map((m) => m.san).join(', ')}.</p>}
-              {played.comment && <p className="comment">{played.comment}</p>}
-              <button className="primary" onClick={onNext}>Continue (Enter)</button>
-            </>
+          {mistakes > 0 && !played && (
+            <p className="error">✗ Not in your repertoire.{revealed ? ' Play the move shown.' : ' Try again.'}</p>
+          )}
+          {asking && !revealed && (
+            <button className="small" onClick={() => setRevealed(true)}>Show the answer</button>
           )}
         </section>
+
+        {feedback && (
+          <section className="panel feedback">
+            <p>
+              <span className={feedback.clean ? 'success' : 'warning'}>{feedback.clean ? '✓' : '↻'} {feedback.played.san}</span>
+              {feedback.others.length > 0 && (
+                <span className="muted"> · also in your repertoire: {feedback.others.map((m) => m.san).join(', ')}</span>
+              )}
+            </p>
+            {feedback.played.comment && <p className="comment">{feedback.played.comment}</p>}
+          </section>
+        )}
       </div>
     </div>
   );
