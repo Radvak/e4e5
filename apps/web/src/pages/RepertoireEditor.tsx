@@ -188,10 +188,10 @@ export function RepertoireEditor({ me }: { me: Me }) {
       brush,
       modifiers: { lineWidth },
     });
-    // The move → plays is drawn lighter and a bit thicker, so the keyboard choice is visible.
+    // The move → plays is drawn in a lighter green (same width: width encodes popularity).
     const next = options[selected];
     // Drawn first (underneath): an arrow on the same line stays visible on top of it.
-    const out = next ? [arrow(next.uci, 'next', width(share.get(next.uci) ?? 0, 9) + 3)] : [];
+    const out = next ? [arrow(next.uci, 'next', width(share.get(next.uci) ?? 0, 9))] : [];
     for (const m of here) if (m.uci !== next?.uci) out.push(arrow(m.uci, 'repertoire', width(share.get(m.uci) ?? 0, 9)));
     for (const m of ed?.moves.slice(0, 6) ?? []) {
       const s = share.get(m.uci) ?? 0;
