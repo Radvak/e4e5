@@ -1,6 +1,5 @@
 /** Arrow colours on the board, shared with the legend so both always match. */
 export const ARROWS = {
-  /** Drawn dashed (see styles.css); the next move is solid. */
   repertoire: { color: '#3fb950', label: 'in your repertoire' },
   next: { color: '#3fb950', label: 'next move (→)' },
   popular: { color: '#f0883e', label: 'popular, not in your repertoire' },

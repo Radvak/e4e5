@@ -182,19 +182,19 @@ export function RepertoireEditor({ me }: { me: Me }) {
     const share = new Map((ed?.moves ?? []).map((m) => [m.uci, total ? totalGames(m) / total : 0]));
     // Thicker = played more often; repertoire arrows never get thinner than 9.
     const width = (s: number, min = 5) => Math.max(min, Math.round(5 + 11 * s));
-    const arrow = (uci: string, brush: ArrowKind, lineWidth: number): DrawShape => ({
+    const arrow = (uci: string, brush: ArrowKind, lineWidth: number, hilite = false): DrawShape => ({
       orig: uci.slice(0, 2) as Key,
       dest: uci.slice(2, 4) as Key,
       brush,
-      modifiers: { lineWidth },
+      modifiers: { lineWidth, hilite },
     });
-    // The move → plays is solid, the other repertoire moves dashed (same colour and width: width encodes popularity).
+    // The move → plays gets a thin white outline (same colour and width: width encodes popularity).
     const next = options[selected];
     const out = here
       .filter((m) => m.uci !== next?.uci)
-      .map((m) => arrow(m.uci, 'repertoire', width(share.get(m.uci) ?? 0, 6)));
-    // Drawn last, so the solid next move stays on top of dashed ones on the same line.
-    if (next) out.push(arrow(next.uci, 'next', width(share.get(next.uci) ?? 0, 9)));
+      .map((m) => arrow(m.uci, 'repertoire', width(share.get(m.uci) ?? 0, 9)));
+    // Drawn last, so its outline stays visible over an arrow on the same line.
+    if (next) out.push(arrow(next.uci, 'next', width(share.get(next.uci) ?? 0, 9), true));
     for (const m of ed?.moves.slice(0, 6) ?? []) {
       const s = share.get(m.uci) ?? 0;
       if (s >= 0.03 && !rep.has(fen, m.uci) && m.uci !== next?.uci) out.push(arrow(m.uci, 'popular', width(s)));
@@ -224,7 +224,7 @@ export function RepertoireEditor({ me }: { me: Me }) {
         <p className="legend muted">
           {(Object.keys(ARROWS) as ArrowKind[]).filter((k) => k !== 'engine' || engineOn).map((k) => (
             <span key={k} className="legend-item">
-              <span className={`swatch ${k === 'repertoire' ? 'dashed' : ''}`} style={{ '--c': ARROWS[k].color, background: k === 'repertoire' ? undefined : ARROWS[k].color } as React.CSSProperties} />
+              <span className={`swatch ${k === 'next' ? 'outlined' : ''}`} style={{ background: ARROWS[k].color }} />
               {ARROWS[k].label}
             </span>
           ))}

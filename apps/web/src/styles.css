@@ -156,6 +156,4 @@ button.primary { background: var(--accent); border-color: var(--accent); }
 .keys { margin: 6px 0 0; }
 kbd { display: inline-block; min-width: 18px; padding: 0 4px; margin: 0 1px; border: 1px solid #5a5856; border-radius: 3px; background: #2f2d2a; font-size: 0.9em; text-align: center; }
 
-/* Repertoire moves other than the next one (brush "repertoire"): dashed. Lengths in board squares. */
-.cg-wrap line[marker-end^='url(#arrowhead-repertoire'] { stroke-dasharray: 0.16 0.06; stroke-linecap: butt; opacity: 0.75; }
-.swatch.dashed { background: repeating-linear-gradient(90deg, var(--c) 0 6px, transparent 6px 8px); opacity: 0.75; height: 4px; }
+.swatch.outlined { box-shadow: 0 0 0 1.5px #fff; }
