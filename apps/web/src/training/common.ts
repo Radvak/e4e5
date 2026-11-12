@@ -1,4 +1,5 @@
 import type { RepMove } from '@prepa-cahier/core';
+import { createElement } from 'react';
 import type { DrawShape } from 'chessground/draw';
 import type { Key } from 'chessground/types';
 
@@ -29,4 +30,18 @@ export function inTime(date: Date): string {
 /** Green arrows showing the expected moves. */
 export function answerArrows(moves: RepMove[]): DrawShape[] {
   return moves.map((m) => ({ orig: m.uci.slice(0, 2) as Key, dest: m.uci.slice(2, 4) as Key, brush: 'repertoire' }));
+}
+
+/**
+ * Comment of the opponent's move that led to the question, shown while thinking (it describes
+ * the opponent's idea; my own move's comment is only shown after answering).
+ */
+export function OpponentComment({ move }: { move: RepMove | undefined }) {
+  if (!move?.comment) return null;
+  return createElement(
+    'p',
+    { className: 'opponent-comment' },
+    createElement('span', { className: 'muted' }, `💬 ${move.san}: `),
+    createElement('span', { className: 'comment' }, move.comment),
+  );
 }

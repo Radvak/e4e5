@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, type Grade } from '../api';
 import { Board } from '../components/Board';
-import { answerArrows, lineText, REPLY_MS } from './common';
+import { answerArrows, lineText, OpponentComment, REPLY_MS } from './common';
 import { FeedbackPanel, outcomeOf, type Feedback } from './Feedback';
 import type { Source } from './useTrainingSources';
 
@@ -179,6 +179,7 @@ export function PlayMode({
         <section className="panel">
           {sources.length > 1 && line && <p className="muted small-text">{line.source.name}</p>}
           <p className="muted">{line ? lineText(line.history) || 'Start of the line' : ''}</p>
+          {line?.phase === 'ask' && <OpponentComment move={line.history.at(-1)} />}
           {line?.phase === 'opponent' && <p className="muted">Opponent to play…</p>}
           {line?.phase === 'ask' &&
             (isNew ? (

@@ -148,3 +148,5 @@ button.primary { background: var(--accent); border-color: var(--accent); }
 .engine-line .eval.b { background: #0b0b0b; color: #e8e6e3; border: 1px solid #6a6764; }
 .engine-line .pv { line-height: 1.6; }
 .engine-line .pv button.link { padding: 0 2px; }
+
+.opponent-comment { margin: 4px 0 8px; padding: 6px 10px; background: #1e1d1b; border-left: 3px solid #58a6ff; border-radius: 3px; }

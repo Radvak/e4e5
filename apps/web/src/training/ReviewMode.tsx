@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Grade, ReviewCard } from '../api';
 import { Board } from '../components/Board';
 import { dayStart } from '../settings';
-import { answerArrows, inTime, JUMP_MS, lineText, REPLAY_MS, REPLAYED_PLIES, REPLY_MS } from './common';
+import { answerArrows, inTime, JUMP_MS, lineText, OpponentComment, REPLAY_MS, REPLAYED_PLIES, REPLY_MS } from './common';
 import { FeedbackPanel, outcomeOf, type Feedback, type Outcome } from './Feedback';
 import type { Source } from './useTrainingSources';
 
@@ -266,6 +266,7 @@ function Drill({
         <section className="panel">
           {showName && <p className="muted small-text">{source.name}</p>}
           <p className="muted">{lineText(target.path.slice(0, shown)) || 'Initial position'}</p>
+          {replied && shown >= plies && <OpponentComment move={lead?.reply ?? target.path.at(-1)} />}
           {played ? (
             <p className="success">✓ {played.san}</p>
           ) : !asking ? (
