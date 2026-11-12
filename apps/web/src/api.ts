@@ -55,7 +55,17 @@ export interface RepertoireSummary { id: string; name: string; color: Color; cre
 export interface StoredMove extends RepMove { id: number; source: string }
 export interface RepertoireDetail extends RepertoireSummary { moves: StoredMove[] }
 export type Grade = 'again' | 'hard' | 'good' | 'easy';
-export interface ReviewCard { fen: string; due: string; reps: number; lapses: number; interval: number; createdAt: string }
+export interface ReviewCard {
+  fen: string;
+  /** Estimated probability (0-1) of finding the move now. */
+  recall: number;
+  due: string;
+  reps: number;
+  lapses: number;
+  interval: number;
+  createdAt: string;
+}
+export interface ReviewLogEntry { repertoireId: string; grade: Grade; isNew: boolean; reviewedAt: string }
 export interface TrainingSummary { repertoireId: string; total: number; due: number; new: number }
 export interface ImportResult {
   games: number; added: number; duplicates: number; unreachable: number; errors: string[];
@@ -86,6 +96,7 @@ export const api = {
   review: (id: string, fen: string, grade: Grade) => request<ReviewCard>('POST', `/api/repertoires/${id}/review`, { fen, grade }),
   trainingSummary: (dayStart: number, newPerDay: number) =>
     request<TrainingSummary[]>('GET', `/api/training/summary?${new URLSearchParams({ dayStart: String(dayStart), newPerDay: String(newPerDay) })}`),
+  statsHistory: (days: number) => request<ReviewLogEntry[]>('GET', `/api/stats/history?days=${days}`),
   explorer: (fen: string, speeds: string[], ratings: number[]) =>
     request<Stats>(
       'GET',

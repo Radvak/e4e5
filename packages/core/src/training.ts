@@ -69,3 +69,24 @@ export function chooseReply(
   }
   return replies.at(-1);
 }
+
+/** Shortest line from the initial position to `fen` in the repertoire (main lines preferred). */
+export function pathTo(rep: Repertoire, fen: string): RepMove[] | null {
+  if (fen === START_FEN) return [];
+  const seen = new Set<string>([START_FEN]);
+  let frontier: { fen: string; path: RepMove[] }[] = [{ fen: START_FEN, path: [] }];
+  while (frontier.length) {
+    const next: typeof frontier = [];
+    for (const node of frontier) {
+      for (const m of rep.movesAt(node.fen)) {
+        if (seen.has(m.toFen)) continue;
+        const path = [...node.path, m];
+        if (m.toFen === fen) return path;
+        seen.add(m.toFen);
+        next.push({ fen: m.toFen, path });
+      }
+    }
+    frontier = next;
+  }
+  return null;
+}

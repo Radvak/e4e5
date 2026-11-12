@@ -1,4 +1,4 @@
-import { playUci, Repertoire, START_FEN, totalGames, trainingPositions, turnOf, type PlayedMove } from '@prepa-cahier/core';
+import { playUci, Repertoire, START_FEN, totalGames, pathTo, turnOf, type PlayedMove } from '@prepa-cahier/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { DrawShape } from 'chessground/draw';
 import type { Key } from 'chessground/types';
@@ -34,10 +34,10 @@ export function RepertoireEditor({ me }: { me: Me }) {
   const openFen = params.get('fen');
   useEffect(() => {
     if (!openFen || !data) return;
-    const target = trainingPositions(rep).find((p) => p.fen === openFen);
-    if (target) {
-      setLine(target.path);
-      setPly(target.path.length);
+    const path = pathTo(rep, openFen);
+    if (path) {
+      setLine(path);
+      setPly(path.length);
     }
     setParams({}, { replace: true });
   }, [openFen, data]);

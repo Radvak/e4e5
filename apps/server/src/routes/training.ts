@@ -1,12 +1,12 @@
 /** Training: spaced-repetition reviews (FSRS) of the positions where it is the user's turn. */
 import { Repertoire, trainingPositions } from '@prepa-cahier/core';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, gte, inArray } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { createEmptyCard, fsrs, Rating, type CardInput } from 'ts-fsrs';
 import { z } from 'zod';
 import { requireUser } from '../auth.js';
 import { db } from '../db/client.js';
-import { repertoires, repMoves, reviewCards } from '../db/schema.js';
+import { repertoires, repMoves, reviewCards, reviewLog } from '../db/schema.js';
 
 const scheduler = fsrs({ enable_fuzz: true });
 const GRADES = { again: Rating.Again, hard: Rating.Hard, good: Rating.Good, easy: Rating.Easy } as const;
@@ -22,8 +22,10 @@ const summaryQuery = z.object({
 });
 
 type CardRow = typeof reviewCards.$inferSelect;
-const publicCard = (c: CardRow) => ({
+const publicCard = (c: CardRow, now = new Date()) => ({
   fen: c.fen,
+  /** Estimated probability (0-1) of finding the move now (FSRS retrievability). */
+  recall: c.reps > 0 ? scheduler.retrievability(c.card as unknown as CardInput, now) : 0,
   due: c.due.toISOString(),
   reps: c.reps,
   lapses: c.lapses,
@@ -43,7 +45,8 @@ export async function trainingRoutes(app: FastifyInstance) {
       .where(and(eq(repertoires.id, req.params.id), eq(repertoires.userId, req.user!.id)));
     if (!rep) return reply.code(404).send({ error: 'Repertoire not found' });
     const cards = await db.select().from(reviewCards).where(eq(reviewCards.repertoireId, rep.id));
-    return cards.map(publicCard);
+    const now = new Date();
+    return cards.map((c) => publicCard(c, now));
   });
 
   /** Records an answer and schedules the next review of the position. */
@@ -74,6 +77,7 @@ export async function trainingRoutes(app: FastifyInstance) {
       lapses: card.lapses,
       lastReview: now,
     };
+    await db.insert(reviewLog).values({ repertoireId: rep.id, fen, grade, isNew: !existing, reviewedAt: now });
     const [saved] = await db
       .insert(reviewCards)
       .values(row)
@@ -83,6 +87,18 @@ export async function trainingRoutes(app: FastifyInstance) {
       })
       .returning();
     return publicCard(saved!);
+  });
+
+  /** Answers of the last `days` days, all repertoires (for activity statistics). */
+  app.get('/api/stats/history', async (req) => {
+    const { days } = z.object({ days: z.coerce.number().int().min(1).max(365).default(90) }).parse(req.query);
+    const since = new Date(Date.now() - days * 86_400_000);
+    return db
+      .select({ repertoireId: reviewLog.repertoireId, grade: reviewLog.grade, isNew: reviewLog.isNew, reviewedAt: reviewLog.reviewedAt })
+      .from(reviewLog)
+      .innerJoin(repertoires, eq(reviewLog.repertoireId, repertoires.id))
+      .where(and(eq(repertoires.userId, req.user!.id), gte(reviewLog.reviewedAt, since)))
+      .orderBy(reviewLog.reviewedAt);
   });
 
   /** Per repertoire: positions due now, new positions available today, and total. */

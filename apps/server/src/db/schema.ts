@@ -88,6 +88,21 @@ export const reviewCards = sqliteTable(
   (t) => [primaryKey({ columns: [t.repertoireId, t.fen] }), index('review_cards_due').on(t.repertoireId, t.due)],
 );
 
+/** One row per recorded answer in training (history for the statistics). */
+export const reviewLog = sqliteTable(
+  'review_log',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    repertoireId: text('repertoire_id').notNull().references(() => repertoires.id, { onDelete: 'cascade' }),
+    fen: text('fen').notNull(),
+    grade: text('grade', { enum: ['again', 'hard', 'good', 'easy'] }).notNull(),
+    /** First review of the position (it was new). */
+    isNew: integer('is_new', { mode: 'boolean' }).notNull(),
+    reviewedAt: integer('reviewed_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [index('review_log_repertoire_time').on(t.repertoireId, t.reviewedAt)],
+);
+
 /**
  * Lichess explorer statistics of a position for one combination of speeds and rating buckets,
  * shared by all users. Filled by live explorer requests and by imported seeds; it only grows.

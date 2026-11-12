@@ -64,6 +64,7 @@ export function useTrainingSources(ids: string[], from: string | null) {
       const old = source.cards.get(fen);
       putCard(source.id, {
         fen,
+        recall: 1,
         due: new Date(Date.now() + 60_000).toISOString(),
         reps: (old?.reps ?? 0) + 1,
         lapses: old?.lapses ?? 0,
@@ -74,6 +75,7 @@ export function useTrainingSources(ids: string[], from: string | null) {
     onSuccess: (card, { source }) => {
       putCard(source.id, card);
       qc.invalidateQueries({ queryKey: ['training-summary'] });
+      qc.invalidateQueries({ queryKey: ['stats-history'] });
     },
     onError: (_e, { source }) => qc.invalidateQueries({ queryKey: ['cards', source.id] }),
   });

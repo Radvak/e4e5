@@ -71,6 +71,9 @@ Planned: `review_cards` (FSRS state per user move), `game_syncs`, `inbox_items`.
   Lichess frequencies at the selected level; reviews recorded only for mistakes, new positions
   and due positions); "Train from here" (subtree); "Train all" repertoires; progress table and
   leeches (forgotten 3+ times) with links to the editor.
+- [x] **2c. Statistics page**: repertoire known now (FSRS retrievability), learnt / well known /
+  due, training streak and first-try accuracy, activity (30 days, from `review_log`), forecast
+  (14 days), breakdown by line, weakest positions.
 - [ ] **4. Gap finder**: probability of reaching each position (product of opponent move
   frequencies), a "top holes" list, and a coverage score per repertoire. Explorer calls are
   bounded by a probability cutoff and run in a background queue.

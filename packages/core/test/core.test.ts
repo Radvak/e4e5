@@ -150,3 +150,15 @@ describe('play mode helpers', () => {
     expect(chooseReply([], stats)).toBeUndefined();
   });
 });
+
+describe('pathTo', () => {
+  it('finds the line to any position of the repertoire', async () => {
+    const { pathTo } = await import('../src/index.js');
+    const moves = pgnToMoves(ITALIAN).moves;
+    const rep = new Repertoire('white', moves);
+    const a6 = moves.find((m) => m.san === 'a6')!.toFen;
+    expect(pathTo(rep, a6)?.map((m) => m.san).join(' ')).toBe('e4 e5 Nf3 Nc6 Bb5 a6');
+    expect(pathTo(rep, START_FEN)).toEqual([]);
+    expect(pathTo(rep, 'rnbqkbnr/pppppppp/8/8/8/7P/PPPPPPP1/RNBQKBNR b KQkq -')).toBeNull();
+  });
+});

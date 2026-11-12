@@ -5,6 +5,7 @@ import { Login } from './pages/Login';
 import { RepertoireEditor } from './pages/RepertoireEditor';
 import { RepertoireList } from './pages/RepertoireList';
 import { Settings } from './pages/Settings';
+import { Stats } from './pages/Stats';
 import { Training } from './pages/Training';
 import { useSettings, type SpeedChoice } from './settings';
 
@@ -21,6 +22,8 @@ export function App() {
     <div className="app">
       <header className="topbar">
         <Link to="/" className="brand">Prepa-cahier</Link>
+        <Link to="/train">Train</Link>
+        <Link to="/stats">Statistics</Link>
         <div className="spacer" />
         <label title="Time control used for the Lichess statistics">
           Stats for{' '}
@@ -52,6 +55,7 @@ export function App() {
           <Route path="/r/:id" element={<RepertoireEditor me={me.data} />} />
           <Route path="/r/:id/train" element={<Training me={me.data} />} />
           <Route path="/train" element={<Training me={me.data} />} />
+          <Route path="/stats" element={<Stats />} />
           <Route path="/settings" element={<Settings me={me.data} />} />
         </Routes>
       </main>
