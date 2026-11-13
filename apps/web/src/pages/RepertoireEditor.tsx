@@ -1,4 +1,4 @@
-import { playUci, Repertoire, START_FEN, totalGames, pathTo, turnOf, type PlayedMove } from '@prepa-cahier/core';
+import { playUci, Repertoire, START_FEN, totalGames, pathTo, type PlayedMove } from '@prepa-cahier/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { DrawShape } from 'chessground/draw';
 import type { Key } from 'chessground/types';
@@ -232,7 +232,6 @@ export function RepertoireEditor({ me }: { me: Me }) {
   const depth = colorReport?.repertoires.find((x) => x.id === id && x.share > 0)?.depth;
   if (error || !data) return <p className="error">Impossible de charger le répertoire.</p>;
 
-  const myTurn = turnOf(fen) === data.color;
   const last = line[ply - 1];
   const lastStored = last ? storedMove(last) : undefined;
 
@@ -309,7 +308,7 @@ export function RepertoireEditor({ me }: { me: Me }) {
         </section>
 
         <section className="panel">
-          <h3>{myTurn ? 'Votre coup' : 'Réponses adverses'} dans votre répertoire</h3>
+          <h3>Dans votre répertoire</h3>
           {here.length === 0 && (
             <p className="muted">Rien de préparé ici. Jouez des coups sur l’échiquier, puis « Enregistrer la variante ».</p>
           )}
