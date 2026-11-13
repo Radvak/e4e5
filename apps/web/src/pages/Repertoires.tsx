@@ -2,22 +2,26 @@ import type { Color } from '@prepa-cahier/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { api, type RepertoireSummary, type TrainingSummary } from '../api';
+import { api, type Me, type RepertoireSummary, type TrainingSummary } from '../api';
 import { dayStart, useSettings } from '../settings';
 import { Button, EmptyState, Menu, PageHeader, Tabs, plural } from '../ui';
+import { depthText, useGaps } from '../useGaps';
 
 const COLORS: { color: Color; label: string }[] = [
   { color: 'white', label: 'Avec les Blancs' },
   { color: 'black', label: 'Avec les Noirs' },
 ];
 
-export function Repertoires() {
+export function Repertoires({ me }: { me: Me }) {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const { newPerDay } = useSettings();
   const reps = useQuery({ queryKey: ['repertoires'], queryFn: api.repertoires });
   const summary = useQuery({ queryKey: ['training-summary', newPerDay], queryFn: () => api.trainingSummary(dayStart(), newPerDay) });
   const counts = new Map((summary.data ?? []).map((s) => [s.repertoireId, s]));
+  const gaps = useGaps(me, (reps.data?.length ?? 0) > 0);
+  // Preparation depth of each repertoire: average number of moves its games stay in the lines.
+  const depths = new Map([...(gaps.data?.white?.repertoires ?? []), ...(gaps.data?.black?.repertoires ?? [])].filter((x) => x.share > 0).map((x) => [x.id, x.depth]));
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState('');
   const [color, setColor] = useState<Color>('white');
@@ -92,6 +96,7 @@ export function Repertoires() {
                   key={r.id}
                   rep={r}
                   counts={counts.get(r.id)}
+                  depth={depths.get(r.id)}
                   onRename={() => {
                     const next = prompt('Nouveau nom', r.name)?.trim();
                     if (next && next !== r.name) rename.mutate({ id: r.id, name: next });
@@ -107,7 +112,7 @@ export function Repertoires() {
   );
 }
 
-function RepertoireCard({ rep, counts, onRename, onDelete }: { rep: RepertoireSummary; counts?: TrainingSummary; onRename: () => void; onDelete: () => void }) {
+function RepertoireCard({ rep, counts, depth, onRename, onDelete }: { rep: RepertoireSummary; counts?: TrainingSummary; depth?: number; onRename: () => void; onDelete: () => void }) {
   const navigate = useNavigate();
   const toTrain = counts ? counts.due + counts.new : 0;
   // The whole card opens the repertoire; its buttons stop the click.
@@ -118,6 +123,7 @@ function RepertoireCard({ rep, counts, onRename, onDelete }: { rep: RepertoireSu
       <div className="info">
         <Link className="name" to={`/r/${rep.id}`} onClick={stop}>{rep.name}</Link>
         <div className="meta">
+          {depth !== undefined && <span title="Nombre moyen de coups qu’une partie reste dans ce répertoire">profondeur {depthText(depth)} coups · </span>}
           {counts ? plural(counts.total, 'position', 'positions') : '…'}
           {counts && counts.due > 0 && <> · <span className="due">{counts.due} à revoir</span></>}
           {counts && counts.new > 0 && <> · {plural(counts.new, 'nouvelle', 'nouvelles')}</>}

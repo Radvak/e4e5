@@ -74,7 +74,7 @@ export function App() {
       <main className="page">
         <Routes>
           <Route path="/" element={<Home me={me.data} />} />
-          <Route path="/repertoires" element={<Repertoires />} />
+          <Route path="/repertoires" element={<Repertoires me={me.data} />} />
           <Route path="/r/:id" element={<RepertoireEditor me={me.data} />} />
           <Route path="/r/:id/train" element={<Training me={me.data} />} />
           <Route path="/train" element={<Training me={me.data} />} />
@@ -83,7 +83,7 @@ export function App() {
           <Route path="/bilan/:tab" element={<Bilan me={me.data} />} />
           <Route path="/settings" element={<Settings me={me.data} />} />
           <Route path="/stats" element={<Redirect to="/bilan/progres" />} />
-          <Route path="/gaps" element={<Redirect to="/bilan/trous" />} />
+          <Route path="/gaps" element={<Redirect to="/repertoires" />} />
           <Route path="/games" element={<Redirect to="/bilan/parties" />} />
           <Route path="*" element={<Redirect to="/" />} />
         </Routes>

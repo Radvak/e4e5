@@ -12,7 +12,9 @@ import { useEngine } from '../engine/useEngine';
 import { Board } from '../components/Board';
 import { ExplorerPanel } from '../components/ExplorerPanel';
 import { explorerParams, useSettings } from '../settings';
+import { Suggestions } from '../components/Suggestions';
 import { Button, Menu, PageHeader, plural } from '../ui';
+import { depthText, useGaps } from '../useGaps';
 
 /** A move of the line on the board; saved or not is derived from the repertoire. */
 type LineMove = PlayedMove;
@@ -20,7 +22,8 @@ type LineMove = PlayedMove;
 export function RepertoireEditor({ me }: { me: Me }) {
   const { id = '' } = useParams();
   const qc = useQueryClient();
-  const { speed, range } = useSettings();
+  const { speed, range, gapCutoff } = useSettings();
+  const gapReport = useGaps(me);
   const { data, isLoading, error } = useQuery({ queryKey: ['repertoire', id], queryFn: () => api.repertoire(id) });
   /**
    * The line on the board and the cursor in it. Moves played on the board are a draft: they are
@@ -218,6 +221,9 @@ export function RepertoireEditor({ me }: { me: Me }) {
   }, [explorer.data, rep, fen, here, engineOn, engine.lines[0]?.pv[0]?.uci, options, selected]);
 
   if (isLoading) return <p className="muted">Chargement…</p>;
+  const colorReport = data ? gapReport.data?.[data.color] : undefined;
+  const holes = colorReport?.gaps.filter((g) => g.repertoireId === id);
+  const depth = colorReport?.repertoires.find((x) => x.id === id && x.share > 0)?.depth;
   if (error || !data) return <p className="error">Impossible de charger le répertoire.</p>;
 
   const myTurn = turnOf(fen) === data.color;
@@ -229,13 +235,12 @@ export function RepertoireEditor({ me }: { me: Me }) {
     <PageHeader
       back="/repertoires"
       title={data.name}
-      subtitle={`${data.color === 'white' ? 'Blancs' : 'Noirs'} · ${plural(rep.size, 'coup', 'coups')}`}
+      subtitle={`${data.color === 'white' ? 'Blancs' : 'Noirs'} · ${plural(rep.size, 'coup', 'coups')}${depth !== undefined ? ` · profondeur ${depthText(depth)}` : ''}`}
       actions={<Button variant="primary" icon="play" to={`/r/${id}/train`}>S’entraîner</Button>}
       menu={[
         ...(ply > 0 && unsaved.length === 0
           ? [{ label: 'S’entraîner à partir d’ici', to: `/r/${id}/train?from=${encodeURIComponent(fen)}` }]
           : []),
-        { label: 'Voir les trous', to: `/bilan/trous?r=${id}` },
         { label: 'Importer un PGN', onClick: () => setImportOpen(true) },
         { label: 'Exporter en PGN', onClick: () => (location.href = `/api/repertoires/${id}/pgn`) },
       ]}
@@ -332,6 +337,23 @@ export function RepertoireEditor({ me }: { me: Me }) {
             </p>
           )}
         </section>
+
+        <Suggestions
+          gaps={holes}
+          fen={fen}
+          cutoff={gapCutoff}
+          pending={!!colorReport?.pending}
+          onOpen={(ucis) => {
+            const moves: PlayedMove[] = [];
+            for (const uci of ucis) {
+              const m = playUci(moves.at(-1)?.toFen ?? START_FEN, uci);
+              if (!m) break;
+              moves.push(m);
+            }
+            jumpTo(moves);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+        />
 
         <EnginePanel
           enabled={engineOn}

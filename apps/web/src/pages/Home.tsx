@@ -3,17 +3,15 @@ import { Link } from 'react-router-dom';
 import { api, type InboxItem, type Me } from '../api';
 import { lineText, moveText } from '../chessText';
 import { GameSyncInline } from '../components/GameSync';
-import { dayStart, explorerParams, useSettings } from '../settings';
+import { dayStart, useSettings } from '../settings';
 import { Button, plural } from '../ui';
 
 const DAY = 86_400_000;
 const KIND = { novelty: 'Nouveauté adverse', deviation: 'Vous avez dévié', end: 'Après la fin de votre ligne' } as const;
-const fr = (n: number, digits = 1) => n.toLocaleString('fr-FR', { maximumFractionDigits: digits });
 
-/** "What do I do today": training, what the last games show, preparation depth, streak. */
+/** "What do I do today": training, what the last games show, streak. */
 export function Home({ me }: { me: Me }) {
   const settings = useSettings();
-  const ex = explorerParams(me, settings.speed, settings.range);
   const reps = useQuery({ queryKey: ['repertoires'], queryFn: api.repertoires });
   const summary = useQuery({
     queryKey: ['training-summary', settings.newPerDay],
@@ -22,11 +20,6 @@ export function Home({ me }: { me: Me }) {
   const games = useQuery({
     queryKey: ['games-report', settings.gamesDays, settings.gamesSpeeds],
     queryFn: () => api.gamesReport(settings.gamesDays, settings.gamesSpeeds),
-  });
-  const gaps = useQuery({
-    queryKey: ['gaps', ex.speeds, ex.ratings, settings.gapCutoff],
-    queryFn: () => api.gaps(ex.speeds, ex.ratings, settings.gapCutoff),
-    enabled: (reps.data?.length ?? 0) > 0,
   });
   const history = useQuery({ queryKey: ['stats-history'], queryFn: () => api.statsHistory(90) });
 
@@ -108,32 +101,6 @@ export function Home({ me }: { me: Me }) {
             <p className="muted">Vos parties montreront où l’adversaire sort de votre préparation et où vous vous trompez.</p>
           )}
           <GameSyncInline />
-        </section>
-
-        <section className="card">
-          <div className="card-head">
-            <h3>Préparation</h3>
-            <Link to="/bilan/trous" className="small-text" style={{ margin: 0 }}>Les trous</Link>
-          </div>
-          <p className="muted small-text">Nombre moyen de coups qu’une partie reste dans vos lignes.</p>
-          {(['white', 'black'] as const).map((c) => {
-            const r = gaps.data?.[c];
-            if (!r) return null;
-            return (
-              <div key={c} className="home-item">
-                <span className={`dot ${c}`} style={{ marginTop: 4 }} />
-                <div className="what">
-                  <strong>{c === 'white' ? 'Blancs' : 'Noirs'}</strong>
-                  <div className="line">{plural(r.gaps.length, 'trou', 'trous')} de {fr(100 * settings.gapCutoff)} % ou plus</div>
-                </div>
-                <div className="big-number" style={{ fontSize: '1.5rem' }}>
-                  {r.unknown >= 0.01 ? '≥ ' : ''}{fr(r.depth)}
-                  <span className="tile-unit"> coups</span>
-                </div>
-              </div>
-            );
-          })}
-          {gaps.isLoading && <p className="muted">Calcul…</p>}
         </section>
 
         <section className="card">
