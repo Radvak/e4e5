@@ -41,7 +41,7 @@ export function OpponentComment({ move }: { move: RepMove | undefined }) {
   return createElement(
     'p',
     { className: 'opponent-comment' },
-    createElement('span', { className: 'muted' }, `💬 ${move.san}: `),
+    createElement('span', { className: 'muted' }, `${move.san} : `),
     createElement('span', { className: 'comment' }, move.comment),
   );
 }

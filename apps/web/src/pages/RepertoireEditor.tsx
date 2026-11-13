@@ -34,6 +34,8 @@ export function RepertoireEditor({ me }: { me: Me }) {
   const [ply, setPly] = useState(0);
   const [notice, setNotice] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  /** Move whose comment is being written (id), or null. */
+  const [commentEdit, setCommentEdit] = useState<number | null>(null);
 
   const rep = useMemo(() => new Repertoire(data?.color ?? 'white', data?.moves ?? []), [data]);
 
@@ -289,6 +291,7 @@ export function RepertoireEditor({ me }: { me: Me }) {
         <section className="panel">
           <h3>Dans votre répertoire</h3>
           {line.length > 0 && (
+          <div className="line-row">
           <div className="moves-path">
             {line.map((m, i) => (
               <button
@@ -303,6 +306,10 @@ export function RepertoireEditor({ me }: { me: Me }) {
               </button>
             ))}
           </div>
+          {lastStored && !lastStored.comment && commentEdit !== lastStored.id && (
+            <Button size="sm" variant="ghost" icon="pencil" title={`Commenter ${lastStored.san}`} onClick={() => setCommentEdit(lastStored.id)} />
+          )}
+          </div>
           )}
 
           {unsaved.length > 0 && (
@@ -316,7 +323,13 @@ export function RepertoireEditor({ me }: { me: Me }) {
           {notice && <p className="muted small-text">{notice}</p>}
           {saveLine.error && <p className="error">{saveLine.error.message}</p>}
           {lastStored && (
-            <CommentNote key={lastStored.id} move={lastStored} onSave={(comment) => setComment.mutate({ m: lastStored, comment })} />
+            <CommentNote
+              key={lastStored.id}
+              move={lastStored}
+              editing={commentEdit === lastStored.id}
+              onEdit={(on) => setCommentEdit(on ? lastStored.id : null)}
+              onSave={(comment) => setComment.mutate({ m: lastStored, comment })}
+            />
           )}
           {here.length === 0 && (
             <p className="muted">Rien de préparé ici. Jouez des coups sur l’échiquier, puis « Enregistrer la variante ».</p>
@@ -330,10 +343,13 @@ export function RepertoireEditor({ me }: { me: Me }) {
             )}
             {here.map((m) => (
               <li key={m.id} className={options[selected]?.uci === m.uci ? 'selected' : ''}>
-                <button className="link san" onClick={() => play(m.uci)}>{m.san}</button>
-                {m.isMain && <span className="badge">principal</span>}
-                {m.comment && <span className="comment" style={{ flex: '1 1 100%' }}>{m.comment}</span>}
-                <span className="spacer" />
+                <div className="move-main">
+                  <div className="row nowrap">
+                    <button className="link san" onClick={() => play(m.uci)}>{m.san}</button>
+                    {m.isMain && <span className="badge">principal</span>}
+                  </div>
+                  {m.comment && <div className="comment move-comment">{m.comment}</div>}
+                </div>
                 <Menu
                   items={[
                     ...(m.isMain ? [] : [{ label: 'Rendre principal', onClick: () => setMain.mutate(m) }]),
@@ -391,32 +407,30 @@ export function RepertoireEditor({ me }: { me: Me }) {
 }
 
 /**
- * Comment of the move leading to the position: shown as text with ✎, or a discreet "+ Commentaire";
- * the text area only appears while writing.
+ * Comment of the move leading to the position: shown as text with a pencil to edit it (the
+ * pencil to add one sits at the end of the line); the text area only appears while writing.
  */
-function CommentNote({ move, onSave }: { move: StoredMove; onSave: (comment: string) => void }) {
-  const [editing, setEditing] = useState(false);
+function CommentNote({ move, editing, onEdit, onSave }: { move: StoredMove; editing: boolean; onEdit: (on: boolean) => void; onSave: (comment: string) => void }) {
   const [text, setText] = useState(move.comment ?? '');
   if (!editing) {
-    return move.comment ? (
-      <p className="comment-note">
-        <span className="comment">💬 {move.comment}</span>
-        <button className="link" onClick={() => setEditing(true)} title="Modifier le commentaire" aria-label="Modifier le commentaire">✎</button>
-      </p>
-    ) : (
-      <button className="link add-comment" onClick={() => setEditing(true)}>+ Commentaire sur {move.san}</button>
+    if (!move.comment) return null;
+    return (
+      <div className="comment-note">
+        <span className="comment">{move.comment}</span>
+        <Button size="sm" variant="ghost" icon="pencil" title="Modifier le commentaire" onClick={() => onEdit(true)} />
+      </div>
     );
   }
   const save = () => {
     if (text.trim() !== (move.comment ?? '')) onSave(text.trim());
-    setEditing(false);
+    onEdit(false);
   };
   return (
     <div className="comment-box">
       <textarea autoFocus placeholder={`Commentaire sur ${move.san}…`} value={text} onChange={(e) => setText(e.target.value)} rows={3} />
       <div className="row">
         <Button size="sm" variant="primary" onClick={save}>Enregistrer</Button>
-        <Button size="sm" variant="ghost" onClick={() => (setText(move.comment ?? ''), setEditing(false))}>Annuler</Button>
+        <Button size="sm" variant="ghost" onClick={() => (setText(move.comment ?? ''), onEdit(false))}>Annuler</Button>
       </div>
     </div>
   );
