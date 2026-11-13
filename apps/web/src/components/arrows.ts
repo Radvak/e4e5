@@ -1,4 +1,8 @@
-/** Arrow colours on the board, shared with the legend so both always match. */
+/**
+ * Arrow colours on the board. The same colours mark the moves around the board (repertoire
+ * moves, moves to complete, engine line: see --rep, --hole, --engine in styles.css), which
+ * acts as the legend.
+ */
 export const ARROWS = {
   repertoire: { color: '#3fb950', label: 'dans votre répertoire' },
   next: { color: '#3fb950', label: 'coup suivant (→)' },
@@ -7,6 +11,9 @@ export const ARROWS = {
 } as const;
 
 export type ArrowKind = keyof typeof ARROWS;
+
+/** A popular move (orange arrow) among the most played ones: top 6 and 3% of the games or more. */
+export const isPopular = (rank: number, share: number) => rank < 6 && share >= 0.03;
 
 /** chessground brushes for the arrow kinds. */
 export const BRUSHES = {

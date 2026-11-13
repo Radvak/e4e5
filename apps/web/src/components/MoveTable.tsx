@@ -1,4 +1,5 @@
 import { totalGames, type ExplorerResponse } from '@prepa-cahier/core';
+import { isPopular } from './arrows';
 
 function pct(n: number, total: number) {
   return total ? (100 * n) / total : 0;
@@ -18,8 +19,15 @@ export function MoveTable({ data, inRep, onPick, limit }: { data: ExplorerRespon
         {moves.map((m) => {
           const n = totalGames(m);
           const prepared = inRep(m.uci);
+          // Same colours as the arrows: green in the repertoire, orange popular but missing.
+          const popular = !prepared && isPopular(data.moves.indexOf(m), n / total);
           return (
-            <tr key={m.uci} className={prepared ? 'in-rep' : ''} onClick={() => onPick(m.uci)} title={prepared ? 'Dans votre répertoire' : 'Jouer ce coup'}>
+            <tr
+              key={m.uci}
+              className={prepared ? 'in-rep' : popular ? 'popular' : ''}
+              onClick={() => onPick(m.uci)}
+              title={prepared ? 'Dans votre répertoire' : popular ? 'Joué souvent, pas dans votre répertoire' : 'Jouer ce coup'}
+            >
               <td className="san">{prepared ? '✓ ' : ''}{m.san}</td>
               <td className="share">{pct(n, total).toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} %</td>
               <td className="games">{n.toLocaleString('fr-FR')}</td>

@@ -5,7 +5,7 @@ import type { Key } from 'chessground/types';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api, type ImportResult, type Me, type StoredMove } from '../api';
-import { ARROWS, OUTLINE_EXTRA, type ArrowKind } from '../components/arrows';
+import { isPopular, OUTLINE_EXTRA, type ArrowKind } from '../components/arrows';
 import { EnginePanel } from '../components/EnginePanel';
 import { useEngine } from '../engine/useEngine';
 import { Board } from '../components/Board';
@@ -217,9 +217,9 @@ export function RepertoireEditor({ me }: { me: Me }) {
       const w = width(share.get(next.uci) ?? 0, 9);
       out.push(arrow(next.uci, 'outline', w + OUTLINE_EXTRA), arrow(next.uci, 'next', w));
     }
-    for (const m of ed?.moves.slice(0, 6) ?? []) {
+    for (const [i, m] of (ed?.moves ?? []).entries()) {
       const s = share.get(m.uci) ?? 0;
-      if (s >= 0.03 && !rep.has(fen, m.uci) && m.uci !== next?.uci) out.push(arrow(m.uci, 'popular', width(s)));
+      if (isPopular(i, s) && !rep.has(fen, m.uci) && m.uci !== next?.uci) out.push(arrow(m.uci, 'popular', width(s)));
     }
     const best = engineOn ? engine.lines[0]?.pv[0] : undefined;
     if (best) out.push(arrow(best.uci, 'engine', 6));
@@ -273,15 +273,6 @@ export function RepertoireEditor({ me }: { me: Me }) {
           <button onClick={forward} title="Avancer (→)">▶</button>
           <button onClick={() => goTo(line.length)} title="Fin de la ligne (Fin)">⏭</button>
         </div>
-        <p className="legend muted">
-          {(Object.keys(ARROWS) as ArrowKind[]).filter((k) => k !== 'engine' || engineOn).map((k) => (
-            <span key={k} className="legend-item">
-              <span className={`swatch ${k === 'next' ? 'outlined' : ''}`} style={{ background: ARROWS[k].color }} />
-              {ARROWS[k].label}
-            </span>
-          ))}
-          <span className="legend-item">plus épais = joué plus souvent</span>
-        </p>
       </div>
 
       <div className="editor-side">

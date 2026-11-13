@@ -5,7 +5,7 @@ import type { Key } from 'chessground/types';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api, ApiError, type ExplorerGameRef, type Me, type RepertoireMoveHere } from '../api';
-import { ARROWS } from '../components/arrows';
+import { isPopular } from '../components/arrows';
 import { Board } from '../components/Board';
 import { EnginePanel } from '../components/EnginePanel';
 import { JumpBox } from '../components/JumpBox';
@@ -160,9 +160,9 @@ export function Explorer({ me }: { me: Me }) {
       modifiers: { lineWidth },
     });
     const out = [...prepared.keys()].map((uci) => arrow(uci, 'repertoire', width(share.get(uci) ?? 0, 9)));
-    for (const m of data?.moves.slice(0, 6) ?? []) {
+    for (const [i, m] of (data?.moves ?? []).entries()) {
       const s = share.get(m.uci) ?? 0;
-      if (s >= 0.03 && !prepared.has(m.uci)) out.push(arrow(m.uci, 'popular', width(s)));
+      if (isPopular(i, s) && !prepared.has(m.uci)) out.push(arrow(m.uci, 'popular', width(s)));
     }
     if (best) out.push(arrow(best.uci, 'engine', 6));
     return out;
@@ -227,22 +227,6 @@ export function Explorer({ me }: { me: Me }) {
           <button onClick={() => goTo(ply + 1)} title="Avancer (→)">▶</button>
           <button onClick={() => goTo(line.length)} title="Fin de la ligne (Fin)">⏭</button>
         </div>
-        <p className="legend muted">
-          <span className="legend-item">
-            <span className="swatch" style={{ background: ARROWS.repertoire.color }} />
-            dans un de vos répertoires
-          </span>
-          <span className="legend-item">
-            <span className="swatch" style={{ background: ARROWS.popular.color }} />
-            joué souvent, dans aucun
-          </span>
-          {engineOn && (
-            <span className="legend-item">
-              <span className="swatch" style={{ background: ARROWS.engine.color }} />
-              {ARROWS.engine.label}
-            </span>
-          )}
-        </p>
       </div>
 
       <div className="editor-side">

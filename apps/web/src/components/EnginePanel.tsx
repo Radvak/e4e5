@@ -38,7 +38,7 @@ export function EnginePanel({
       {enabled && lines.length === 0 && <p className="muted small-text">Réflexion…</p>}
       {enabled &&
         lines.map((l) => (
-          <div key={l.multipv} className="engine-line">
+          <div key={l.multipv} className={`engine-line ${l.multipv === 1 ? 'best' : ''}`} title={l.multipv === 1 ? 'Meilleure ligne (flèche bleue)' : undefined}>
             <span className={`eval ${('mate' in l.score ? l.score.mate : l.score.cp) >= 0 ? 'w' : 'b'}`}>
               {formatScore(l.score)}
             </span>

@@ -378,3 +378,15 @@ kbd { display: inline-block; min-width: 18px; padding: 0 4px; margin: 0 1px; bor
 .suggestion .freq { color: var(--text-2); font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 0.88rem; }
 .suggestion .badge { margin-left: 6px; }
 .pgn-import { margin-bottom: 16px; } .pgn-import textarea { margin: 8px 0; }
+
+/* Colours shared with the board arrows (components/arrows.ts): they act as the legend. */
+:root { --rep: #3fb950; --hole: #f0883e; --engine: #58a6ff; }
+.rep-moves .san { color: var(--rep); }
+.rep-moves .unsaved, .rep-moves .san.unsaved { color: var(--text-2); }
+.rep-moves li.selected { box-shadow: inset 3px 0 0 var(--rep); }
+.explorer tr.in-rep .san { color: var(--rep); }
+.explorer tr.popular .san { color: var(--hole); font-weight: 700; }
+.hole-move { color: var(--hole); }
+.suggestion.here { background: rgba(240, 136, 62, 0.1); }
+.suggestion .badge.warn { background: rgba(240, 136, 62, 0.18); color: var(--hole); }
+.engine-line.best .pv button.link:first-child { color: var(--engine); font-weight: 700; }
