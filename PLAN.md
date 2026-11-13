@@ -101,7 +101,8 @@ Planned: `review_cards` (FSRS state per user move), `game_syncs`, `inbox_items`.
   top / recent games, a click replays the game on the board.
 - [ ] **6. Polish**: search/jump to position, mobile
   layout, PWA, sharing a repertoire with a friend (read-only link / copy).
-- [ ] **7. Hosting**: deploy (Fly.io / Railway / VPS), backups of the SQLite file.
+- [x] **7. Hosting**: Fly.io app `mon-cahier` (https://mon-cahier.fly.dev), one machine in
+  Paris, 1 GB encrypted volume with daily snapshots (5 days). Own domain later (mon-cahier.fr).
 
 ## Risks
 

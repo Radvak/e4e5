@@ -63,6 +63,16 @@ fly deploy
 It is then at https://mon-cahier.fly.dev. Then `fly deploy` for each new version. Fly keeps daily snapshots of the volume (5 days); a copy
 of the database: `fly ssh sftp get /data/prepa-cahier.db`.
 
+Where Fly's remote builder cannot be reached (corporate TLS proxy), build locally for Fly's
+x86 machines and deploy the image:
+
+```bash
+TAG=registry.fly.io/mon-cahier:$(git rev-parse --short HEAD)
+docker build --platform linux/amd64 --secret id=ca,src=$NODE_EXTRA_CA_CERTS --secret id=npmrc,src=<npmrc> -t $TAG .
+fly auth docker && docker push $TAG
+fly deploy --image $TAG
+```
+
 Own domain (e.g. mon-cahier.fr): `fly certs add mon-cahier.fr`, add the DNS records it prints at
 the registrar, then set `PUBLIC_URL = "https://mon-cahier.fr"` in `fly.toml` (session cookies and
 the Lichess login redirect use it) and `fly deploy`.
