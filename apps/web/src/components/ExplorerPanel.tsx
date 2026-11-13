@@ -49,7 +49,7 @@ export function ExplorerPanel({ me, fen, rep, stats, error, loading, onPick, bar
       {origin && <p className="warning small-text">{origin}</p>}
       {missing && <p className="muted">Aucune statistique pour cette position{missingReason ? ` : ${REASONS[missingReason]}` : ''}.</p>}
       {Boolean(error) && !missing && <p className="error">{String(error)}</p>}
-      {data && <MoveTable data={data} inRep={(uci) => rep.has(fen, uci)} onPick={onPick} />}
+      {data && <MoveTable data={data} inRep={(uci) => rep.has(fen, uci)} onPick={onPick} limit={10} />}
     </>
   );
   if (bare) return body;

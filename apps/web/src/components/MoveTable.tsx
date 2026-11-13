@@ -4,14 +4,18 @@ function pct(n: number, total: number) {
   return total ? (100 * n) / total : 0;
 }
 
-/** One row per move: share, games, win/draw/loss bar. Moves in the repertoire are marked. */
-export function MoveTable({ data, inRep, onPick }: { data: ExplorerResponse; inRep: (uci: string) => boolean; onPick: (uci: string) => void }) {
+/**
+ * One row per move: share, games, win/draw/loss bar. Moves in the repertoire are marked.
+ * `limit`: only the most played moves, plus the repertoire moves played less often.
+ */
+export function MoveTable({ data, inRep, onPick, limit }: { data: ExplorerResponse; inRep: (uci: string) => boolean; onPick: (uci: string) => void; limit?: number }) {
   const total = totalGames(data);
   if (total === 0) return <p className="muted">Aucune partie dans cette position.</p>;
+  const moves = limit ? data.moves.filter((m, i) => i < limit || inRep(m.uci)) : data.moves;
   return (
     <table className="explorer">
       <tbody>
-        {data.moves.map((m) => {
+        {moves.map((m) => {
           const n = totalGames(m);
           const prepared = inRep(m.uci);
           return (
