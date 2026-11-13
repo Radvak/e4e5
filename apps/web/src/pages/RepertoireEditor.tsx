@@ -219,7 +219,8 @@ export function RepertoireEditor({ me }: { me: Me }) {
     }
     for (const [i, m] of (ed?.moves ?? []).entries()) {
       const s = share.get(m.uci) ?? 0;
-      if (isPopular(i, s) && !rep.has(fen, m.uci) && m.uci !== next?.uci) out.push(arrow(m.uci, 'popular', width(s)));
+      // Orange only for the opponent's moves: what others play on my turn is not a hole.
+      if (!rep.isMyTurn(fen) && isPopular(i, s) && !rep.has(fen, m.uci) && m.uci !== next?.uci) out.push(arrow(m.uci, 'popular', width(s)));
     }
     const best = engineOn ? engine.lines[0]?.pv[0] : undefined;
     if (best) out.push(arrow(best.uci, 'engine', 6));
@@ -382,6 +383,7 @@ export function RepertoireEditor({ me }: { me: Me }) {
           loading={explorer.isLoading}
           me={me}
           onPick={play}
+          markPopular={!rep.isMyTurn(fen)}
         />
 
       </div>

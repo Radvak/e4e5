@@ -9,7 +9,7 @@ function pct(n: number, total: number) {
  * One row per move: share, games, win/draw/loss bar. Moves in the repertoire are marked.
  * `limit`: only the most played moves, plus the repertoire moves played less often.
  */
-export function MoveTable({ data, inRep, onPick, limit }: { data: ExplorerResponse; inRep: (uci: string) => boolean; onPick: (uci: string) => void; limit?: number }) {
+export function MoveTable({ data, inRep, onPick, limit, markPopular = true }: { data: ExplorerResponse; inRep: (uci: string) => boolean; onPick: (uci: string) => void; limit?: number; markPopular?: boolean }) {
   const total = totalGames(data);
   if (total === 0) return <p className="muted">Aucune partie dans cette position.</p>;
   const moves = limit ? data.moves.filter((m, i) => i < limit || inRep(m.uci)) : data.moves;
@@ -20,7 +20,7 @@ export function MoveTable({ data, inRep, onPick, limit }: { data: ExplorerRespon
           const n = totalGames(m);
           const prepared = inRep(m.uci);
           // Same colours as the arrows: green in the repertoire, orange popular but missing.
-          const popular = !prepared && isPopular(data.moves.indexOf(m), n / total);
+          const popular = markPopular && !prepared && isPopular(data.moves.indexOf(m), n / total);
           return (
             <tr
               key={m.uci}

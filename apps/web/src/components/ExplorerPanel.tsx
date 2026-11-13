@@ -14,6 +14,8 @@ interface Props {
   onPick: (uci: string) => void;
   /** Hide the heading (when the panel sits under a tab named after it). */
   bare?: boolean;
+  /** Show popular moves missing from the repertoire in orange (default: yes). */
+  markPopular?: boolean;
 }
 
 export const REASONS: Record<NonNullable<StatsMeta['reason']>, string> = {
@@ -34,7 +36,7 @@ function provenance(meta: StatsMeta): string | null {
 }
 
 /** Moves played at the user's level in this position, marked when in the repertoire. */
-export function ExplorerPanel({ me, fen, rep, stats, error, loading, onPick, bare }: Props) {
+export function ExplorerPanel({ me, fen, rep, stats, error, loading, onPick, bare, markPopular = true }: Props) {
   const data = stats?.data;
   const origin = stats ? provenance(stats.meta) : null;
   const missing = error instanceof ApiError && error.status === 404;
@@ -49,7 +51,7 @@ export function ExplorerPanel({ me, fen, rep, stats, error, loading, onPick, bar
       {origin && <p className="warning small-text">{origin}</p>}
       {missing && <p className="muted">Aucune statistique pour cette position{missingReason ? ` : ${REASONS[missingReason]}` : ''}.</p>}
       {Boolean(error) && !missing && <p className="error">{String(error)}</p>}
-      {data && <MoveTable data={data} inRep={(uci) => rep.has(fen, uci)} onPick={onPick} limit={10} />}
+      {data && <MoveTable data={data} inRep={(uci) => rep.has(fen, uci)} onPick={onPick} limit={10} markPopular={markPopular} />}
     </>
   );
   if (bare) return body;
