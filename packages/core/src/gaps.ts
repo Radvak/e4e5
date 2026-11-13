@@ -231,7 +231,9 @@ function matchGap<K>(gap: Pick<Gap, 'fen' | 'path'>, c: GapCandidate<K>): { owns
   }
   let prefix = 0;
   while (prefix < gap.path.length && c.rep.has(gap.path[prefix]!.fromFen, gap.path[prefix]!.uci)) prefix++;
-  return { owns: !c.trunk.positions.has(gap.fen) && prefix >= c.trunk.length, score: 2 * prefix };
+  // Owned only if the line follows the repertoire past its first choice (one of its own moves
+  // there), not just along its trunk: a Philidor (1. e4 e5 / 1. e4 d6) does not own 1. e4 c6.
+  return { owns: !c.trunk.positions.has(gap.fen) && prefix > c.trunk.length, score: 2 * prefix };
 }
 
 /**

@@ -146,6 +146,60 @@ export interface LichessGame {
   moves: string[];
 }
 
+export type GameResult = 'win' | 'draw' | 'loss';
+export type Results = Record<GameResult, number>;
+export interface SyncJob {
+  source: 'chesscom' | 'lichess';
+  status: 'running' | 'done' | 'error';
+  startedAt: string;
+  fetched: number;
+  added: number;
+  progress?: { done: number; total: number };
+  reviews?: number;
+  error?: string;
+}
+export interface SyncState {
+  accounts: { chesscom: string | null; lichess: string | null };
+  syncs: { source: 'chesscom' | 'lichess'; account: string; lastGameAt: string | null; syncedAt: string }[];
+  counts: Partial<Record<'chesscom' | 'lichess', number>>;
+  jobs: SyncJob[];
+}
+export interface InboxItem {
+  key: string;
+  kind: 'novelty' | 'deviation' | 'end';
+  repertoireId: string;
+  fen: string;
+  line: { sans: string[]; ucis: string[] };
+  move: { san: string; uci: string };
+  games: number;
+  results: Results;
+  replies: { san: string; uci: string; games: number; results: Results }[];
+  expected: string[];
+  lastPlayedAt: string;
+  example: string;
+}
+export interface GamesReport {
+  games: number;
+  repertoires: { id: string; games: number; results: Results; bookMoves: number }[];
+  outside: { color: Color; move: string; games: number; results: Results }[];
+  inbox: { novelties: InboxItem[]; deviations: InboxItem[]; ends: InboxItem[] };
+  recent: {
+    id: string;
+    url: string;
+    playedAt: string;
+    color: Color;
+    result: GameResult;
+    speed: string;
+    opponent: string;
+    opponentRating: number | null;
+    repertoireId: string | null;
+    kind: 'in-book' | 'my-deviation' | 'opponent-novelty' | 'end-of-prep' | 'outside';
+    ply: number;
+    move: { san: string; uci: string } | null;
+    ucis: string[];
+  }[];
+}
+
 export const api = {
   me: () => request<Me>('GET', '/api/me'),
   authConfig: () => request<{ guestLogin: boolean }>('GET', '/api/auth/config'),
@@ -183,6 +237,13 @@ export const api = {
     request<MyGames>('GET', `/api/explorer/mine?${new URLSearchParams({ fen, color, speeds: speeds.join(',') })}`),
   repertoireMovesAt: (fen: string) => request<RepertoireMoveHere[]>('GET', `/api/explorer/repertoires?${new URLSearchParams({ fen })}`),
   lichessGame: (id: string) => request<LichessGame>('GET', `/api/lichess-games/${id}`),
+  syncState: () => request<SyncState>('GET', '/api/games/sync'),
+  startSync: (source: 'chesscom' | 'lichess') => request<SyncJob>('POST', '/api/games/sync', { source }),
+  gamesReport: (days: number, speeds: string[]) =>
+    request<GamesReport>('GET', `/api/games/report?${new URLSearchParams({ days: String(days), speeds: speeds.join(',') })}`),
+  dismissInbox: (key: string) => request<{ ok: true }>('POST', '/api/games/inbox/dismiss', { key }),
+  restoreInbox: () => request<{ ok: true }>('DELETE', '/api/games/inbox/dismiss'),
+  reviewNow: (id: string, fen: string) => request<ReviewCard>('POST', `/api/repertoires/${id}/cards/due`, { fen }),
   explorer: (fen: string, speeds: string[], ratings: number[]) =>
     request<Stats>(
       'GET',

@@ -89,6 +89,23 @@ export async function trainingRoutes(app: FastifyInstance) {
     return publicCard(saved!);
   });
 
+  /** Makes a learnt position due for review now (e.g. after a deviation in a game). */
+  app.post<{ Params: { id: string } }>('/api/repertoires/:id/cards/due', async (req, reply) => {
+    const [rep] = await db
+      .select({ id: repertoires.id })
+      .from(repertoires)
+      .where(and(eq(repertoires.id, req.params.id), eq(repertoires.userId, req.user!.id)));
+    if (!rep) return reply.code(404).send({ error: 'Repertoire not found' });
+    const { fen } = z.object({ fen: z.string().min(10).max(120) }).parse(req.body);
+    const [card] = await db
+      .update(reviewCards)
+      .set({ due: new Date() })
+      .where(and(eq(reviewCards.repertoireId, rep.id), eq(reviewCards.fen, fen)))
+      .returning();
+    if (!card) return reply.code(404).send({ error: 'This position is not learnt yet: train it first' });
+    return publicCard(card);
+  });
+
   /** Answers of the last `days` days, all repertoires (for activity statistics). */
   app.get('/api/stats/history', async (req) => {
     const { days } = z.object({ days: z.coerce.number().int().min(1).max(365).default(90) }).parse(req.query);

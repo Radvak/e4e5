@@ -129,5 +129,61 @@ export const seedImports = sqliteTable('seed_imports', {
   importedAt: integer('imported_at', { mode: 'timestamp_ms' }).notNull(),
 });
 
+/**
+ * A game played by the user on Lichess or Chess.com, imported by the game sync. Only what the
+ * comparison with the repertoires and the statistics need; the analysis itself is recomputed
+ * on demand, so it follows the repertoires as they change.
+ */
+export const games = sqliteTable(
+  'games',
+  {
+    /** "lichess:<game id>" or "chesscom:<uuid>". */
+    id: text('id').primaryKey(),
+    userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    source: text('source', { enum: ['lichess', 'chesscom'] }).notNull(),
+    url: text('url').notNull(),
+    playedAt: integer('played_at', { mode: 'timestamp_ms' }).notNull(),
+    /** The user's colour. */
+    color: text('color', { enum: ['white', 'black'] }).notNull(),
+    result: text('result', { enum: ['win', 'draw', 'loss'] }).notNull(),
+    /** bullet, blitz, rapid, classical, daily. */
+    speed: text('speed').notNull(),
+    rated: integer('rated', { mode: 'boolean' }).notNull(),
+    opponent: text('opponent').notNull(),
+    opponentRating: integer('opponent_rating'),
+    myRating: integer('my_rating'),
+    /** SAN moves of the whole game. */
+    moves: text('moves', { mode: 'json' }).$type<string[]>().notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index('games_user_time').on(t.userId, t.playedAt)],
+);
+
+/** Where the last sync of a source stopped (games newer than `lastGameAt` are fetched next). */
+export const gameSyncs = sqliteTable(
+  'game_syncs',
+  {
+    userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    source: text('source', { enum: ['lichess', 'chesscom'] }).notNull(),
+    /** Account synced (a change of username starts over). */
+    account: text('account').notNull(),
+    lastGameAt: integer('last_game_at', { mode: 'timestamp_ms' }),
+    syncedAt: integer('synced_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.source] })],
+);
+
+/** Inbox items (games analysis) the user has dealt with or dismissed. */
+export const inboxDismissed = sqliteTable(
+  'inbox_dismissed',
+  {
+    userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    /** kind|repertoireId|fen|uci, see the games routes. */
+    key: text('key').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.key] })],
+);
+
 export type User = typeof users.$inferSelect;
 export type RepMoveRow = typeof repMoves.$inferSelect;

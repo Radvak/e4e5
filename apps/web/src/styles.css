@@ -176,3 +176,20 @@ kbd { display: inline-block; min-width: 18px; padding: 0 4px; margin: 0 1px; bor
 .games-title { margin: 10px 0 4px; font-size: 0.9em; }
 .lines.games tr.clickable { cursor: pointer; }
 .lines.games tr.clickable:hover td { background: #3a3835; }
+
+.games-page { max-width: 1000px; }
+.filters { margin-top: 12px; }
+.check { display: inline-flex; align-items: center; gap: 4px; }
+.result-bar { display: inline-flex; width: 110px; height: 10px; border-radius: 3px; overflow: hidden; background: #3a3835; vertical-align: middle; }
+.result-bar .win { background: #3fb950; }
+.result-bar .draw { background: #8a8784; }
+.result-bar .loss { background: #d1495b; }
+.inbox { list-style: none; padding: 0; margin: 0; }
+.inbox-item { border-top: 1px solid #3a3835; padding: 8px 0; }
+.inbox-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.inbox-body { margin: 4px 0; font-size: 0.9em; }
+.inbox-actions { gap: 6px; }
+.inbox-actions button.small { margin-left: 0; }
+.success-text { color: var(--accent); }
+.result.win { color: #3fb950; }
+.result.loss { color: #d1495b; }

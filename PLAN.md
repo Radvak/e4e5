@@ -84,14 +84,15 @@ Planned: `review_cards` (FSRS state per user move), `game_syncs`, `inbox_items`.
   with a "prepare in…" menu of all repertoires of the colour, ranked by the same logic. Explores
   down to 0.01% of games on stored statistics; the cutoff (0.5–5%) only sets which holes are
   listed and which missing statistics the background queue fetches (deduplicated, waits out 429s).
-- [ ] **5. Game sync** (Lichess and Chess.com): fetch new games (Chess.com: monthly archives
-  `/pub/player/{u}/games/{YYYY}/{MM}`, one request at a time) and match each to the best repertoire
-  (`bestRepertoire`), then classify with `analyzeGame`:
-  - my deviation: schedule that card for early review
-  - opponent novelty: inbox item; suggest my game reply, the most played reply, or the engine move
-  - end of prep: offer to extend the line
-
-  One click adds the line. Stats per line.
+- [x] **5. Game sync** (Lichess and Chess.com): background sync (Chess.com monthly archives one
+  request at a time, from the month of the last synced game; Lichess ndjson export `since`),
+  games stored in `games` (SAN moves), cursor in `game_syncs`. Each game is compared with all
+  repertoires of its colour merged (transpositions followed) and given to the best suited
+  repertoire (trunk logic), recomputed on demand. Games page: statistics per repertoire (games,
+  score, moves in book) and outside the repertoires; inbox grouped by position (opponent
+  novelties with my replies, my deviations, ends of lines), one click adds the line, "review
+  now" makes the card due, dismiss (`inbox_dismissed`). Deviations of the last 14 days make
+  their card due at sync time.
 - [x] **6a. Engine + search**: Stockfish 19 lite (WASM worker, 3 lines, best-move arrow, click to
   play a line as a draft); search box (moves, FEN, comment text) with `/` shortcut.
 - [x] **6b. Explorer page**: free board (flip, reset, ←/→, line kept in the URL), Stockfish, moves of all

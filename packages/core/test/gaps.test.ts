@@ -139,6 +139,10 @@ describe('gaps across several repertoires of the same colour', () => {
       { key: 'sicilian', owns: true },
       { key: 'open', owns: false },
     ]);
+    // Following a repertoire only along its trunk is not enough to belong to it.
+    const philidor = gapCandidate('philidor', rep('white', '1. e4 e5 (1... d6 2. d4) 2. Nf3 *'));
+    const caroLine = { fen: after('e2e4', 'c7c6', 'd2d4', 'd7d5'), path: rep('white', '1. e4 c6 2. d4 d5 *').movesAt(START_FEN) };
+    expect(rankRepertoires(caroLine, [philidor])).toEqual([{ key: 'philidor', owns: false }]);
     // A single repertoire: deviations inside its trunk are still not its holes.
     expect(gapOwner(report.gaps[0]!, [gapCandidate('open', open)])).toBeUndefined();
   });

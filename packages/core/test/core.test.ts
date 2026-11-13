@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   analyzeGame,
+  bestRepertoires,
+  GameLine,
+  gameMovesFromPgn,
   bucketsFor,
   pgnToMoves,
   playUci,
@@ -178,5 +181,36 @@ describe('engine output', () => {
     expect(parseInfo('info depth 10 score cp 20 lowerbound pv e2e4', START_FEN)).toBeNull();
     expect(parseInfo('bestmove e2e4', START_FEN)).toBeNull();
     expect(uciFen(START_FEN)).toBe(`${START_FEN} 0 1`);
+  });
+});
+
+describe('played games', () => {
+  const CHESSCOM = `[Event "Live Chess"]
+[Site "Chess.com"]
+[White "lartistefou"]
+[Result "1-0"]
+
+1. d4 {[%clk 0:04:59.7]} 1... d5 {[%clk 0:04:58.7]} 2. Nf3 {[%clk 0:04:57.2]} 2... c5 {[%clk 0:04:58]} 3. dxc5 $1 {[%clk 0:04:54.8]} (3. c4 e6) 3... Nc6 {[%clk 0:04:57]} 1-0`;
+
+  it('reads the moves of a Chess.com PGN (clocks, NAGs, variations dropped)', () => {
+    expect(gameMovesFromPgn(CHESSCOM)).toEqual({ sans: ['d4', 'd5', 'Nf3', 'c5', 'dxc5', 'Nc6'], standard: true });
+    expect(gameMovesFromPgn('[SetUp "1"]\n[FEN "8/8/8/8/8/8/8/K6k w - - 0 1"]\n\n1. Kb1 *').standard).toBe(false);
+  });
+
+  it('plays the moves of a game on demand', () => {
+    const line = new GameLine(['e4', 'e5', 'Nf3', 'Qxx9', 'Nc6']);
+    expect(line.at(1)?.uci).toBe('e7e5');
+    expect(line.at(3)).toBeNull(); // illegal move: the game ends there
+    expect(line.slice(10).map((m) => m.san)).toEqual(['e4', 'e5', 'Nf3']);
+  });
+
+  it('finds every repertoire following a game the longest', () => {
+    const scotch = new Repertoire('white', pgnToMoves('1. e4 e5 2. Nf3 Nc6 3. d4 *').moves);
+    const petrov = new Repertoire('white', pgnToMoves('1. e4 e5 2. Nf3 Nf6 3. Nxe5 *').moves);
+    const best = bestRepertoires([{ id: 'scotch', rep: scotch }, { id: 'petrov', rep: petrov }], ['e4', 'e5', 'Nf3', 'Bc5', 'c3']);
+    expect(best.map((b) => [b.candidate.id, b.analysis.kind, b.analysis.ply])).toEqual([
+      ['scotch', 'opponent-novelty', 3],
+      ['petrov', 'opponent-novelty', 3],
+    ]);
   });
 });
