@@ -43,6 +43,8 @@ const profileBody = z.object({
     .nullable()
     .optional(),
   password: credentials.shape.password.optional(),
+  /** Login name, when a Lichess account adds a password (default: the Lichess username). */
+  login: loginName.optional(),
 });
 
 /** Public view of the logged-in user. */
@@ -200,8 +202,14 @@ export async function authRoutes(app: FastifyInstance) {
       }
     }
     if (body.password) {
-      if (!user.login || user.login.startsWith('guest:')) {
-        return reply.code(400).send({ error: 'Only password accounts can set a password' });
+      if (user.login?.startsWith('guest:')) return reply.code(400).send({ error: 'Guest accounts cannot have a password' });
+      if (!user.login) {
+        // A Lichess account adds a password: it also needs a login name, to log in without Lichess.
+        const login = (body.login ?? user.lichessUsername ?? '').toLowerCase();
+        if (!loginName.safeParse(login).success) return reply.code(400).send({ error: 'Choose a username (2-30 letters, digits, - or _)' });
+        const [taken] = await db.select({ id: users.id }).from(users).where(eq(users.login, login));
+        if (taken) return reply.code(409).send({ error: `The username “${login}” is taken` });
+        patch.login = login;
       }
       patch.passwordHash = await hashPassword(body.password);
     }

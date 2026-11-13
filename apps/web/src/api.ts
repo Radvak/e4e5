@@ -207,7 +207,7 @@ export const api = {
   register: (username: string, password: string) => request<{ ok: true }>('POST', '/api/auth/register', { username, password }),
   passwordLogin: (username: string, password: string) =>
     request<{ ok: true }>('POST', '/api/auth/password', { username, password }),
-  updateMe: (patch: { chesscomUsername?: string | null; password?: string }) =>
+  updateMe: (patch: { chesscomUsername?: string | null; password?: string; login?: string }) =>
     request<{ user: Me; warning?: string }>('PATCH', '/api/me', patch),
   unlinkLichess: () => request<{ user: Me }>('DELETE', '/api/me/lichess'),
   logout: () => request<{ ok: true }>('POST', '/api/auth/logout'),

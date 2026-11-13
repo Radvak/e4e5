@@ -6,6 +6,7 @@ export function Settings({ me }: { me: Me }) {
   const qc = useQueryClient();
   const [chesscom, setChesscom] = useState(me.chesscom?.username ?? '');
   const [password, setPassword] = useState('');
+  const [login, setLogin] = useState(me.lichess?.username.toLowerCase() ?? '');
   const [message, setMessage] = useState<string | null>(null);
 
   const onSaved = ({ user, warning }: { user: Me; warning?: string }) => {
@@ -17,7 +18,7 @@ export function Settings({ me }: { me: Me }) {
     onSuccess: onSaved,
   });
   const savePassword = useMutation({
-    mutationFn: () => api.updateMe({ password }),
+    mutationFn: () => api.updateMe(me.login ? { password } : { password, login }),
     onSuccess: (r) => {
       setPassword('');
       onSaved(r);
@@ -39,7 +40,7 @@ export function Settings({ me }: { me: Me }) {
           {me.guest && <span className="muted"> (guest: no password, for testing only)</span>}
           {me.login && <span className="muted"> · login “{me.login}”</span>}
         </p>
-        {me.hasPassword && (
+        {!me.guest && (
           <form
             className="row"
             onSubmit={(e) => {
@@ -47,15 +48,31 @@ export function Settings({ me }: { me: Me }) {
               savePassword.mutate();
             }}
           >
+            {!me.login && (
+              <input
+                autoComplete="username"
+                placeholder="Username"
+                value={login}
+                onChange={(e) => setLogin(e.target.value)}
+                aria-label="Username to log in with a password"
+              />
+            )}
             <input
               type="password"
               autoComplete="new-password"
-              placeholder="New password (8+ characters)"
+              placeholder={me.hasPassword ? 'New password (8+ characters)' : 'Password (8+ characters)'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
-            <button type="submit" disabled={password.length < 8 || savePassword.isPending}>Change password</button>
+            <button type="submit" disabled={password.length < 8 || (!me.login && login.length < 2) || savePassword.isPending}>
+              {me.hasPassword ? 'Change password' : 'Add a password'}
+            </button>
           </form>
+        )}
+        {!me.guest && !me.hasPassword && (
+          <p className="muted small-text">
+            Add a username and password to log in without Lichess too (e.g. on a network where Lichess is blocked).
+          </p>
         )}
       </section>
 
