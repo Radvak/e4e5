@@ -39,10 +39,10 @@ const lineText = (line: PlayedMove[]) =>
   line.map((m, i) => `${i % 2 === 0 ? `${i / 2 + 1}. ` : ''}${m.san}`).join(' ');
 
 /**
- * Search box: a move sequence (jumps there, saved or not), a FEN (jumps if the position is in
- * the repertoire), or text searched in the comments.
+ * Search box: a move sequence (jumps there, saved or not); with a repertoire, also a FEN (jumps
+ * if the position is in it) or text searched in its comments.
  */
-export const JumpBox = forwardRef<HTMLInputElement, { rep: Repertoire; onJump: (line: PlayedMove[]) => void }>(
+export const JumpBox = forwardRef<HTMLInputElement, { rep?: Repertoire; onJump: (line: PlayedMove[]) => void }>(
   function JumpBox({ rep, onJump }, ref) {
     const [text, setText] = useState('');
     const [hits, setHits] = useState<Hit[] | null>(null);
@@ -61,6 +61,7 @@ export const JumpBox = forwardRef<HTMLInputElement, { rep: Repertoire; onJump: (
       setError(null);
       if (!q) return;
       if (q.split('/').length === 8) {
+        if (!rep) return setError('Saisissez des coups, par exemple 1. e4 c5 2. Nf3.');
         let key: string;
         try {
           key = fenKey(positionFromFen(q));
@@ -72,6 +73,7 @@ export const JumpBox = forwardRef<HTMLInputElement, { rep: Repertoire; onJump: (
       }
       const moves = parseMoves(q);
       if (moves) return jump(moves);
+      if (!rep) return setError('Coups illégaux ou mal écrits (exemple : 1. e4 c5 2. Nf3).');
       const needle = q.toLowerCase();
       const found: Hit[] = [];
       for (const m of rep.all()) {
@@ -98,7 +100,7 @@ export const JumpBox = forwardRef<HTMLInputElement, { rep: Repertoire; onJump: (
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => e.key === 'Escape' && (e.currentTarget.blur(), setHits(null), setError(null))}
-            placeholder="Aller à : coups (1. e4 c5 2. Nf3), FEN ou mot d’un commentaire"
+            placeholder={rep ? 'Aller à : coups (1. e4 c5 2. Nf3), FEN ou mot d’un commentaire' : 'Aller à : 1. e4 c5 2. Nf3'}
             aria-label="Chercher ou aller à une position"
           />
           <button type="submit">OK</button>

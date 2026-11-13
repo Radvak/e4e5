@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api, type Me, type RepertoireSummary, type TrainingSummary } from '../api';
 import { dayStart, useSettings } from '../settings';
-import { Button, EmptyState, Menu, PageHeader, Tabs, plural } from '../ui';
+import { Button, EmptyState, PageHeader, Tabs, plural } from '../ui';
 import { depthText, useGaps } from '../useGaps';
 
 const COLORS: { color: Color; label: string }[] = [
@@ -34,8 +34,6 @@ export function Repertoires({ me }: { me: Me }) {
       navigate(`/r/${rep.id}`);
     },
   });
-  const remove = useMutation({ mutationFn: api.deleteRepertoire, onSuccess: refresh });
-  const rename = useMutation({ mutationFn: ({ id, name }: { id: string; name: string }) => api.renameRepertoire(id, name), onSuccess: refresh });
 
   const list = reps.data ?? [];
   return (
@@ -97,11 +95,6 @@ export function Repertoires({ me }: { me: Me }) {
                   rep={r}
                   counts={counts.get(r.id)}
                   depth={depths.get(r.id)}
-                  onRename={() => {
-                    const next = prompt('Nouveau nom', r.name)?.trim();
-                    if (next && next !== r.name) rename.mutate({ id: r.id, name: next });
-                  }}
-                  onDelete={() => confirm(`Supprimer le répertoire « ${r.name} » et tous ses coups ?`) && remove.mutate(r.id)}
                 />
               ))}
             </div>
@@ -112,7 +105,7 @@ export function Repertoires({ me }: { me: Me }) {
   );
 }
 
-function RepertoireCard({ rep, counts, depth, onRename, onDelete }: { rep: RepertoireSummary; counts?: TrainingSummary; depth?: number; onRename: () => void; onDelete: () => void }) {
+function RepertoireCard({ rep, counts, depth }: { rep: RepertoireSummary; counts?: TrainingSummary; depth?: number }) {
   const navigate = useNavigate();
   const toTrain = counts ? counts.due + counts.new : 0;
   // The whole card opens the repertoire; its buttons stop the click.
@@ -135,13 +128,6 @@ function RepertoireCard({ rep, counts, depth, onRename, onDelete }: { rep: Reper
             Entraîner
           </Button>
         )}
-        <Menu
-          items={[
-            { label: 'Renommer', onClick: onRename },
-            { label: 'Exporter en PGN', onClick: () => (location.href = `/api/repertoires/${rep.id}/pgn`) },
-            { label: 'Supprimer', onClick: onDelete, danger: true },
-          ]}
-        />
       </div>
     </div>
   );

@@ -2,12 +2,11 @@ import { playUci, Repertoire, START_FEN, totalGames, pathTo, turnOf, type Played
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { DrawShape } from 'chessground/draw';
 import type { Key } from 'chessground/types';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api, type ImportResult, type Me, type StoredMove } from '../api';
 import { ARROWS, OUTLINE_EXTRA, type ArrowKind } from '../components/arrows';
 import { EnginePanel } from '../components/EnginePanel';
-import { JumpBox } from '../components/JumpBox';
 import { useEngine } from '../engine/useEngine';
 import { Board } from '../components/Board';
 import { ExplorerPanel } from '../components/ExplorerPanel';
@@ -22,6 +21,7 @@ type LineMove = PlayedMove;
 export function RepertoireEditor({ me }: { me: Me }) {
   const { id = '' } = useParams();
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const { speed, range, gapCutoff } = useSettings();
   const gapReport = useGaps(me);
   const { data, isLoading, error } = useQuery({ queryKey: ['repertoire', id], queryFn: () => api.repertoire(id) });
@@ -78,6 +78,17 @@ export function RepertoireEditor({ me }: { me: Me }) {
     onSuccess: async (r) => {
       await refresh();
       setNotice(`${plural(r.added, 'coup enregistré', 'coups enregistrés')}.`);
+    },
+  });
+  const renameRep = useMutation({
+    mutationFn: (name: string) => api.renameRepertoire(id, name),
+    onSuccess: () => Promise.all([refresh(), qc.invalidateQueries({ queryKey: ['repertoires'] })]),
+  });
+  const deleteRep = useMutation({
+    mutationFn: () => api.deleteRepertoire(id),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['repertoires'] });
+      navigate('/repertoires');
     },
   });
   const deleteMove = useMutation({ mutationFn: (m: StoredMove) => api.deleteMove(id, m.id), onSuccess: refresh });
@@ -155,15 +166,10 @@ export function RepertoireEditor({ me }: { me: Me }) {
     setEngineOn(on);
   };
   const engine = useEngine(fen, engineOn);
-  const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.target as HTMLElement).closest('textarea, input')) return;
-      if (e.key === '/') {
-        e.preventDefault();
-        searchRef.current?.focus();
-      }
       if (e.key.startsWith('Arrow')) e.preventDefault(); // no page scroll
       if (e.key === 'ArrowLeft') goTo(ply - 1);
       if (e.key === 'ArrowRight') forward();
@@ -243,6 +249,18 @@ export function RepertoireEditor({ me }: { me: Me }) {
           : []),
         { label: 'Importer un PGN', onClick: () => setImportOpen(true) },
         { label: 'Exporter en PGN', onClick: () => (location.href = `/api/repertoires/${id}/pgn`) },
+        {
+          label: 'Renommer',
+          onClick: () => {
+            const next = prompt('Nouveau nom', data.name)?.trim();
+            if (next && next !== data.name) renameRep.mutate(next);
+          },
+        },
+        {
+          label: 'Supprimer le répertoire',
+          danger: true,
+          onClick: () => confirm(`Supprimer le répertoire « ${data.name} » et tous ses coups ?`) && deleteRep.mutate(),
+        },
       ]}
     />
     {importOpen && <PgnImport repertoireId={id} onDone={refresh} onClose={() => setImportOpen(false)} />}
@@ -268,7 +286,6 @@ export function RepertoireEditor({ me }: { me: Me }) {
 
       <div className="editor-side">
         <section className="panel">
-          <JumpBox ref={searchRef} rep={rep} onJump={jumpTo} />
           <div className="moves-path">
             <button className={`link ${ply === 0 ? 'current' : ''}`} onClick={() => goTo(0)}>Début</button>
             {line.map((m, i) => (
@@ -334,7 +351,7 @@ export function RepertoireEditor({ me }: { me: Me }) {
           {options.length > 0 && (
             <p className="muted small-text keys">
               {options.length > 1 && <><kbd>↑</kbd><kbd>↓</kbd> choisir · </>}
-              <kbd>→</kbd> jouer · <kbd>←</kbd> reculer · <kbd>/</kbd> chercher
+              <kbd>→</kbd> jouer · <kbd>←</kbd> reculer
             </p>
           )}
         </section>

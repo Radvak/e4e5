@@ -8,6 +8,7 @@ import { api, ApiError, type ExplorerGameRef, type Me, type RepertoireMoveHere }
 import { ARROWS } from '../components/arrows';
 import { Board } from '../components/Board';
 import { EnginePanel } from '../components/EnginePanel';
+import { JumpBox } from '../components/JumpBox';
 import { useEngine } from '../engine/useEngine';
 import { MoveTable } from '../components/MoveTable';
 import { StatsSource } from '../components/StatsSource';
@@ -246,6 +247,7 @@ export function Explorer({ me }: { me: Me }) {
 
       <div className="editor-side">
         <section className="panel">
+          <JumpBox onJump={(moves) => setLine(moves, moves.length)} />
           <div className="moves-path">
             <button className={`link ${ply === 0 ? 'current' : ''}`} onClick={() => goTo(0)}>Début</button>
             {line.map((m, i) => (
