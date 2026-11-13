@@ -245,6 +245,7 @@ export function RepertoireEditor({ me }: { me: Me }) {
         { label: 'Exporter en PGN', onClick: () => (location.href = `/api/repertoires/${id}/pgn`) },
       ]}
     />
+    {importOpen && <PgnImport repertoireId={id} onDone={refresh} onClose={() => setImportOpen(false)} />}
     <div className="editor">
       <div className="editor-board">
         <Board fen={fen} orientation={data.color} lastMove={last?.uci} shapes={shapes} onMove={play} />
@@ -376,7 +377,6 @@ export function RepertoireEditor({ me }: { me: Me }) {
           onPick={play}
         />
 
-        <PgnImport repertoireId={id} onDone={refresh} open={importOpen} onToggle={setImportOpen} />
       </div>
     </div>
     </>
@@ -398,7 +398,8 @@ function CommentBox({ move, onSave }: { move: StoredMove; onSave: (comment: stri
   );
 }
 
-function PgnImport({ repertoireId, onDone, open, onToggle }: { repertoireId: string; onDone: () => void; open: boolean; onToggle: (open: boolean) => void }) {
+/** Opened from the ⋯ menu of the header. */
+function PgnImport({ repertoireId, onDone, onClose }: { repertoireId: string; onDone: () => void; onClose: () => void }) {
   const [pgn, setPgn] = useState('');
   const [result, setResult] = useState<ImportResult | null>(null);
   const mutation = useMutation({
@@ -410,8 +411,11 @@ function PgnImport({ repertoireId, onDone, open, onToggle }: { repertoireId: str
     },
   });
   return (
-    <details className="panel" open={open} onToggle={(e) => onToggle((e.target as HTMLDetailsElement).open)}>
-      <summary>Importer un PGN</summary>
+    <section className="card pgn-import">
+      <div className="card-head">
+        <h3>Importer un PGN</h3>
+        <Button size="sm" variant="ghost" onClick={onClose}>Fermer</Button>
+      </div>
       <input
         type="file"
         accept=".pgn,text/plain"
@@ -433,6 +437,6 @@ function PgnImport({ repertoireId, onDone, open, onToggle }: { repertoireId: str
           {result.errors.length > 0 && <span className="error"> {result.errors.join('; ')}</span>}
         </p>
       )}
-    </details>
+    </section>
   );
 }
