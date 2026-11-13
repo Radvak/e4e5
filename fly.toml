@@ -1,0 +1,38 @@
+# Fly.io: one machine (SQLite on a volume, so never more than one), Paris region.
+#   fly apps create mon-cahier
+#   fly volumes create data --region cdg --size 1
+#   fly secrets set COOKIE_SECRET=$(openssl rand -hex 32)
+#   fly deploy
+app = "mon-cahier"
+primary_region = "cdg"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PUBLIC_URL = "https://mon-cahier.fly.dev"
+  HOST = "0.0.0.0"
+  PORT = "3000"
+
+[mounts]
+  source = "data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  # Sleeps when idle (cheapest); the first visit after that takes a few seconds.
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    method = "GET"
+    path = "/api/health"
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "20s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

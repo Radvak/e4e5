@@ -43,10 +43,37 @@ pnpm --filter server stats:export-seed my-seed-name                   # table ->
 
 ## Deployment
 
-The app runs as a single container. The server also serves the built web app.
+The app runs as a single container (the server also serves the built web app), with the SQLite
+file on a volume at `/data`.
+
+### Fly.io
+
+`fly.toml` describes one machine in Paris (`cdg`) with a 1 GB volume. First time:
+
+```bash
+fly auth login
+fly apps create mon-cahier
+fly volumes create data --region cdg --size 1
+fly secrets set COOKIE_SECRET=$(openssl rand -hex 32)
+# optional: statistics for users without a linked Lichess account
+fly secrets set LICHESS_APP_TOKEN=lip_...
+fly deploy
+```
+
+It is then at https://mon-cahier.fly.dev. Then `fly deploy` for each new version. Fly keeps daily snapshots of the volume (5 days); a copy
+of the database: `fly ssh sftp get /data/prepa-cahier.db`.
+
+Own domain (e.g. mon-cahier.fr): `fly certs add mon-cahier.fr`, add the DNS records it prints at
+the registrar, then set `PUBLIC_URL = "https://mon-cahier.fr"` in `fly.toml` (session cookies and
+the Lichess login redirect use it) and `fly deploy`.
+
+### Any Docker host
 
 ```bash
 docker build -t prepa-cahier .
 docker run -p 3000:3000 -v prepa-cahier-data:/data \
   -e PUBLIC_URL=https://your.domain -e COOKIE_SECRET=$(openssl rand -hex 32) prepa-cahier
 ```
+
+On a corporate network (TLS proxy, npm mirror), pass them as build secrets (not kept in the
+image): `--secret id=ca,src=$NODE_EXTRA_CA_CERTS --secret id=npmrc,src=<npmrc with registry=...>`.
