@@ -40,7 +40,7 @@ async function ownRepertoire(req: FastifyRequest<{ Params: Params }>, reply: Fas
     .select()
     .from(repertoires)
     .where(and(eq(repertoires.id, req.params.id), eq(repertoires.userId, req.user!.id)));
-  if (!rep) reply.code(404).send({ error: 'Repertoire not found' });
+  if (!rep) reply.code(404).send({ error: 'Répertoire introuvable' });
   return rep;
 }
 
@@ -106,7 +106,7 @@ export async function repertoireRoutes(app: FastifyInstance) {
     } catch {
       played = null;
     }
-    if (!played) return reply.code(400).send({ error: 'Illegal move' });
+    if (!played) return reply.code(400).send({ error: 'Coup illégal' });
     const siblings = await db
       .select({ id: repMoves.id })
       .from(repMoves)
@@ -136,7 +136,7 @@ export async function repertoireRoutes(app: FastifyInstance) {
     const played = [];
     for (const uci of ucis) {
       const move = playUciOn(pos, uci);
-      if (!move) return reply.code(400).send({ error: `Illegal move ${uci} at ply ${played.length + 1}` });
+      if (!move) return reply.code(400).send({ error: `Coup illégal ${uci} au demi-coup ${played.length + 1}` });
       played.push(move);
     }
     const graph = new Repertoire(rep.color, await loadMoves(rep.id));
@@ -157,7 +157,7 @@ export async function repertoireRoutes(app: FastifyInstance) {
     const patch = patchMoveBody.parse(req.body);
     const where = and(eq(repMoves.id, Number(req.params.moveId)), eq(repMoves.repertoireId, rep.id));
     const [move] = await db.select().from(repMoves).where(where);
-    if (!move) return reply.code(404).send({ error: 'Move not found' });
+    if (!move) return reply.code(404).send({ error: 'Coup introuvable' });
     if (patch.isMain) {
       // Only one main line per position.
       await db

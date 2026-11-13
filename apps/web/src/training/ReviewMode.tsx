@@ -139,15 +139,15 @@ export function ReviewMode({
   if (!current) {
     return (
       <div className="panel done">
-        <h3>{sources.every((s) => s.positions.length === 0) ? 'Nothing to train here' : 'All done for now 🎉'}</h3>
+        <h3>{sources.every((s) => s.positions.length === 0) ? 'Rien à entraîner ici' : 'Tout est fait pour l’instant 🎉'}</h3>
         {sources.every((s) => s.positions.length === 0) && (
-          <p className="muted">No position where it is your turn in these lines: add (and save) moves for your side first.</p>
+          <p className="muted">Aucune position où c’est à vous de jouer dans ces lignes : ajoutez (et enregistrez) d’abord des coups pour votre camp.</p>
         )}
-        {queue.nextDue && <p>Next review {inTime(queue.nextDue)}.</p>}
+        {queue.nextDue && <p>Prochaine révision {inTime(queue.nextDue)}.</p>}
         <div className="row">
           {queue.unseen > 0 && (
             <button className="primary" onClick={() => setExtraNew((n) => n + 10)}>
-              Learn {Math.min(10, queue.unseen)} new position(s) ({queue.unseen} not learnt yet)
+              Apprendre {Math.min(10, queue.unseen)} nouvelles positions ({queue.unseen} pas encore apprises)
             </button>
           )}
           {queue.early > 0 && (
@@ -157,7 +157,7 @@ export function ReviewMode({
                 setNow(Date.now());
               }}
             >
-              Review ahead ({queue.early} learnt, not due yet)
+              Réviser en avance ({queue.early} apprises, pas encore dues)
             </button>
           )}
         </div>
@@ -265,7 +265,7 @@ function Drill({
       <div className="editor-side">
         <section className="panel">
           {showName && <p className="muted small-text">{source.name}</p>}
-          <p className="muted">{lineText(target.path.slice(0, shown)) || 'Initial position'}</p>
+          <p className="muted">{lineText(target.path.slice(0, shown)) || 'Position initiale'}</p>
           {replied && shown >= plies && <OpponentComment move={lead?.reply ?? target.path.at(-1)} />}
           {played ? (
             <p className="success">✓ {played.san}</p>
@@ -273,17 +273,17 @@ function Drill({
             <p className="muted">…</p>
           ) : isNew ? (
             <p>
-              <strong>New position.</strong> Play the move shown{answers.length > 1 ? ' (any of them)' : ''}:{' '}
-              {answers.map((m) => m.san).join(' or ')}.
+              <strong>Nouvelle position.</strong> Jouez le coup indiqué{answers.length > 1 ? ' (n’importe lequel)' : ''} :{' '}
+              {answers.map((m) => m.san).join(' ou ')}.
             </p>
           ) : (
-            <p><strong>Your move.</strong></p>
+            <p><strong>À vous de jouer.</strong></p>
           )}
           {mistakes > 0 && !played && (
-            <p className="error">✗ Not in your repertoire.{revealed ? ' Play the move shown.' : ' Try again.'}</p>
+            <p className="error">✗ Pas dans votre répertoire.{revealed ? ' Jouez le coup indiqué.' : ' Réessayez.'}</p>
           )}
           {asking && !revealed && (
-            <button className="small" onClick={() => update({ revealed: true })}>Show the answer</button>
+            <button className="small" onClick={() => update({ revealed: true })}>Voir la réponse</button>
           )}
         </section>
         {feedback && <FeedbackPanel {...feedback} />}

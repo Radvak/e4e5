@@ -2,121 +2,77 @@ import type { Color } from '@prepa-cahier/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api, type GamesReport, type InboxItem, type RepertoireSummary, type Results, type SyncState } from '../api';
+import { api, type GamesReport, type InboxItem, type RepertoireSummary, type Results } from '../api';
+import { lineText, moveText } from '../chessText';
+import { GameSyncInline, useGameSync } from '../components/GameSync';
+import { SPEED_NAMES, useSettings } from '../settings';
+import { Button, EmptyState, Tabs, plural } from '../ui';
 
-const PERIODS = [
-  { days: 30, label: 'last 30 days' },
-  { days: 90, label: 'last 3 months' },
-  { days: 365, label: 'last year' },
-  { days: 0, label: 'all games' },
-];
-const SPEEDS = ['bullet', 'blitz', 'rapid', 'classical', 'daily'];
-const SOURCES = { chesscom: 'Chess.com', lichess: 'Lichess' } as const;
-
-const pct = (x: number) => `${Math.round(100 * x)}%`;
+const PERIOD: Record<number, string> = { 30: '30 derniers jours', 90: '3 derniers mois', 365: '12 derniers mois', 0: 'toutes les parties' };
+const pct = (x: number) => `${Math.round(100 * x)} %`;
 const score = (r: Results) => {
   const n = r.win + r.draw + r.loss;
   return n ? (r.win + r.draw / 2) / n : 0;
 };
-const date = (iso: string) => new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+const date = (iso: string) => new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
 
-/** "1. e4 c5 2. Nf3" */
-function lineText(sans: string[]): string {
-  return sans.map((san, i) => `${i % 2 === 0 ? `${i / 2 + 1}. ` : ''}${san}`).join(' ');
-}
-/** The move after `line`, numbered: "3. Bb5", "2... d6" (or just "d6" right after White's move). */
-function moveText(line: string[], san: string, alone = false): string {
-  const ply = line.length;
-  if (ply % 2 === 0) return `${ply / 2 + 1}. ${san}`;
-  return alone || ply === 0 ? `${(ply + 1) / 2}... ${san}` : san;
-}
-
+/** Bilan › Parties: statistics per repertoire, inbox, recent games. */
 export function Games() {
-  const qc = useQueryClient();
-  const [days, setDays] = useState(() => Number(localStorage.getItem('gamesDays') ?? 90));
-  const [speeds, setSpeeds] = useState<string[]>(() => JSON.parse(localStorage.getItem('gamesSpeeds') ?? '["blitz","rapid","classical","daily"]'));
+  const { gamesDays, gamesSpeeds } = useSettings();
   const [tab, setTab] = useState<'novelties' | 'deviations' | 'ends'>('novelties');
-
   const reps = useQuery({ queryKey: ['repertoires'], queryFn: api.repertoires });
-  const sync = useQuery({
-    queryKey: ['game-sync'],
-    queryFn: api.syncState,
-    refetchInterval: (q) => (q.state.data?.jobs.some((j) => j.status === 'running') ? 1500 : false),
-  });
-  const running = sync.data?.jobs.some((j) => j.status === 'running') ?? false;
+  const { running } = useGameSync();
   const report = useQuery({
-    queryKey: ['games-report', days, speeds, running],
-    queryFn: () => api.gamesReport(days, speeds),
+    queryKey: ['games-report', gamesDays, gamesSpeeds, running],
+    queryFn: () => api.gamesReport(gamesDays, gamesSpeeds),
     enabled: !running,
   });
-  const start = useMutation({
-    mutationFn: api.startSync,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['game-sync'] }),
-  });
+  const qc = useQueryClient();
   const restore = useMutation({ mutationFn: api.restoreInbox, onSuccess: () => qc.invalidateQueries({ queryKey: ['games-report'] }) });
-
-  const setPeriod = (d: number) => {
-    localStorage.setItem('gamesDays', String(d));
-    setDays(d);
-  };
-  const toggleSpeed = (s: string) => {
-    const next = speeds.includes(s) ? speeds.filter((x) => x !== s) : [...speeds, s];
-    localStorage.setItem('gamesSpeeds', JSON.stringify(next));
-    setSpeeds(next);
-  };
   const byId = new Map((reps.data ?? []).map((r) => [r.id, r]));
   const r = report.data;
 
   return (
-    <div className="games-page">
-      <header className="row">
-        <h2>Games</h2>
-      </header>
-
-      <SyncPanel state={sync.data} onSync={(s) => start.mutate(s)} error={start.error} />
-
-      <div className="row filters">
-        <select value={days} onChange={(e) => setPeriod(Number(e.target.value))} aria-label="Period">
-          {PERIODS.map((p) => (
-            <option key={p.days} value={p.days}>{p.label}</option>
-          ))}
-        </select>
-        {SPEEDS.map((s) => (
-          <label key={s} className="check">
-            <input type="checkbox" checked={speeds.includes(s)} onChange={() => toggleSpeed(s)} /> {s}
-          </label>
-        ))}
-        {r && <span className="muted">{r.games} games</span>}
+    <div className="stack">
+      <div className="row">
+        <Link className="chip" to="/settings#parties" title="Changer dans les paramètres">
+          {PERIOD[gamesDays] ?? `${gamesDays} jours`} · {gamesSpeeds.map((s) => SPEED_NAMES[s] ?? s).join(', ')}
+        </Link>
+        {r && <span className="muted small-text" style={{ margin: 0 }}>{plural(r.games, 'partie', 'parties')}</span>}
       </div>
+      <GameSyncInline />
 
-      {report.isLoading && <p className="muted">Analysing your games…</p>}
+      {report.isLoading && <p className="muted">Analyse de vos parties…</p>}
       {report.error && <p className="error">{String(report.error)}</p>}
-      {r && r.games === 0 && <p className="muted">No game for these filters{sync.data && !Object.keys(sync.data.counts).length ? ': sync your games first.' : '.'}</p>}
+      {r && r.games === 0 && (
+        <EmptyState title="Aucune partie" action={<Button to="/settings#parties">Paramètres des parties</Button>}>
+          Importez vos parties Chess.com ou Lichess, ou élargissez la période et les cadences.
+        </EmptyState>
+      )}
 
       {r && r.games > 0 && (
         <>
-          <RepertoireStats report={r} reps={byId} />
-
-          <section className="panel">
-            <div className="row">
-              <h3>Inbox</h3>
-              <div className="tabs inline">
-                <button className={tab === 'novelties' ? 'active' : ''} onClick={() => setTab('novelties')} title="The opponent played a move you have not prepared">
-                  Opponent novelties ({r.inbox.novelties.length})
-                </button>
-                <button className={tab === 'deviations' ? 'active' : ''} onClick={() => setTab('deviations')} title="You played something else than your prepared move">
-                  Your deviations ({r.inbox.deviations.length})
-                </button>
-                <button className={tab === 'ends' ? 'active' : ''} onClick={() => setTab('ends')} title="The game went on after the end of your line">
-                  Ends of your lines ({r.inbox.ends.length})
-                </button>
-              </div>
-              <button className="small" onClick={() => restore.mutate()} title="Show the dismissed items again">show dismissed</button>
+          <section className="card">
+            <div className="card-head">
+              <h3>À traiter</h3>
+              <Button size="sm" variant="ghost" onClick={() => restore.mutate()} title="Réafficher les éléments ignorés">Réafficher</Button>
             </div>
-            <p className="muted small-text">
-              Grouped by position, most frequent first. Adding a line removes the item: the next games will follow it.
+            <Tabs
+              block
+              value={tab}
+              onChange={setTab}
+              tabs={[
+                { id: 'novelties', label: `Nouveautés (${r.inbox.novelties.length})` },
+                { id: 'deviations', label: `Vos écarts (${r.inbox.deviations.length})` },
+                { id: 'ends', label: `Fins de ligne (${r.inbox.ends.length})` },
+              ]}
+            />
+            <p className="muted small-text" style={{ marginTop: 8 }}>
+              {tab === 'novelties' && 'L’adversaire a joué un coup que vous n’avez pas préparé.'}
+              {tab === 'deviations' && 'Vous avez joué autre chose que votre coup préparé.'}
+              {tab === 'ends' && 'La partie a continué après la fin de votre ligne.'} Regroupé par position, du plus fréquent au moins fréquent.
             </p>
-            {r.inbox[tab].length === 0 && <p className="muted">Nothing here.</p>}
+            {r.inbox[tab].length === 0 && <p className="muted">Rien ici.</p>}
             <ul className="inbox">
               {r.inbox[tab].map((item) => (
                 <InboxRow key={item.key} item={item} rep={byId.get(item.repertoireId)} />
@@ -124,6 +80,7 @@ export function Games() {
             </ul>
           </section>
 
+          <RepertoireStats report={r} reps={byId} />
           <RecentGames report={r} reps={byId} />
         </>
       )}
@@ -131,51 +88,10 @@ export function Games() {
   );
 }
 
-function SyncPanel({ state, onSync, error }: { state: SyncState | undefined; onSync: (s: 'chesscom' | 'lichess') => void; error: Error | null }) {
-  if (!state) return null;
-  return (
-    <section className="panel">
-      <h3>Sync</h3>
-      <table className="lines">
-        <tbody>
-          {(['chesscom', 'lichess'] as const).map((source) => {
-            const account = state.accounts[source];
-            const job = state.jobs.find((j) => j.source === source);
-            const last = state.syncs.find((s) => s.source === source);
-            return (
-              <tr key={source}>
-                <td><strong>{SOURCES[source]}</strong></td>
-                <td>{account ?? <Link to="/settings">{source === 'chesscom' ? 'set your username' : 'link your account'} in Settings</Link>}</td>
-                <td className="muted">
-                  {(state.counts[source] ?? 0).toLocaleString()} games
-                  {last && ` · synced ${date(last.syncedAt)}`}
-                </td>
-                <td className="muted small-text">
-                  {job?.status === 'running' &&
-                    `syncing… ${job.progress ? `month ${job.progress.done}/${job.progress.total}, ` : ''}${job.added} new games`}
-                  {job?.status === 'done' &&
-                    `${job.added} new game${job.added === 1 ? '' : 's'}${job.reviews ? `, ${job.reviews} position${job.reviews > 1 ? 's' : ''} to review (recent deviations)` : ''}`}
-                  {job?.status === 'error' && <span className="error">{job.error}</span>}
-                </td>
-                <td>
-                  <button disabled={!account || job?.status === 'running'} onClick={() => onSync(source)}>
-                    {last ? 'Sync new games' : 'Import my games'}
-                  </button>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-      {error && <p className="error">{error.message}</p>}
-    </section>
-  );
-}
-
 function ResultBar({ results }: { results: Results }) {
   const n = results.win + results.draw + results.loss || 1;
   return (
-    <span className="result-bar" title={`${results.win} won · ${results.draw} drawn · ${results.loss} lost`}>
+    <span className="result-bar" title={`${results.win} gagnées · ${results.draw} nulles · ${results.loss} perdues`}>
       <span className="win" style={{ width: pct(results.win / n) }} />
       <span className="draw" style={{ width: pct(results.draw / n) }} />
       <span className="loss" style={{ width: pct(results.loss / n) }} />
@@ -187,50 +103,53 @@ function RepertoireStats({ report, reps }: { report: GamesReport; reps: Map<stri
   const rows = report.repertoires.filter((x) => x.games > 0).sort((a, b) => b.games - a.games);
   const colors: Color[] = ['white', 'black'];
   return (
-    <section className="panel">
-      <h3>By repertoire</h3>
-      <table className="lines">
-        <thead>
-          <tr>
-            <th />
-            <th>Games</th>
-            <th>Score</th>
-            <th />
-            <th title="Average number of moves played in your preparation">In book</th>
-          </tr>
-        </thead>
-        {colors.map((color) => {
-          const own = rows.filter((x) => reps.get(x.id)?.color === color);
-          const out = report.outside.filter((o) => o.color === color);
-          if (!own.length && !out.length) return null;
-          return (
-            <tbody key={color}>
-              {own.map((x) => (
-                <tr key={x.id}>
-                  <td>
-                    <span className={`dot inline ${color}`} /> <Link to={`/r/${x.id}`}>{reps.get(x.id)?.name}</Link>
-                  </td>
-                  <td>{x.games}</td>
-                  <td>{pct(score(x.results))}</td>
-                  <td><ResultBar results={x.results} /></td>
-                  <td>{x.bookMoves.toFixed(1)} moves</td>
-                </tr>
-              ))}
-              {out.slice(0, 4).map((o) => (
-                <tr key={o.move} className="muted">
-                  <td title="You played another first move than in your repertoires">
-                    <span className={`dot inline ${color}`} /> outside your repertoires: {o.move}
-                  </td>
-                  <td>{o.games}</td>
-                  <td>{pct(score(o.results))}</td>
-                  <td><ResultBar results={o.results} /></td>
-                  <td />
-                </tr>
-              ))}
-            </tbody>
-          );
-        })}
-      </table>
+    <section className="card">
+      <h3>Par répertoire</h3>
+      <div className="table-wrap">
+        <table className="lines">
+          <thead>
+            <tr>
+              <th />
+              <th>Parties</th>
+              <th>Score</th>
+              <th title="Nombre moyen de coups joués dans votre préparation">Dans la théorie</th>
+            </tr>
+          </thead>
+          {colors.map((color) => {
+            const own = rows.filter((x) => reps.get(x.id)?.color === color);
+            const out = report.outside.filter((o) => o.color === color);
+            if (!own.length && !out.length) return null;
+            return (
+              <tbody key={color}>
+                {own.map((x) => (
+                  <tr key={x.id}>
+                    <td>
+                      <span className={`dot ${color}`} /> <Link to={`/r/${x.id}`}>{reps.get(x.id)?.name}</Link>
+                    </td>
+                    <td>{x.games}</td>
+                    <td className="meter-cell">
+                      {pct(score(x.results))} <ResultBar results={x.results} />
+                    </td>
+                    <td>{x.bookMoves.toLocaleString('fr-FR', { maximumFractionDigits: 1 })} coups</td>
+                  </tr>
+                ))}
+                {out.slice(0, 4).map((o) => (
+                  <tr key={o.move} className="muted">
+                    <td title="Vous avez joué un autre premier coup que dans vos répertoires">
+                      <span className={`dot ${color}`} /> hors répertoire : {o.move}
+                    </td>
+                    <td>{o.games}</td>
+                    <td className="meter-cell">
+                      {pct(score(o.results))} <ResultBar results={o.results} />
+                    </td>
+                    <td />
+                  </tr>
+                ))}
+              </tbody>
+            );
+          })}
+        </table>
+      </div>
     </section>
   );
 }
@@ -245,13 +164,13 @@ function InboxRow({ item, rep }: { item: InboxItem; rep: RepertoireSummary | und
   const add = useMutation({
     mutationFn: (ucis: string[]) => api.saveLine(item.repertoireId, ucis),
     onSuccess: async (res) => {
-      setDone(`${res.added} move${res.added === 1 ? '' : 's'} added to ${rep?.name ?? 'the repertoire'}.`);
+      setDone(`${plural(res.added, 'coup ajouté', 'coups ajoutés')} à ${rep?.name ?? 'votre répertoire'}.`);
       await refresh();
     },
   });
   const review = useMutation({
     mutationFn: () => api.reviewNow(item.repertoireId, item.fen),
-    onSuccess: () => setDone('Due for review now.'),
+    onSuccess: () => setDone('À revoir dès maintenant.'),
   });
   const dismiss = useMutation({ mutationFn: () => api.dismissInbox(item.key), onSuccess: refresh });
 
@@ -265,102 +184,101 @@ function InboxRow({ item, rep }: { item: InboxItem; rep: RepertoireSummary | und
   return (
     <li className="inbox-item">
       <div className="inbox-head">
-        <span className="muted">{lineText(line) || 'Initial position'} </span>
+        <span className="muted">{lineText(line) || 'Position initiale'} </span>
         <span className="hole-move">{moveText(line, item.move.san)}</span>
-        <span className="rep-tag"><span className={`dot inline ${rep?.color ?? 'white'}`} /> {rep?.name ?? '?'}</span>
-        <span className="muted small-text">
-          {item.games} game{item.games > 1 ? 's' : ''} · {pct(score(item.results))} score · last {date(item.lastPlayedAt)} ·{' '}
-          <a href={item.example} target="_blank" rel="noreferrer">a game ↗</a>
+      </div>
+      <div className="row small-text" style={{ margin: '4px 0' }}>
+        <span className="rep-tag"><span className={`dot ${rep?.color ?? 'white'}`} /> {rep?.name ?? '?'}</span>
+        <span className="muted">
+          {plural(item.games, 'partie', 'parties')} · score {pct(score(item.results))} · dernière le {date(item.lastPlayedAt)} ·{' '}
+          <a href={item.example} target="_blank" rel="noreferrer">voir une partie ↗</a>
         </span>
       </div>
       <div className="inbox-body">
         {item.kind === 'deviation' && (
           <span>
-            You played <strong>{moveText(line, item.move.san, true)}</strong> instead of{' '}
-            <strong>{item.expected.map((s) => moveText(line, s, true)).join(' or ')}</strong>.{' '}
+            Vous avez joué <strong>{moveText(line, item.move.san, true)}</strong> au lieu de{' '}
+            <strong>{item.expected.map((s) => moveText(line, s, true)).join(' ou ')}</strong>.{' '}
           </span>
         )}
-        {item.kind === 'end' && <span>Your line ends here. </span>}
+        {item.kind === 'end' && <span>Votre ligne s’arrête ici. </span>}
         {item.replies.length > 0 && (
           <span className="muted">
-            You answered {item.replies.slice(0, 3).map((x) => `${moveText(after, x.san, true)} (${x.games}, ${pct(score(x.results))})`).join(', ')}.{' '}
+            Vos réponses : {item.replies.slice(0, 3).map((x) => `${moveText(after, x.san, true)} (${x.games}, ${pct(score(x.results))})`).join(', ')}.
           </span>
         )}
       </div>
       <div className="row inbox-actions">
         {item.kind === 'deviation' && (
           <>
-            <button className="small" disabled={review.isPending} onClick={() => review.mutate()} title="Make this position due in training now">
-              Review now
-            </button>
-            <button className="small" disabled={add.isPending} onClick={() => add.mutate(afterMove)} title="Accept your move as another answer">
-              Add {moveText(line, item.move.san, true)} to the repertoire
-            </button>
+            <Button size="sm" variant="primary" disabled={review.isPending} onClick={() => review.mutate()} title="Rendre cette position à revoir maintenant">
+              Revoir maintenant
+            </Button>
+            <Button size="sm" disabled={add.isPending} onClick={() => add.mutate(afterMove)} title="Accepter votre coup comme autre réponse">
+              Ajouter {moveText(line, item.move.san, true)}
+            </Button>
           </>
         )}
         {item.kind !== 'deviation' &&
-          item.replies.slice(0, 2).map((x) => (
-            <button key={x.uci} className="small" disabled={add.isPending} onClick={() => add.mutate([...afterMove, x.uci])}>
-              Add {moveText(line, item.move.san, true)} {moveText(after, x.san)}
-            </button>
+          item.replies.slice(0, 2).map((x, i) => (
+            <Button key={x.uci} size="sm" variant={i === 0 ? 'primary' : 'secondary'} disabled={add.isPending} onClick={() => add.mutate([...afterMove, x.uci])}>
+              Ajouter {moveText(line, item.move.san, true)} {moveText(after, x.san)}
+            </Button>
           ))}
         {item.kind === 'end' && item.replies.length === 0 && (
-          <button className="small" disabled={add.isPending} onClick={() => add.mutate(afterMove)}>
-            Add {moveText(line, item.move.san, true)}
-          </button>
+          <Button size="sm" variant="primary" disabled={add.isPending} onClick={() => add.mutate(afterMove)}>
+            Ajouter {moveText(line, item.move.san, true)}
+          </Button>
         )}
-        <Link className="button small" to={explorer} title="Statistics, games and engine for this position">Explorer</Link>
-        <Link className="button small" to={editor} title="Choose another move in the editor">Editor</Link>
-        <button className="small" disabled={dismiss.isPending} onClick={() => dismiss.mutate()} title="Hide this item">Dismiss</button>
-        {done && <span className="success-text small-text">{done}</span>}
-        {error && <span className="error small-text">{error.message}</span>}
+        <Button size="sm" variant="ghost" to={explorer} title="Statistiques, parties et moteur pour cette position">Explorer</Button>
+        <Button size="sm" variant="ghost" to={editor} title="Choisir un autre coup dans l’éditeur">Éditeur</Button>
+        <Button size="sm" variant="ghost" disabled={dismiss.isPending} onClick={() => dismiss.mutate()} title="Masquer cet élément">Ignorer</Button>
       </div>
+      {done && <p className="success-text small-text">{done}</p>}
+      {error && <p className="error small-text">{error.message}</p>}
     </li>
   );
 }
 
 const KIND_TEXT = {
-  'in-book': 'stayed in your preparation',
-  'my-deviation': 'you deviated',
-  'opponent-novelty': 'opponent novelty',
-  'end-of-prep': 'after the end of your line',
-  outside: 'outside your repertoires',
+  'in-book': 'restée dans la théorie',
+  'my-deviation': 'écart de votre part',
+  'opponent-novelty': 'nouveauté adverse',
+  'end-of-prep': 'après la fin de votre ligne',
+  outside: 'hors de vos répertoires',
 } as const;
+const RESULT = { win: 'gagnée', draw: 'nulle', loss: 'perdue' } as const;
 
 function RecentGames({ report, reps }: { report: GamesReport; reps: Map<string, RepertoireSummary> }) {
   return (
     <details className="panel">
-      <summary>Recent games</summary>
-      <table className="lines">
-        <tbody>
-          {report.recent.map((g) => {
-            const sans = g.move ? [g.move.san] : [];
-            const at = g.move ? `${moveText(new Array(g.ply).fill(''), g.move.san, true)}: ` : '';
-            return (
+      <summary>Dernières parties</summary>
+      <div className="table-wrap">
+        <table className="lines">
+          <tbody>
+            {report.recent.map((g) => (
               <tr key={g.id}>
                 <td className="muted">{date(g.playedAt)}</td>
                 <td>
-                  <span className={`dot inline ${g.color}`} /> {g.opponent} <span className="muted">{g.opponentRating}</span>
+                  <span className={`dot ${g.color}`} /> {g.opponent} <span className="muted">{g.opponentRating}</span>
                 </td>
-                <td className={`result ${g.result}`}>{g.result}</td>
-                <td className="muted">{g.speed}</td>
+                <td className={`result ${g.result}`}>{RESULT[g.result]}</td>
                 <td>{g.repertoireId ? reps.get(g.repertoireId)?.name : '—'}</td>
                 <td className="small-text">
-                  {sans.length ? at : ''}
+                  {g.move ? `${moveText(new Array(g.ply).fill(''), g.move.san, true)} : ` : ''}
                   {KIND_TEXT[g.kind]}
-                  {g.kind !== 'outside' && g.kind !== 'in-book' && <span className="muted"> (move {Math.floor(g.ply / 2) + 1})</span>}
                 </td>
                 <td>
                   <Link className="small-text" to={`/explorer?${new URLSearchParams({ line: g.ucis.join(','), ...(g.color === 'black' ? { color: 'black' } : {}) })}`}>
                     explorer
                   </Link>{' '}
-                  <a className="small-text" href={g.url} target="_blank" rel="noreferrer">game ↗</a>
+                  <a className="small-text" href={g.url} target="_blank" rel="noreferrer">partie ↗</a>
                 </td>
               </tr>
-            );
-          })}
-        </tbody>
-      </table>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </details>
   );
 }

@@ -160,7 +160,7 @@ export function PlayMode({
     [line?.phase, line?.revealed, line?.fen],
   );
 
-  if (!playable.length) return <div className="panel done"><h3>Nothing to train yet</h3></div>;
+  if (!playable.length) return <div className="panel done"><h3>Rien à entraîner pour l’instant</h3></div>;
 
   const isNew = line?.phase === 'ask' && !line.source.cards.has(line.fen);
   return (
@@ -178,28 +178,28 @@ export function PlayMode({
       <div className="editor-side">
         <section className="panel">
           {sources.length > 1 && line && <p className="muted small-text">{line.source.name}</p>}
-          <p className="muted">{line ? lineText(line.history) || 'Start of the line' : ''}</p>
+          <p className="muted">{line ? lineText(line.history) || 'Début de la ligne' : ''}</p>
           {line?.phase === 'ask' && <OpponentComment move={line.history.at(-1)} />}
-          {line?.phase === 'opponent' && <p className="muted">Opponent to play…</p>}
+          {line?.phase === 'opponent' && <p className="muted">L’adversaire joue…</p>}
           {line?.phase === 'ask' &&
             (isNew ? (
               <p>
-                <strong>New position.</strong> Play the move shown: {answers.map((m) => m.san).join(' or ')}.
+                <strong>Nouvelle position.</strong> Jouez le coup indiqué : {answers.map((m) => m.san).join(' ou ')}.
               </p>
             ) : (
-              <p><strong>Your move.</strong></p>
+              <p><strong>À vous de jouer.</strong></p>
             ))}
           {line?.phase === 'ask' && line.mistakes > 0 && (
-            <p className="error">✗ Not in your repertoire.{line.revealed ? ' Play the move shown.' : ' Try again.'}</p>
+            <p className="error">✗ Pas dans votre répertoire.{line.revealed ? ' Jouez le coup indiqué.' : ' Réessayez.'}</p>
           )}
           {line?.phase === 'ask' && !line.revealed && (
-            <button className="small" onClick={() => setLine({ ...line, revealed: true })}>Show the answer</button>
+            <button className="small" onClick={() => setLine({ ...line, revealed: true })}>Voir la réponse</button>
           )}
-          {line?.phase === 'end' && <p className="success">✓ End of the line</p>}
+          {line?.phase === 'end' && <p className="success">✓ Fin de la ligne</p>}
           <p className="muted small-text">
-            {score.lines} line(s) · {score.moves} move(s)
-            {score.asked > 0 && ` · ${Math.round((100 * score.clean) / score.asked)}% first try`} · opponent moves
-            weighted by Lichess {speeds.join('+')} games
+            {score.lines} ligne(s) · {score.moves} coup(s)
+            {score.asked > 0 && ` · ${Math.round((100 * score.clean) / score.asked)} % du premier coup`} · coups adverses
+            pondérés par les parties Lichess
           </p>
         </section>
         {feedback && <FeedbackPanel {...feedback} />}

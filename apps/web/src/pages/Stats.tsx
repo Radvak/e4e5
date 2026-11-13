@@ -10,15 +10,15 @@ import { useTrainingSources, type Source } from '../training/useTrainingSources'
 
 /** Categorical slots 1-3 (blue, orange, aqua), validated on the panel surface #262421. */
 const ACTIVITY: Series[] = [
-  { name: 'Right first try', color: '#3987e5' },
-  { name: 'Needed help', color: '#d95926' },
-  { name: 'New learnt', color: '#199e70' },
+  { name: 'Juste du premier coup', color: '#3987e5' },
+  { name: 'Avec une erreur', color: '#d95926' },
+  { name: 'Nouvelles apprises', color: '#199e70' },
 ];
-const FORECAST: Series[] = [{ name: 'Reviews due', color: '#3987e5' }];
+const FORECAST: Series[] = [{ name: 'Révisions prévues', color: '#3987e5' }];
 const DAY = 86_400_000;
 
-const pct = (x: number) => `${Math.round(100 * x)}%`;
-const dayLabel = (t: number) => new Date(t).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+const pct = (x: number) => `${Math.round(100 * x)} %`;
+const dayLabel = (t: number) => new Date(t).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
 
 /** Knowledge of a set of positions: learnt share, and expected share found right now. */
 function knowledge(source: Source, fens: string[]) {
@@ -88,7 +88,7 @@ export function Stats() {
     for (let d = trained.has(today) ? today : today - DAY; trained.has(d); d -= DAY) streak++;
     const columns = days.map((d, i) => ({
       label: dayLabel(d),
-      tick: i % 7 === 2 || i === 29 ? new Date(d).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : '',
+      tick: i % 7 === 2 || i === 29 ? new Date(d).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : '',
       values: counts.get(d)!,
     }));
     return { columns, streak, accuracy: asked ? firstTry / asked : null, total: [...counts.values()].reduce((n, v) => n + v[0]! + v[1]! + v[2]!, 0) };
@@ -107,8 +107,8 @@ export function Stats() {
       }
     }
     return counts.map((n, i) => ({
-      label: i === 0 ? 'Today (incl. overdue)' : dayLabel(today + i * DAY),
-      tick: i === 0 ? 'today' : i % 2 === 0 ? new Date(today + i * DAY).toLocaleDateString(undefined, { weekday: 'short' }) : '',
+      label: i === 0 ? 'Aujourd’hui (retards compris)' : dayLabel(today + i * DAY),
+      tick: i === 0 ? 'auj.' : i % 2 === 0 ? new Date(today + i * DAY).toLocaleDateString('fr-FR', { weekday: 'short' }) : '',
       values: [n],
     }));
   }, [shown]);
@@ -141,15 +141,14 @@ export function Stats() {
     [shown],
   );
 
-  if (all.isLoading || loading) return <p>Loading…</p>;
-  if (!sources.length) return <p className="muted">No repertoire yet.</p>;
+  if (all.isLoading || loading) return <p className="muted">Chargement…</p>;
+  if (!sources.length) return <p className="muted">Aucun répertoire.</p>;
 
   return (
-    <div className="stats">
+    <div className="stats stack">
       <header className="row">
-        <h2>Statistics</h2>
-        <select value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Repertoire">
-          <option value="all">All repertoires</option>
+        <select value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Répertoire">
+          <option value="all">Tous les répertoires</option>
           {sources.map((s) => (
             <option key={s.id} value={s.id}>{s.name}</option>
           ))}
@@ -159,64 +158,64 @@ export function Stats() {
       <div className="tiles">
         <div className="tile">
           <div className="tile-value">{pct(summary.known)}</div>
-          <div className="tile-label">of the repertoire known now</div>
-          <div className="tile-note muted">estimated chance of finding your move, over all {summary.total} positions</div>
+          <div className="tile-label">du répertoire su aujourd’hui</div>
+          <div className="tile-note muted">chance estimée de trouver votre coup, sur les {summary.total} positions</div>
         </div>
         <div className="tile">
           <div className="tile-value">{summary.learnt}<span className="tile-unit"> / {summary.total}</span></div>
-          <div className="tile-label">positions learnt ({pct(summary.learnt / (summary.total || 1))})</div>
-          <div className="tile-note muted">recall of learnt positions: {pct(summary.recallLearnt)}</div>
+          <div className="tile-label">positions apprises ({pct(summary.learnt / (summary.total || 1))})</div>
+          <div className="tile-note muted">mémorisation des positions apprises : {pct(summary.recallLearnt)}</div>
         </div>
         <div className="tile">
           <div className="tile-value">{summary.mature}</div>
-          <div className="tile-label">well known</div>
-          <div className="tile-note muted">next review in {MATURE_DAYS}+ days</div>
+          <div className="tile-label">bien sues</div>
+          <div className="tile-note muted">prochaine révision dans {MATURE_DAYS} jours ou plus</div>
         </div>
         <div className="tile">
           <div className="tile-value">{summary.due}</div>
-          <div className="tile-label">due now</div>
+          <div className="tile-label">à revoir</div>
           <div className="tile-note">
-            <Link to={filter === 'all' ? '/train' : `/r/${filter}/train`}>Train</Link>
+            <Link to={filter === 'all' ? '/train' : `/r/${filter}/train`}>S’entraîner</Link>
           </div>
         </div>
         <div className="tile">
-          <div className="tile-value">{activity.streak}<span className="tile-unit"> day{activity.streak === 1 ? '' : 's'}</span></div>
-          <div className="tile-label">training streak</div>
+          <div className="tile-value">{activity.streak}<span className="tile-unit"> jour{activity.streak > 1 ? 's' : ''}</span></div>
+          <div className="tile-label">de suite</div>
           <div className="tile-note muted">
-            {activity.accuracy === null ? 'no review in 30 days' : `${pct(activity.accuracy)} right first try (30 days)`}
+            {activity.accuracy === null ? 'aucune révision en 30 jours' : `${pct(activity.accuracy)} justes du premier coup (30 jours)`}
           </div>
         </div>
       </div>
 
       <section className="panel">
-        <BarChart title="Training activity, last 30 days" series={ACTIVITY} columns={activity.columns} unit="answers" />
-        {activity.total === 0 && <p className="muted small-text">History is recorded from now on: train to fill this chart.</p>}
+        <BarChart title="Activité, 30 derniers jours" series={ACTIVITY} columns={activity.columns} unit="réponses" />
+        {activity.total === 0 && <p className="muted small-text">L’historique est enregistré à partir de maintenant : entraînez-vous pour remplir ce graphique.</p>}
       </section>
 
       <section className="panel">
-        <BarChart title="Reviews coming, next 14 days" series={FORECAST} columns={forecast} unit="reviews" />
+        <BarChart title="Révisions à venir, 14 prochains jours" series={FORECAST} columns={forecast} unit="révisions" />
       </section>
 
       <section className="panel">
         <div className="row">
-          <h3>By line</h3>
+          <h3>Par ligne</h3>
           <label className="muted">
-            grouped by the first{' '}
+            selon les{' '}
             <select value={depth} onChange={(e) => setDepth(Number(e.target.value))}>
               {[1, 2, 3, 4, 6].map((d) => (
                 <option key={d} value={d}>{d}</option>
               ))}
             </select>{' '}
-            moves
+            premiers coups
           </label>
         </div>
-        <table className="lines">
+        <div className="table-wrap"><table className="lines">
           <thead>
             <tr>
-              <th>Line</th>
+              <th>Ligne</th>
               <th>Positions</th>
-              <th>Learnt</th>
-              <th>Known now</th>
+              <th>Apprises</th>
+              <th>Sues</th>
               <th />
             </tr>
           </thead>
@@ -230,13 +229,13 @@ export function Stats() {
                     {fen ? (
                       <Link to={`/r/${g.source.id}?fen=${encodeURIComponent(fen)}`}>{lineText(g.path)}</Link>
                     ) : (
-                      'Initial position'
+                      'Position initiale'
                     )}
                   </td>
                   <td>{g.k.total}</td>
                   <td>{pct(g.k.learntShare)}</td>
                   <td className="meter-cell">
-                    <span className="meter" title={`${pct(g.k.known)} known now`}>
+                    <span className="meter" title={`${pct(g.k.known)} sues aujourd’hui`}>
                       <span style={{ width: pct(g.k.known) }} />
                     </span>
                     {pct(g.k.known)}
@@ -244,7 +243,7 @@ export function Stats() {
                   <td>
                     {fen && (
                       <Link className="small-text" to={`/r/${g.source.id}/train?from=${encodeURIComponent(fen)}`}>
-                        train
+                        s’entraîner
                       </Link>
                     )}
                   </td>
@@ -252,22 +251,22 @@ export function Stats() {
               );
             })}
           </tbody>
-        </table>
+        </table></div>
       </section>
 
       <section className="panel">
-        <h3>Weakest positions</h3>
+        <h3>Positions les plus fragiles</h3>
         {weakest.length === 0 && (
-          <p className="muted">None for now: every learnt position has an estimated recall of 90% or more.</p>
+          <p className="muted">Aucune pour l’instant : chaque position apprise a une mémorisation estimée d’au moins 90 %.</p>
         )}
         {weakest.length > 0 && (
           <ul className="weakest">
             {weakest.map(({ s, p, c }) => (
               <li key={`${s.id}|${p.fen}`}>
-                <Link to={`/r/${s.id}?fen=${encodeURIComponent(p.fen)}`}>{lineText(p.path) || 'Initial position'}</Link>
+                <Link to={`/r/${s.id}?fen=${encodeURIComponent(p.fen)}`}>{lineText(p.path) || 'Position initiale'}</Link>
                 <span className="muted">
-                  {' '}· {s.rep.movesAt(p.fen).map((m) => m.san).join(', ')} · {pct(c!.recall)} recall
-                  {c!.lapses > 0 && ` · forgotten ${c!.lapses}×`}
+                  {' '}· {s.rep.movesAt(p.fen).map((m) => m.san).join(', ')} · {pct(c!.recall)} de mémorisation
+                  {c!.lapses > 0 && ` · oubliée ${c!.lapses} fois`}
                 </span>
               </li>
             ))}

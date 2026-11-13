@@ -26,7 +26,7 @@ app.setErrorHandler((err, _req, reply) => {
   }
   app.log.error(err);
   const status = (err as { statusCode?: number }).statusCode ?? 500;
-  return reply.code(status).send({ error: status < 500 ? (err as Error).message : 'Internal error' });
+  return reply.code(status).send({ error: status < 500 ? (err as Error).message : 'Erreur interne' });
 });
 
 await importSeeds(app.log);

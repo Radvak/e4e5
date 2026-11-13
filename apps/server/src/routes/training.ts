@@ -43,7 +43,7 @@ export async function trainingRoutes(app: FastifyInstance) {
       .select({ id: repertoires.id })
       .from(repertoires)
       .where(and(eq(repertoires.id, req.params.id), eq(repertoires.userId, req.user!.id)));
-    if (!rep) return reply.code(404).send({ error: 'Repertoire not found' });
+    if (!rep) return reply.code(404).send({ error: 'Répertoire introuvable' });
     const cards = await db.select().from(reviewCards).where(eq(reviewCards.repertoireId, rep.id));
     const now = new Date();
     return cards.map((c) => publicCard(c, now));
@@ -55,12 +55,12 @@ export async function trainingRoutes(app: FastifyInstance) {
       .select()
       .from(repertoires)
       .where(and(eq(repertoires.id, req.params.id), eq(repertoires.userId, req.user!.id)));
-    if (!rep) return reply.code(404).send({ error: 'Repertoire not found' });
+    if (!rep) return reply.code(404).send({ error: 'Répertoire introuvable' });
     const { fen, grade } = reviewBody.parse(req.body);
 
     const graph = new Repertoire(rep.color, await db.select().from(repMoves).where(eq(repMoves.repertoireId, rep.id)));
     if (!graph.isMyTurn(fen) || graph.movesAt(fen).length === 0) {
-      return reply.code(400).send({ error: 'Not a position to train in this repertoire' });
+      return reply.code(400).send({ error: 'Pas une position à entraîner dans ce répertoire' });
     }
     const [existing] = await db
       .select()
@@ -95,14 +95,14 @@ export async function trainingRoutes(app: FastifyInstance) {
       .select({ id: repertoires.id })
       .from(repertoires)
       .where(and(eq(repertoires.id, req.params.id), eq(repertoires.userId, req.user!.id)));
-    if (!rep) return reply.code(404).send({ error: 'Repertoire not found' });
+    if (!rep) return reply.code(404).send({ error: 'Répertoire introuvable' });
     const { fen } = z.object({ fen: z.string().min(10).max(120) }).parse(req.body);
     const [card] = await db
       .update(reviewCards)
       .set({ due: new Date() })
       .where(and(eq(reviewCards.repertoireId, rep.id), eq(reviewCards.fen, fen)))
       .returning();
-    if (!card) return reply.code(404).send({ error: 'This position is not learnt yet: train it first' });
+    if (!card) return reply.code(404).send({ error: 'Cette position n’est pas encore apprise : entraînez-la d’abord' });
     return publicCard(card);
   });
 

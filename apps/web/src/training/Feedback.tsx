@@ -24,18 +24,18 @@ export function FeedbackPanel({ played, others, outcome }: Feedback) {
         {outcome === 'correct' && <span className="success">✓ {played.san}</span>}
         {outcome === 'new' && (
           <span>
-            New move learnt: <strong>{played.san}</strong> <span className="muted">· it will come back in a minute</span>
+            Nouveau coup appris : <strong>{played.san}</strong> <span className="muted">· il reviendra dans une minute</span>
           </span>
         )}
         {(outcome === 'mistake' || outcome === 'shown') && (
           <span>
             <strong className="warning">{played.san}</strong>
             <span className="muted">
-              {' '}· found {outcome === 'mistake' ? 'after a mistake' : 'with the answer shown'}, it will come back soon
+              {' '}· trouvé {outcome === 'mistake' ? 'après une erreur' : 'avec la réponse affichée'}, il reviendra bientôt
             </span>
           </span>
         )}
-        {others.length > 0 && <span className="muted"> · also in your repertoire: {others.map((m) => m.san).join(', ')}</span>}
+        {others.length > 0 && <span className="muted"> · aussi dans votre répertoire : {others.map((m) => m.san).join(', ')}</span>}
       </p>
       {played.comment && <p className="comment">{played.comment}</p>}
     </section>

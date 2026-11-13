@@ -10,8 +10,9 @@ import { Board } from '../components/Board';
 import { EnginePanel } from '../components/EnginePanel';
 import { useEngine } from '../engine/useEngine';
 import { MoveTable } from '../components/MoveTable';
-import { RatingRange } from '../components/RatingRange';
-import { explorerParams, rangeLabel, useSettings } from '../settings';
+import { StatsSource } from '../components/StatsSource';
+import { explorerParams, speedsLabel, useSettings } from '../settings';
+import { Button, PageHeader, Tabs } from '../ui';
 
 type Source = 'lichess' | 'mine';
 
@@ -205,25 +206,34 @@ export function Explorer({ me }: { me: Me }) {
   const gameList = source === 'lichess' ? games.data : mine.data ? { topGames: [], recentGames: mine.data.recentGames } : undefined;
 
   return (
+    <>
+    <PageHeader
+      title="Explorer"
+      subtitle="Échiquier libre, vos répertoires, statistiques et moteur"
+      actions={
+        <>
+          <Button variant="ghost" onClick={flip} title="Retourner l’échiquier (f)">⇅</Button>
+          <Button variant="ghost" onClick={reset} title="Revenir à la position initiale">↺</Button>
+        </>
+      }
+    />
     <div className="editor">
       <div className="editor-board">
         <Board fen={fen} orientation={orientation} lastMove={last?.uci} shapes={shapes} onMove={play} />
         <div className="nav">
-          <button onClick={() => goTo(0)} title="Start (Home)">⏮</button>
-          <button onClick={() => goTo(ply - 1)} title="Back (←)">◀</button>
-          <button onClick={() => goTo(ply + 1)} title="Forward (→)">▶</button>
-          <button onClick={() => goTo(line.length)} title="End of the line (End)">⏭</button>
-          <button onClick={flip} title="Flip the board (f)">⇅ Flip</button>
-          <button onClick={reset} title="Back to the initial position, clear the line">↺ Reset</button>
+          <button onClick={() => goTo(0)} title="Début (Origine)">⏮</button>
+          <button onClick={() => goTo(ply - 1)} title="Reculer (←)">◀</button>
+          <button onClick={() => goTo(ply + 1)} title="Avancer (→)">▶</button>
+          <button onClick={() => goTo(line.length)} title="Fin de la ligne (Fin)">⏭</button>
         </div>
         <p className="legend muted">
           <span className="legend-item">
             <span className="swatch" style={{ background: ARROWS.repertoire.color }} />
-            in one of your repertoires
+            dans un de vos répertoires
           </span>
           <span className="legend-item">
             <span className="swatch" style={{ background: ARROWS.popular.color }} />
-            popular, in none of them
+            joué souvent, dans aucun
           </span>
           {engineOn && (
             <span className="legend-item">
@@ -235,13 +245,9 @@ export function Explorer({ me }: { me: Me }) {
       </div>
 
       <div className="editor-side">
-        <header className="row">
-          <h2>Explorer</h2>
-        </header>
-
         <section className="panel">
           <div className="moves-path">
-            <button className={`link ${ply === 0 ? 'current' : ''}`} onClick={() => goTo(0)}>Start</button>
+            <button className={`link ${ply === 0 ? 'current' : ''}`} onClick={() => goTo(0)}>Début</button>
             {line.map((m, i) => (
               <button
                 key={i}
@@ -253,23 +259,23 @@ export function Explorer({ me }: { me: Me }) {
             ))}
           </div>
           <p className="muted small-text keys">
-            <kbd>←</kbd><kbd>→</kbd> move · <kbd>f</kbd> flip · <kbd>e</kbd> engine · play moves on the board or click them below
+            <kbd>←</kbd><kbd>→</kbd> naviguer · <kbd>f</kbd> retourner · <kbd>e</kbd> moteur
           </p>
         </section>
 
         <section className="panel">
-          <h3>In your repertoires</h3>
-          {repMoves.data && prepared.size === 0 && <p className="muted">No repertoire has a move in this position.</p>}
+          <h3>Dans vos répertoires</h3>
+          {repMoves.data && prepared.size === 0 && <p className="muted">Aucun répertoire n’a de coup dans cette position.</p>}
           <ul className="rep-moves">
             {[...prepared.values()].map(({ san, uci, reps }) => (
               <li key={uci}>
-                <button className="link" onClick={() => play(uci)}>{san}</button>{' '}
+                <button className="link san" onClick={() => play(uci)}>{san}</button>
                 {reps.map((r) => (
                   <Link
                     key={r.repertoireId}
                     className="rep-tag"
                     to={`/r/${r.repertoireId}?${new URLSearchParams({ line: ucis([...shown, playUci(fen, uci)!]) })}`}
-                    title={`Open ${r.name} on this move${r.comment ? ` — ${r.comment}` : ''}`}
+                    title={`Ouvrir ${r.name} sur ce coup${r.comment ? ` — ${r.comment}` : ''}`}
                   >
                     <span className={`dot inline ${r.color}`} /> {r.name}
                   </Link>
@@ -291,25 +297,26 @@ export function Explorer({ me }: { me: Me }) {
 
         <section className="panel">
           <div className="row">
-            <div className="tabs inline">
-              <button className={source === 'lichess' ? 'active' : ''} onClick={() => chooseSource('lichess')}>
-                Lichess players
-              </button>
-              <button className={source === 'mine' ? 'active' : ''} onClick={() => chooseSource('mine')}>
-                My games
-              </button>
-            </div>
-            {data?.opening && <small className="muted">{data.opening.eco} {data.opening.name}</small>}
+            <Tabs
+              value={source}
+              onChange={chooseSource}
+              tabs={[
+                { id: 'lichess', label: 'Joueurs Lichess' },
+                { id: 'mine', label: 'Mes parties' },
+              ]}
+            />
+            {data?.opening && <span className="muted small-text" style={{ margin: 0 }}>{data.opening.eco} · {data.opening.name}</span>}
           </div>
 
           {source === 'lichess' && (
             <>
-              <RatingRange current={ex.ratings} />
-              <p className="muted small-text">
-                Lichess players rated {rangeLabel(ex.ratings)}, {ex.speeds.join('+')} games.
-                {lichess.data && !lichess.data.meta.exact && ' No stored data for this range: closest one shown.'}
-              </p>
-              {lichess.isLoading && <p className="muted">Loading…</p>}
+              <div className="row" style={{ margin: '10px 0' }}>
+                <StatsSource me={me} />
+              </div>
+              {lichess.data && !lichess.data.meta.exact && (
+                <p className="warning small-text">Pas de données pour votre tranche : la plus proche est affichée.</p>
+              )}
+              {lichess.isLoading && <p className="muted">Chargement…</p>}
               {lichess.error && <ErrorText error={lichess.error} />}
             </>
           )}
@@ -317,17 +324,16 @@ export function Explorer({ me }: { me: Me }) {
             <>
               {!me.lichess ? (
                 <p className="muted">
-                  Link your Lichess account in <Link to="/settings">Settings</Link> to see your own games.
-                  Chess.com games will come with the game sync.
+                  Liez votre compte Lichess dans les <Link to="/settings#parties">paramètres</Link> pour voir vos propres parties.
                 </p>
               ) : (
                 <p className="muted small-text">
-                  Your Lichess games ({mine.data?.player ?? me.lichess.username}) as <strong>{orientation}</strong>,{' '}
-                  {ex.speeds.join('+')} — flip the board for your games as {orientation === 'white' ? 'Black' : 'White'}.
-                  {mine.data && !mine.data.done && ' Lichess is indexing your games…'}
+                  Vos parties Lichess ({mine.data?.player ?? me.lichess.username}) avec les <strong>{orientation === 'white' ? 'Blancs' : 'Noirs'}</strong>,{' '}
+                  {speedsLabel(ex.speeds)} — retournez l’échiquier pour vos parties avec les {orientation === 'white' ? 'Noirs' : 'Blancs'}.
+                  {mine.data && !mine.data.done && ' Lichess indexe vos parties…'}
                 </p>
               )}
-              {mine.isLoading && <p className="muted">Loading your games…</p>}
+              {mine.isLoading && <p className="muted">Chargement de vos parties…</p>}
               {mine.error && <ErrorText error={mine.error} />}
             </>
           )}
@@ -335,20 +341,21 @@ export function Explorer({ me }: { me: Me }) {
         </section>
 
         <details className="panel" open={showGames} onToggle={(e) => setShowGames((e.target as HTMLDetailsElement).open)}>
-          <summary>Games</summary>
-          {source === 'lichess' && games.isLoading && <p className="muted">Loading…</p>}
+          <summary>Parties</summary>
+          {source === 'lichess' && games.isLoading && <p className="muted">Chargement…</p>}
           {source === 'lichess' && games.error && <ErrorText error={games.error} />}
           {gameList && (
             <>
-              {gameList.topGames.length > 0 && <GameList title="Top games" games={gameList.topGames} onOpen={(id) => loadGame.mutate(id)} />}
-              <GameList title={source === 'mine' ? 'Your recent games' : 'Recent games'} games={gameList.recentGames} onOpen={(id) => loadGame.mutate(id)} />
+              {gameList.topGames.length > 0 && <GameList title="Meilleures parties" games={gameList.topGames} onOpen={(id) => loadGame.mutate(id)} />}
+              <GameList title={source === 'mine' ? 'Vos dernières parties' : 'Parties récentes'} games={gameList.recentGames} onOpen={(id) => loadGame.mutate(id)} />
             </>
           )}
-          {loadGame.isPending && <p className="muted small-text">Loading the game…</p>}
+          {loadGame.isPending && <p className="muted small-text">Chargement de la partie…</p>}
           {loadGame.error && <ErrorText error={loadGame.error} />}
         </details>
       </div>
     </div>
+    </>
   );
 }
 
@@ -370,12 +377,12 @@ function GameList({ title, games, onOpen }: { title: string; games: ExplorerGame
     <>
       <h4 className="games-title">{title}</h4>
       {games.length === 0 ? (
-        <p className="muted small-text">No game.</p>
+        <p className="muted small-text">Aucune partie.</p>
       ) : (
         <table className="lines games">
           <tbody>
             {games.map((g) => (
-              <tr key={g.id} className="clickable" onClick={() => onOpen(g.id)} title="Replay this game on the board">
+              <tr key={g.id} className="clickable" onClick={() => onOpen(g.id)} title="Rejouer cette partie sur l’échiquier">
                 <td>
                   {g.white.name} <span className="muted">{g.white.rating}</span>
                 </td>
@@ -385,7 +392,7 @@ function GameList({ title, games, onOpen }: { title: string; games: ExplorerGame
                 <td>{g.winner ? RESULT[g.winner] : '½-½'}</td>
                 <td className="muted">{[g.speed, g.month].filter(Boolean).join(' · ')}</td>
                 <td>
-                  <a href={`https://lichess.org/${g.id}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} title="Open on Lichess">
+                  <a href={`https://lichess.org/${g.id}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} title="Ouvrir sur Lichess">
                     ↗
                   </a>
                 </td>
@@ -399,6 +406,6 @@ function GameList({ title, games, onOpen }: { title: string; games: ExplorerGame
 }
 
 function ErrorText({ error }: { error: unknown }) {
-  if (error instanceof ApiError && error.status === 404) return <p className="muted">No statistics stored for this position.</p>;
+  if (error instanceof ApiError && error.status === 404) return <p className="muted">Aucune statistique pour cette position.</p>;
   return <p className="error small-text">{error instanceof Error ? error.message : String(error)}</p>;
 }

@@ -65,10 +65,10 @@ export const JumpBox = forwardRef<HTMLInputElement, { rep: Repertoire; onJump: (
         try {
           key = fenKey(positionFromFen(q));
         } catch {
-          return setError('Invalid FEN.');
+          return setError('FEN invalide.');
         }
         const path = pathTo(rep, key);
-        return path ? jump(path) : setError('This position is not in the repertoire.');
+        return path ? jump(path) : setError('Cette position n’est pas dans le répertoire.');
       }
       const moves = parseMoves(q);
       if (moves) return jump(moves);
@@ -80,7 +80,7 @@ export const JumpBox = forwardRef<HTMLInputElement, { rep: Repertoire; onJump: (
         if (path) found.push({ line: [...path, m], comment: m.comment });
         if (found.length >= 20) break;
       }
-      if (!found.length) return setError('No legal moves, FEN or comment matching.');
+      if (!found.length) return setError('Aucun coup légal, FEN ou commentaire correspondant.');
       setHits(found.sort((a, b) => a.line.length - b.line.length));
     };
 
@@ -98,10 +98,10 @@ export const JumpBox = forwardRef<HTMLInputElement, { rep: Repertoire; onJump: (
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => e.key === 'Escape' && (e.currentTarget.blur(), setHits(null), setError(null))}
-            placeholder="Jump: moves (1. e4 c5 2. Nf3), FEN, or a word from your comments   ( / )"
-            aria-label="Search or jump to a position"
+            placeholder="Aller à : coups (1. e4 c5 2. Nf3), FEN ou mot d’un commentaire"
+            aria-label="Chercher ou aller à une position"
           />
-          <button type="submit">Go</button>
+          <button type="submit">OK</button>
         </form>
         {error && <p className="error small-text">{error}</p>}
         {hits && (

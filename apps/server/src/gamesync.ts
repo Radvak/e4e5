@@ -103,7 +103,7 @@ export function fromChesscom(userId: string, account: string, g: ChesscomGame): 
 
 /** Monthly archives from the month of the last synced game on, one request at a time. */
 async function syncChesscom(user: User, job: SyncJob) {
-  if (!user.chesscomUsername) throw new Error('Set your Chess.com username in Settings');
+  if (!user.chesscomUsername) throw new Error('Indiquez votre pseudo Chess.com dans les paramètres');
   const account = user.chesscomUsername.toLowerCase();
   let last = await syncState(user.id, 'chesscom', account);
   const from = last ? `${last.getUTCFullYear()}/${String(last.getUTCMonth() + 1).padStart(2, '0')}` : '';
@@ -142,7 +142,7 @@ function fromLichess(userId: string, account: string, g: LichessGameExport): Gam
 }
 
 async function syncLichess(user: User, job: SyncJob) {
-  if (!user.lichessUsername) throw new Error('Link your Lichess account in Settings');
+  if (!user.lichessUsername) throw new Error('Liez votre compte Lichess dans les paramètres');
   const account = user.lichessUsername.toLowerCase();
   const last = await syncState(user.id, 'lichess', account);
   const exported = await lichessUserGames(account, last?.getTime() ?? null, user.lichessToken ?? env.lichessAppToken);

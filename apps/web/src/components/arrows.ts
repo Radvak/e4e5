@@ -1,9 +1,9 @@
 /** Arrow colours on the board, shared with the legend so both always match. */
 export const ARROWS = {
-  repertoire: { color: '#3fb950', label: 'in your repertoire' },
-  next: { color: '#3fb950', label: 'next move (→)' },
-  popular: { color: '#f0883e', label: 'popular, not in your repertoire' },
-  engine: { color: '#58a6ff', label: "engine's best move" },
+  repertoire: { color: '#3fb950', label: 'dans votre répertoire' },
+  next: { color: '#3fb950', label: 'coup suivant (→)' },
+  popular: { color: '#f0883e', label: 'joué souvent, pas dans votre répertoire' },
+  engine: { color: '#58a6ff', label: 'meilleur coup du moteur' },
 } as const;
 
 export type ArrowKind = keyof typeof ARROWS;

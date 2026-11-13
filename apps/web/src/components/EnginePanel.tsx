@@ -9,7 +9,7 @@ export function EnginePanel({
   maxDepth,
   firstMoveNumber,
   onPlay,
-  hint = 'Click a move to play the line up to it.',
+  hint = 'Touchez un coup pour jouer la ligne jusqu’à lui.',
 }: {
   enabled: boolean;
   onToggle: (on: boolean) => void;
@@ -25,17 +25,17 @@ export function EnginePanel({
   return (
     <section className="panel engine">
       <div className="row">
-        <h3>Engine</h3>
+        <h3>Moteur</h3>
         <label className="switch">
           <input type="checkbox" checked={enabled} onChange={(e) => onToggle(e.target.checked)} /> Stockfish 19
         </label>
         {enabled && (
           <span className="muted small-text">
-            depth {depth}/{maxDepth}
+            profondeur {depth}/{maxDepth}
           </span>
         )}
       </div>
-      {enabled && lines.length === 0 && <p className="muted small-text">Thinking…</p>}
+      {enabled && lines.length === 0 && <p className="muted small-text">Réflexion…</p>}
       {enabled &&
         lines.map((l) => (
           <div key={l.multipv} className="engine-line">
@@ -47,7 +47,7 @@ export function EnginePanel({
                 const ply = firstMoveNumber + i;
                 const num = ply % 2 === 0 ? `${ply / 2 + 1}. ` : i === 0 ? `${(ply + 1) / 2}… ` : '';
                 return (
-                  <button key={i} className="link" onClick={() => onPlay(l.pv.slice(0, i + 1))} title="Play up to this move">
+                  <button key={i} className="link" onClick={() => onPlay(l.pv.slice(0, i + 1))} title="Jouer jusqu’à ce coup">
                     {num}
                     {m.san}
                   </button>

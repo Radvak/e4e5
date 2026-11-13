@@ -213,6 +213,7 @@ export const api = {
   logout: () => request<{ ok: true }>('POST', '/api/auth/logout'),
   repertoires: () => request<RepertoireSummary[]>('GET', '/api/repertoires'),
   createRepertoire: (name: string, color: Color) => request<RepertoireSummary>('POST', '/api/repertoires', { name, color }),
+  renameRepertoire: (id: string, name: string) => request<RepertoireSummary>('PATCH', `/api/repertoires/${id}`, { name }),
   deleteRepertoire: (id: string) => request<{ ok: true }>('DELETE', `/api/repertoires/${id}`),
   repertoire: (id: string) => request<RepertoireDetail>('GET', `/api/repertoires/${id}`),
   saveLine: (id: string, ucis: string[]) =>

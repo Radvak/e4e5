@@ -14,16 +14,20 @@ export function RatingRange({ current }: { current: number[] }) {
 
   return (
     <div className="rating-range">
-      <span>
-        Lichess players rated <strong>{rangeLabel(current)}</strong>
-      </span>
-      <input type="range" min={0} max={max} value={lo} aria-label="Lowest rating" onChange={(e) => set(Number(e.target.value), hi)} />
-      <input type="range" min={0} max={max} value={hi} aria-label="Highest rating" onChange={(e) => set(lo, Number(e.target.value))} />
-      {range && (
-        <button className="small" onClick={() => setRange(null)} title="Use the buckets around your own rating">
-          auto
-        </button>
-      )}
+      <div className="row">
+        <strong className="big">{rangeLabel(current)}</strong>
+        {range ? (
+          <button className="small" onClick={() => setRange(null)} title="Revenir à la tranche autour de votre classement">
+            Automatique
+          </button>
+        ) : (
+          <span className="badge accent">automatique</span>
+        )}
+      </div>
+      <div className="row nowrap sliders">
+        <input type="range" min={0} max={max} value={lo} aria-label="Classement minimum" onChange={(e) => set(Number(e.target.value), hi)} />
+        <input type="range" min={0} max={max} value={hi} aria-label="Classement maximum" onChange={(e) => set(lo, Number(e.target.value))} />
+      </div>
     </div>
   );
 }

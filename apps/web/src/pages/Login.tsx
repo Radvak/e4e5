@@ -1,10 +1,11 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { api } from '../api';
+import { Button, Tabs } from '../ui';
 
 const ERRORS: Record<string, string> = {
-  failed: 'Lichess login failed, please try again.',
-  'lichess-already-linked': 'This Lichess account is already linked to another Mon cahier account.',
+  failed: 'La connexion avec Lichess a échoué, réessayez.',
+  'lichess-already-linked': 'Ce compte Lichess est déjà lié à un autre compte Mon cahier.',
 };
 
 export function Login() {
@@ -25,12 +26,14 @@ export function Login() {
 
   return (
     <div className="login">
+      <div className="brand-mark">♞</div>
       <h1>Mon cahier</h1>
-      <p>Build your opening repertoire, see what players of your level actually play, and grow it from your own games.</p>
-      {loginError && <p className="error">{ERRORS[loginError] ?? ERRORS.failed}</p>}
+      <p>Construisez votre répertoire d’ouvertures, voyez ce que jouent les joueurs de votre niveau, et faites-le grandir avec vos propres parties.</p>
+      {loginError && <p className="notice error">{ERRORS[loginError] ?? ERRORS.failed}</p>}
 
-      <a className="button big" href="/api/auth/login">Login with Lichess</a>
+      <Button variant="primary" size="lg" block href="/api/auth/login">Se connecter avec Lichess</Button>
 
+      <div className="or">ou avec un identifiant</div>
       <form
         className="account-form"
         onSubmit={(e) => {
@@ -38,33 +41,29 @@ export function Login() {
           account.mutate();
         }}
       >
-        <div className="tabs">
-          <button type="button" className={mode === 'login' ? 'active' : ''} onClick={() => setMode('login')}>
-            Log in
-          </button>
-          <button type="button" className={mode === 'register' ? 'active' : ''} onClick={() => setMode('register')}>
-            Create account
-          </button>
-        </div>
-        <input
-          placeholder="Username"
-          autoComplete="username"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
+        <Tabs
+          block
+          value={mode}
+          onChange={setMode}
+          tabs={[
+            { id: 'login', label: 'Se connecter' },
+            { id: 'register', label: 'Créer un compte' },
+          ]}
         />
+        <input placeholder="Identifiant" autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} />
         <input
           type="password"
-          placeholder={mode === 'register' ? 'Password (8+ characters)' : 'Password'}
+          placeholder={mode === 'register' ? 'Mot de passe (8 caractères min.)' : 'Mot de passe'}
           autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
         />
-        <button type="submit" disabled={!username.trim() || !password || account.isPending}>
-          {mode === 'login' ? 'Log in' : 'Create account'}
-        </button>
+        <Button type="submit" block disabled={!username.trim() || !password || account.isPending}>
+          {mode === 'login' ? 'Se connecter' : 'Créer le compte'}
+        </Button>
         {account.error && <p className="error">{account.error.message}</p>}
         {mode === 'register' && (
-          <p className="muted small-text">Play on Chess.com? Create an account, then add your Chess.com username in Settings.</p>
+          <p className="muted small-text">Vous jouez sur Chess.com ? Créez un compte, puis indiquez votre pseudo Chess.com dans les paramètres.</p>
         )}
       </form>
 
@@ -76,10 +75,10 @@ export function Login() {
             if (guestName.trim()) guest.mutate();
           }}
         >
-          <p className="muted">…or try it as a guest (no password, for testing):</p>
-          <div className="row">
-            <input placeholder="Your name" value={guestName} onChange={(e) => setGuestName(e.target.value)} />
-            <button type="submit" disabled={!guestName.trim() || guest.isPending}>Continue as guest</button>
+          <p className="muted small-text">… ou essayer en invité (sans mot de passe, pour tester) :</p>
+          <div className="form-row">
+            <input placeholder="Votre nom" value={guestName} onChange={(e) => setGuestName(e.target.value)} />
+            <Button type="submit" disabled={!guestName.trim() || guest.isPending}>Continuer</Button>
           </div>
           {guest.error && <p className="error">{guest.error.message}</p>}
         </form>

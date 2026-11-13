@@ -29,10 +29,10 @@ const secure = env.publicUrl.startsWith('https://');
 const loginName = z
   .string()
   .trim()
-  .regex(/^[A-Za-z0-9_-]{2,30}$/, 'Username: 2-30 letters, digits, - or _');
+  .regex(/^[A-Za-z0-9_-]{2,30}$/, 'Identifiant : 2 à 30 lettres, chiffres, - ou _');
 const credentials = z.object({
   username: loginName,
-  password: z.string().min(8, 'Password: at least 8 characters').max(200),
+  password: z.string().min(8, 'Mot de passe : au moins 8 caractères').max(200),
 });
 const guestBody = z.object({ username: loginName });
 const profileBody = z.object({
@@ -79,11 +79,11 @@ export async function authRoutes(app: FastifyInstance) {
   app.get('/api/auth/config', async () => ({ guestLogin: env.guestLogin }));
 
   app.post('/api/auth/register', async (req, reply) => {
-    if (tooManyAttempts(req.ip)) return reply.code(429).send({ error: 'Too many attempts, try again later' });
+    if (tooManyAttempts(req.ip)) return reply.code(429).send({ error: 'Trop de tentatives, réessayez plus tard' });
     const { username, password } = credentials.parse(req.body);
     const login = username.toLowerCase();
     const [taken] = await db.select({ id: users.id }).from(users).where(eq(users.login, login));
-    if (taken) return reply.code(409).send({ error: 'This username is taken' });
+    if (taken) return reply.code(409).send({ error: 'Cet identifiant est déjà pris' });
     const id = randomUUID();
     await db.insert(users).values({ id, username, login, passwordHash: await hashPassword(password) });
     await startSession(reply, id);
@@ -91,11 +91,11 @@ export async function authRoutes(app: FastifyInstance) {
   });
 
   app.post('/api/auth/password', async (req, reply) => {
-    if (tooManyAttempts(req.ip)) return reply.code(429).send({ error: 'Too many attempts, try again later' });
+    if (tooManyAttempts(req.ip)) return reply.code(429).send({ error: 'Trop de tentatives, réessayez plus tard' });
     const { username, password } = credentials.parse(req.body);
     const [user] = await db.select().from(users).where(eq(users.login, username.toLowerCase()));
     if (!user?.passwordHash || !(await verifyPassword(password, user.passwordHash))) {
-      return reply.code(401).send({ error: 'Wrong username or password' });
+      return reply.code(401).send({ error: 'Identifiant ou mot de passe incorrect' });
     }
     await startSession(reply, user.id);
     return { ok: true };
@@ -196,19 +196,19 @@ export async function authRoutes(app: FastifyInstance) {
       try {
         patch.chesscomRatings = await chesscomRatings(body.chesscomUsername);
       } catch (e) {
-        if (e instanceof ChesscomUserNotFound) return reply.code(400).send({ error: 'Unknown Chess.com username' });
+        if (e instanceof ChesscomUserNotFound) return reply.code(400).send({ error: 'Pseudo Chess.com inconnu' });
         req.log.warn({ err: e }, 'Chess.com unreachable');
-        warning = 'Chess.com could not be reached: username saved, ratings will be fetched later.';
+        warning = 'Chess.com est injoignable : pseudo enregistré, les classements seront récupérés plus tard.';
       }
     }
     if (body.password) {
-      if (user.login?.startsWith('guest:')) return reply.code(400).send({ error: 'Guest accounts cannot have a password' });
+      if (user.login?.startsWith('guest:')) return reply.code(400).send({ error: 'Les comptes invités ne peuvent pas avoir de mot de passe' });
       if (!user.login) {
         // A Lichess account adds a password: it also needs a login name, to log in without Lichess.
         const login = (body.login ?? user.lichessUsername ?? '').toLowerCase();
-        if (!loginName.safeParse(login).success) return reply.code(400).send({ error: 'Choose a username (2-30 letters, digits, - or _)' });
+        if (!loginName.safeParse(login).success) return reply.code(400).send({ error: 'Choisissez un identifiant (2 à 30 lettres, chiffres, - ou _)' });
         const [taken] = await db.select({ id: users.id }).from(users).where(eq(users.login, login));
-        if (taken) return reply.code(409).send({ error: `The username “${login}” is taken` });
+        if (taken) return reply.code(409).send({ error: `L’identifiant « ${login} » est déjà pris` });
         patch.login = login;
       }
       patch.passwordHash = await hashPassword(body.password);
@@ -220,7 +220,7 @@ export async function authRoutes(app: FastifyInstance) {
   /** Unlinks Lichess (only if the account can still be reached by password). */
   app.delete('/api/me/lichess', { preHandler: requireUser }, async (req, reply) => {
     const user = req.user!;
-    if (!user.passwordHash) return reply.code(400).send({ error: 'Set up a password account first: Lichess is your only login' });
+    if (!user.passwordHash) return reply.code(400).send({ error: 'Ajoutez d’abord un mot de passe : Lichess est votre seul moyen de connexion' });
     const patch = { lichessId: null, lichessUsername: null, lichessToken: null, lichessPerfs: null };
     await db.update(users).set(patch).where(eq(users.id, user.id));
     return { user: publicUser({ ...user, ...patch }) };

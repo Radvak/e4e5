@@ -22,9 +22,9 @@ export function lineText(path: RepMove[]): string {
 /** Short "in 3 min" / "in 2 h" / "in 4 days". */
 export function inTime(date: Date): string {
   const min = Math.max(1, Math.round((date.getTime() - Date.now()) / 60_000));
-  if (min < 60) return `in ${min} min`;
-  if (min < 48 * 60) return `in ${Math.round(min / 60)} h`;
-  return `in ${Math.round(min / 1440)} days`;
+  if (min < 60) return `dans ${min} min`;
+  if (min < 48 * 60) return `dans ${Math.round(min / 60)} h`;
+  return `dans ${Math.round(min / 1440)} jours`;
 }
 
 /** Green arrows showing the expected moves. */

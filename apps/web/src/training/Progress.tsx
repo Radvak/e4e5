@@ -7,15 +7,15 @@ export function Progress({ sources }: { sources: Source[] }) {
   const now = Date.now();
   return (
     <details className="panel progress" open>
-      <summary>Progress</summary>
+      <summary>Progrès</summary>
       <table>
         <thead>
           <tr>
             <th />
-            <th title="Positions where it is your turn">Positions</th>
-            <th>Learnt</th>
-            <th title={`Next review in ${MATURE_DAYS}+ days`}>Well known</th>
-            <th>Due</th>
+            <th title="Positions où c’est à vous de jouer">Positions</th>
+            <th>Apprises</th>
+            <th title={`Prochaine révision dans ${MATURE_DAYS} jours ou plus`}>Bien sues</th>
+            <th>À revoir</th>
           </tr>
         </thead>
         <tbody>
@@ -43,14 +43,14 @@ export function Progress({ sources }: { sources: Source[] }) {
         return (
           <div key={s.id} className="leeches">
             <h4>
-              Often failed in {s.name}{' '}
-              <span className="muted small-text">(forgotten {LEECH_LAPSES}+ times after being learnt)</span>
+              Souvent ratées dans {s.name}{' '}
+              <span className="muted small-text">(oubliées {LEECH_LAPSES} fois ou plus après avoir été apprises)</span>
             </h4>
             <ul>
               {leeches.map(({ p, card }) => (
                 <li key={p.fen}>
-                  <Link to={`/r/${s.id}?fen=${encodeURIComponent(p.fen)}`}>{lineText(p.path) || 'Initial position'}</Link>
-                  <span className="muted"> · {card!.lapses}× · {s.rep.movesAt(p.fen).map((m) => m.san).join(', ')}</span>
+                  <Link to={`/r/${s.id}?fen=${encodeURIComponent(p.fen)}`}>{lineText(p.path) || 'Position initiale'}</Link>
+                  <span className="muted"> · {card!.lapses} fois · {s.rep.movesAt(p.fen).map((m) => m.san).join(', ')}</span>
                 </li>
               ))}
             </ul>

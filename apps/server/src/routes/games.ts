@@ -66,8 +66,8 @@ export async function gameRoutes(app: FastifyInstance) {
   app.post('/api/games/sync', async (req, reply) => {
     const { source } = z.object({ source: z.enum(['chesscom', 'lichess']) }).parse(req.body);
     const user = req.user!;
-    if (source === 'chesscom' && !user.chesscomUsername) return reply.code(409).send({ error: 'Set your Chess.com username in Settings' });
-    if (source === 'lichess' && !user.lichessUsername) return reply.code(409).send({ error: 'Link your Lichess account in Settings' });
+    if (source === 'chesscom' && !user.chesscomUsername) return reply.code(409).send({ error: 'Indiquez votre pseudo Chess.com dans les paramètres' });
+    if (source === 'lichess' && !user.lichessUsername) return reply.code(409).send({ error: 'Liez votre compte Lichess dans les paramètres' });
     return startSync(user, source, req.log);
   });
 

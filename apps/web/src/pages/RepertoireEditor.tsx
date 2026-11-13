@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { DrawShape } from 'chessground/draw';
 import type { Key } from 'chessground/types';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { api, type ImportResult, type Me, type StoredMove } from '../api';
 import { ARROWS, OUTLINE_EXTRA, type ArrowKind } from '../components/arrows';
 import { EnginePanel } from '../components/EnginePanel';
@@ -12,6 +12,7 @@ import { useEngine } from '../engine/useEngine';
 import { Board } from '../components/Board';
 import { ExplorerPanel } from '../components/ExplorerPanel';
 import { explorerParams, useSettings } from '../settings';
+import { Button, Menu, PageHeader, plural } from '../ui';
 
 /** A move of the line on the board; saved or not is derived from the repertoire. */
 type LineMove = PlayedMove;
@@ -29,6 +30,7 @@ export function RepertoireEditor({ me }: { me: Me }) {
   const [line, setLine] = useState<LineMove[]>([]);
   const [ply, setPly] = useState(0);
   const [notice, setNotice] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   const rep = useMemo(() => new Repertoire(data?.color ?? 'white', data?.moves ?? []), [data]);
 
@@ -72,7 +74,7 @@ export function RepertoireEditor({ me }: { me: Me }) {
     mutationFn: () => api.saveLine(id, shown.map((m) => m.uci)),
     onSuccess: async (r) => {
       await refresh();
-      setNotice(`${r.added} move(s) saved.`);
+      setNotice(`${plural(r.added, 'coup enregistré', 'coups enregistrés')}.`);
     },
   });
   const deleteMove = useMutation({ mutationFn: (m: StoredMove) => api.deleteMove(id, m.id), onSuccess: refresh });
@@ -215,22 +217,37 @@ export function RepertoireEditor({ me }: { me: Me }) {
     return out;
   }, [explorer.data, rep, fen, here, engineOn, engine.lines[0]?.pv[0]?.uci, options, selected]);
 
-  if (isLoading) return <p>Loading…</p>;
-  if (error || !data) return <p className="error">Could not load the repertoire.</p>;
+  if (isLoading) return <p className="muted">Chargement…</p>;
+  if (error || !data) return <p className="error">Impossible de charger le répertoire.</p>;
 
   const myTurn = turnOf(fen) === data.color;
   const last = line[ply - 1];
   const lastStored = last ? storedMove(last) : undefined;
 
   return (
+    <>
+    <PageHeader
+      back="/repertoires"
+      title={data.name}
+      subtitle={`${data.color === 'white' ? 'Blancs' : 'Noirs'} · ${plural(rep.size, 'coup', 'coups')}`}
+      actions={<Button variant="primary" icon="play" to={`/r/${id}/train`}>S’entraîner</Button>}
+      menu={[
+        ...(ply > 0 && unsaved.length === 0
+          ? [{ label: 'S’entraîner à partir d’ici', to: `/r/${id}/train?from=${encodeURIComponent(fen)}` }]
+          : []),
+        { label: 'Voir les trous', to: `/bilan/trous?r=${id}` },
+        { label: 'Importer un PGN', onClick: () => setImportOpen(true) },
+        { label: 'Exporter en PGN', onClick: () => (location.href = `/api/repertoires/${id}/pgn`) },
+      ]}
+    />
     <div className="editor">
       <div className="editor-board">
         <Board fen={fen} orientation={data.color} lastMove={last?.uci} shapes={shapes} onMove={play} />
         <div className="nav">
-          <button onClick={() => goTo(0)} title="Start (Home)">⏮</button>
-          <button onClick={() => goTo(ply - 1)} title="Back (←)">◀</button>
-          <button onClick={forward} title="Forward (→)">▶</button>
-          <button onClick={() => goTo(line.length)} title="End of the line (End)">⏭</button>
+          <button onClick={() => goTo(0)} title="Début (Origine)">⏮</button>
+          <button onClick={() => goTo(ply - 1)} title="Reculer (←)">◀</button>
+          <button onClick={forward} title="Avancer (→)">▶</button>
+          <button onClick={() => goTo(line.length)} title="Fin de la ligne (Fin)">⏭</button>
         </div>
         <p className="legend muted">
           {(Object.keys(ARROWS) as ArrowKind[]).filter((k) => k !== 'engine' || engineOn).map((k) => (
@@ -239,32 +256,15 @@ export function RepertoireEditor({ me }: { me: Me }) {
               {ARROWS[k].label}
             </span>
           ))}
-          <span className="legend-item">thicker = played more often</span>
+          <span className="legend-item">plus épais = joué plus souvent</span>
         </p>
       </div>
 
       <div className="editor-side">
-        <header className="row">
-          <Link to="/">← Repertoires</Link>
-          <h2>{data.name}</h2>
-          <span className="muted">({data.color}, {rep.size} moves)</span>
-          <Link className="button primary" to={`/r/${id}/train`}>Train</Link>
-          <Link className="button" to={`/gaps?r=${id}`} title="Popular opponent moves you have not prepared">Gaps</Link>
-          {ply > 0 &&
-            (unsaved.length === 0 ? (
-              <Link className="button" to={`/r/${id}/train?from=${encodeURIComponent(fen)}`} title="Train only the lines after this position">
-                Train from here
-              </Link>
-            ) : (
-              <button disabled title="Save the variation first">Train from here</button>
-            ))}
-          <a className="button" href={`/api/repertoires/${id}/pgn`}>Export PGN</a>
-        </header>
-
         <section className="panel">
           <JumpBox ref={searchRef} rep={rep} onJump={jumpTo} />
           <div className="moves-path">
-            <button className={`link ${ply === 0 ? 'current' : ''}`} onClick={() => goTo(0)}>Start</button>
+            <button className={`link ${ply === 0 ? 'current' : ''}`} onClick={() => goTo(0)}>Début</button>
             {line.map((m, i) => (
               <button
                 key={i}
@@ -272,7 +272,7 @@ export function RepertoireEditor({ me }: { me: Me }) {
                   .filter(Boolean)
                   .join(' ')}
                 onClick={() => goTo(i + 1)}
-                title={rep.has(m.fromFen, m.uci) ? 'In your repertoire' : 'Not saved'}
+                title={rep.has(m.fromFen, m.uci) ? 'Dans votre répertoire' : 'Pas enregistré'}
               >
                 {i % 2 === 0 ? `${i / 2 + 1}. ` : ''}{m.san}
               </button>
@@ -282,9 +282,9 @@ export function RepertoireEditor({ me }: { me: Me }) {
           {unsaved.length > 0 && (
             <div className="draft">
               <button className="primary" disabled={saveLine.isPending} onClick={() => saveLine.mutate()}>
-                Save variation ({unsaved.length} new move{unsaved.length > 1 ? 's' : ''})
+                Enregistrer la variante ({plural(unsaved.length, 'nouveau coup', 'nouveaux coups')})
               </button>
-              <button className="small" onClick={discard}>Discard</button>
+              <Button size="sm" variant="ghost" onClick={discard}>Annuler</Button>
             </div>
           )}
           {notice && <p className="muted small-text">{notice}</p>}
@@ -295,37 +295,40 @@ export function RepertoireEditor({ me }: { me: Me }) {
         </section>
 
         <section className="panel">
-          <h3>{myTurn ? 'Your move' : 'Opponent replies'} in your repertoire</h3>
+          <h3>{myTurn ? 'Votre coup' : 'Réponses adverses'} dans votre répertoire</h3>
           {here.length === 0 && (
-            <p className="muted">Nothing prepared here. Play moves on the board, then “Save variation”.</p>
+            <p className="muted">Rien de préparé ici. Jouez des coups sur l’échiquier, puis « Enregistrer la variante ».</p>
           )}
           <ul className="rep-moves">
             {options[0] && !rep.has(options[0].fromFen, options[0].uci) && (
               <li className={selected === 0 ? 'selected' : ''}>
-                <button className="link unsaved" onClick={() => play(options[0]!.uci)}>{options[0].san}</button>
-                <span className="muted"> next in your line, not saved</span>
+                <button className="link unsaved san" onClick={() => play(options[0]!.uci)}>{options[0].san}</button>
+                <span className="muted small-text" style={{ margin: 0 }}>suite de votre ligne, pas enregistrée</span>
               </li>
             )}
             {here.map((m) => (
               <li key={m.id} className={options[selected]?.uci === m.uci ? 'selected' : ''}>
-                <button className="link" onClick={() => play(m.uci)}>{m.san}</button>
-                {m.isMain ? <span className="muted"> main</span> : (
-                  <button className="small" onClick={() => setMain.mutate(m)}>make main</button>
-                )}
-                {m.comment && <span className="comment"> {m.comment}</span>}
-                <button
-                  className="small danger"
-                  onClick={() => confirm(`Delete ${m.san} and the lines after it from the repertoire?`) && deleteMove.mutate(m)}
-                >
-                  delete
-                </button>
+                <button className="link san" onClick={() => play(m.uci)}>{m.san}</button>
+                {m.isMain && <span className="badge">principal</span>}
+                {m.comment && <span className="comment" style={{ flex: '1 1 100%' }}>{m.comment}</span>}
+                <span className="spacer" />
+                <Menu
+                  items={[
+                    ...(m.isMain ? [] : [{ label: 'Rendre principal', onClick: () => setMain.mutate(m) }]),
+                    {
+                      label: 'Supprimer ce coup et la suite',
+                      danger: true,
+                      onClick: () => confirm(`Supprimer ${m.san} et les lignes qui suivent ?`) && deleteMove.mutate(m),
+                    },
+                  ]}
+                />
               </li>
             ))}
           </ul>
           {options.length > 0 && (
             <p className="muted small-text keys">
-              {options.length > 1 && <><kbd>↑</kbd><kbd>↓</kbd> choose · </>}
-              <kbd>→</kbd> play · <kbd>←</kbd> back · <kbd>/</kbd> search
+              {options.length > 1 && <><kbd>↑</kbd><kbd>↓</kbd> choisir · </>}
+              <kbd>→</kbd> jouer · <kbd>←</kbd> reculer · <kbd>/</kbd> chercher
             </p>
           )}
         </section>
@@ -338,7 +341,7 @@ export function RepertoireEditor({ me }: { me: Me }) {
           maxDepth={engine.maxDepth}
           firstMoveNumber={ply}
           onPlay={playMoves}
-          hint="Click a move to play the line up to it (as an unsaved variation)."
+          hint="Touchez un coup pour jouer la ligne jusqu’à lui (en variante non enregistrée)."
         />
 
         <ExplorerPanel
@@ -347,20 +350,14 @@ export function RepertoireEditor({ me }: { me: Me }) {
           stats={explorer.data}
           error={explorer.error}
           loading={explorer.isLoading}
-          ratings={ex.ratings}
-          note={
-            !ex.auto
-              ? `Custom range, ${ex.speeds.join('+')} games.`
-              : ex.source
-                ? `Default: around your ${ex.source} ${ex.speeds.join('+')} rating (${ex.rating}).`
-                : `Default: around 1500 (no rating known).`
-          }
+          me={me}
           onPick={play}
         />
 
-        <PgnImport repertoireId={id} onDone={refresh} />
+        <PgnImport repertoireId={id} onDone={refresh} open={importOpen} onToggle={setImportOpen} />
       </div>
     </div>
+    </>
   );
 }
 
@@ -369,7 +366,7 @@ function CommentBox({ move, onSave }: { move: StoredMove; onSave: (comment: stri
   return (
     <div className="comment-box">
       <textarea
-        placeholder={`Comment on ${move.san}…`}
+        placeholder={`Commentaire sur ${move.san}…`}
         value={text}
         onChange={(e) => setText(e.target.value)}
         onBlur={() => text !== (move.comment ?? '') && onSave(text)}
@@ -379,7 +376,7 @@ function CommentBox({ move, onSave }: { move: StoredMove; onSave: (comment: stri
   );
 }
 
-function PgnImport({ repertoireId, onDone }: { repertoireId: string; onDone: () => void }) {
+function PgnImport({ repertoireId, onDone, open, onToggle }: { repertoireId: string; onDone: () => void; open: boolean; onToggle: (open: boolean) => void }) {
   const [pgn, setPgn] = useState('');
   const [result, setResult] = useState<ImportResult | null>(null);
   const mutation = useMutation({
@@ -391,8 +388,8 @@ function PgnImport({ repertoireId, onDone }: { repertoireId: string; onDone: () 
     },
   });
   return (
-    <details className="panel">
-      <summary>Import PGN</summary>
+    <details className="panel" open={open} onToggle={(e) => onToggle((e.target as HTMLDetailsElement).open)}>
+      <summary>Importer un PGN</summary>
       <input
         type="file"
         accept=".pgn,text/plain"
@@ -401,15 +398,15 @@ function PgnImport({ repertoireId, onDone }: { repertoireId: string; onDone: () 
           if (file) setPgn(await file.text());
         }}
       />
-      <textarea rows={6} placeholder="…or paste PGN here (variations are kept)" value={pgn} onChange={(e) => setPgn(e.target.value)} />
+      <textarea rows={6} placeholder="… ou collez le PGN ici (les variantes sont gardées)" value={pgn} onChange={(e) => setPgn(e.target.value)} />
       <button disabled={!pgn.trim() || mutation.isPending} onClick={() => mutation.mutate()}>
-        {mutation.isPending ? 'Importing…' : 'Import'}
+        {mutation.isPending ? 'Import…' : 'Importer'}
       </button>
       {mutation.error && <p className="error">{String(mutation.error)}</p>}
       {result && (
         <p>
-          {result.games} game(s): {result.added} moves added, {result.duplicates} already known
-          {result.unreachable > 0 && `, ${result.unreachable} skipped (not reachable from the initial position)`}
+          {plural(result.games, 'partie', 'parties')} : {plural(result.added, 'coup ajouté', 'coups ajoutés')}, {result.duplicates} déjà connus
+          {result.unreachable > 0 && `, ${result.unreachable} ignorés (inaccessibles depuis la position initiale)`}
           .
           {result.errors.length > 0 && <span className="error"> {result.errors.join('; ')}</span>}
         </p>

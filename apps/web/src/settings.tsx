@@ -14,6 +14,16 @@ export const SPEEDS: Record<SpeedChoice, Speed[]> = {
 /** Lichess explorer rating range, as [lowest bucket, highest bucket] (e.g. [1600, 1800] = 1600-1999). */
 export type RatingRange = [number, number];
 
+/** French names of the speeds, e.g. for "blitz+rapid". */
+export const SPEED_NAMES: Record<string, string> = { bullet: 'bullet', blitz: 'blitz', rapid: 'rapide', classical: 'classique', daily: 'par correspondance' };
+export const SPEED_CHOICES: Record<SpeedChoice, string> = {
+  blitz: 'Blitz',
+  rapid: 'Rapide',
+  both: 'Blitz + rapide',
+  all: 'Blitz + rapide + classique',
+};
+export const speedsLabel = (speeds: string[]) => speeds.map((s) => SPEED_NAMES[s] ?? s).join(' + ');
+
 interface Settings {
   speed: SpeedChoice;
   setSpeed: (s: SpeedChoice) => void;
@@ -23,6 +33,14 @@ interface Settings {
   /** New positions to learn per day and per repertoire. */
   newPerDay: number;
   setNewPerDay: (n: number) => void;
+  /** Gap finder: holes listed from this share of games. */
+  gapCutoff: number;
+  setGapCutoff: (n: number) => void;
+  /** Played games analysed: last `gamesDays` days (0: all), of these speeds. */
+  gamesDays: number;
+  setGamesDays: (n: number) => void;
+  gamesSpeeds: string[];
+  setGamesSpeeds: (s: string[]) => void;
 }
 
 const Ctx = createContext<Settings | null>(null);
@@ -41,24 +59,31 @@ function persist(key: string, value: unknown) {
   else localStorage.setItem(key, JSON.stringify(value));
 }
 
+/** State kept in localStorage. */
+function usePersisted<T>(key: string, fallback: T): [T, (v: T) => void] {
+  const [value, setValue] = useState<T>(() => stored(key, fallback));
+  return [
+    value,
+    (v: T) => {
+      persist(key, v);
+      setValue(v);
+    },
+  ];
+}
+
 export function SettingsProvider({ children }: { children: ReactNode }) {
-  const [speed, setSpeedState] = useState<SpeedChoice>(() => stored('speed', 'both'));
-  const [range, setRangeState] = useState<RatingRange | null>(() => stored('ratingRange', null));
-  const setSpeed = (s: SpeedChoice) => {
-    persist('speed', s);
-    setSpeedState(s);
-  };
-  const setRange = (r: RatingRange | null) => {
-    persist('ratingRange', r);
-    setRangeState(r);
-  };
-  const [newPerDay, setNewPerDayState] = useState<number>(() => stored('newPerDay', 10));
-  const setNewPerDay = (n: number) => {
-    persist('newPerDay', n);
-    setNewPerDayState(n);
-  };
+  const [speed, setSpeed] = usePersisted<SpeedChoice>('speed', 'both');
+  const [range, setRange] = usePersisted<RatingRange | null>('ratingRange', null);
+  const [newPerDay, setNewPerDay] = usePersisted('newPerDay', 10);
+  const [gapCutoff, setGapCutoff] = usePersisted('gapCutoff', 0.01);
+  const [gamesDays, setGamesDays] = usePersisted('gamesDays', 90);
+  const [gamesSpeeds, setGamesSpeeds] = usePersisted<string[]>('gamesSpeeds', ['blitz', 'rapid', 'classical', 'daily']);
   return (
-    <Ctx.Provider value={{ speed, setSpeed, range, setRange, newPerDay, setNewPerDay }}>{children}</Ctx.Provider>
+    <Ctx.Provider
+      value={{ speed, setSpeed, range, setRange, newPerDay, setNewPerDay, gapCutoff, setGapCutoff, gamesDays, setGamesDays, gamesSpeeds, setGamesSpeeds }}
+    >
+      {children}
+    </Ctx.Provider>
   );
 }
 

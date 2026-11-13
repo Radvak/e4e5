@@ -1,9 +1,10 @@
 import { positionFromFen, START_FEN } from '@prepa-cahier/core';
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useMemo, useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { api, type Grade, type Me } from '../api';
 import { explorerParams, useSettings } from '../settings';
+import { Button, PageHeader, Tabs } from '../ui';
 import { lineText } from '../training/common';
 import { PlayMode } from '../training/PlayMode';
 import { Progress } from '../training/Progress';
@@ -34,7 +35,7 @@ export function Training({ me }: { me: Me }) {
   const ids = useMemo(() => (id ? [id] : (all.data ?? []).map((r) => r.id)), [id, all.data]);
   const { sources, loading, review } = useTrainingSources(ids, from);
 
-  const { newPerDay, setNewPerDay, speed, range } = useSettings();
+  const { newPerDay, speed, range } = useSettings();
   const ex = explorerParams(me, speed, range);
   const [mode, setModeState] = useState<Mode>(() => (localStorage.getItem('trainingMode') as Mode | null) ?? 'review');
   const setMode = (m: Mode) => {
@@ -45,46 +46,40 @@ export function Training({ me }: { me: Me }) {
   const onCounts = useCallback((c: typeof counts) => setCounts(c), []);
   const onReview = (source: Source, fen: string, grade: Grade) => review.mutate({ source, fen, grade });
 
-  if (loading || (!id && all.isLoading)) return <p>Loading…</p>;
-  if (id && !sources.length) return <p className="error">Could not load the repertoire.</p>;
+  if (loading || (!id && all.isLoading)) return <p className="muted">Chargement…</p>;
+  if (id && !sources.length) return <p className="error">Impossible de charger le répertoire.</p>;
 
   const fromPath = from && sources[0] ? sources[0].positions.find((p) => p.fen === from)?.path : undefined;
-  const title = id ? sources[0]!.name : 'All repertoires';
+  const title = id ? sources[0]!.name : 'Tous les répertoires';
 
   return (
     <div className="training">
-      <header className="row">
-        {id ? <Link to={`/r/${id}`}>← {title}</Link> : <Link to="/">← Repertoires</Link>}
-        <h2>Training{id ? '' : ': all repertoires'}</h2>
-        <div className="tabs inline">
-          <button className={mode === 'review' ? 'active' : ''} onClick={() => setMode('review')}>
-            Review
-          </button>
-          <button className={mode === 'play' ? 'active' : ''} onClick={() => setMode('play')}>
-            Play lines
-          </button>
-        </div>
-        {mode === 'review' && (
-          <>
-            <span className="muted">
-              {counts.due} due · {counts.fresh} new · {counts.reviewed} done
-              {counts.asked > 0 && ` (${Math.round((100 * counts.firstTry) / counts.asked)}% first try)`}
-            </span>
-            <label className="muted">
-              New per day{' '}
-              <select value={newPerDay} onChange={(e) => setNewPerDay(Number(e.target.value))}>
-                {[0, 5, 10, 20, 50].map((n) => (
-                  <option key={n} value={n}>{n}</option>
-                ))}
-              </select>
-            </label>
-          </>
-        )}
-      </header>
+      <PageHeader
+        back={id ? `/r/${id}` : undefined}
+        title="Entraînement"
+        subtitle={
+          mode === 'review'
+            ? `${title} · ${counts.due} à revoir · ${counts.fresh} nouvelles · ${counts.reviewed} faites${
+                counts.asked > 0 ? ` (${Math.round((100 * counts.firstTry) / counts.asked)} % du premier coup)` : ''
+              }`
+            : title
+        }
+      />
+      <div style={{ marginBottom: 12 }}>
+        <Tabs
+          block
+          value={mode}
+          onChange={setMode}
+          tabs={[
+            { id: 'review', label: 'Réviser' },
+            { id: 'play', label: 'Jouer les lignes' },
+          ]}
+        />
+      </div>
       {from && (
         <p className="muted from">
-          Only the lines after <strong>{fromPath ? lineText(fromPath) : 'this position'}</strong>.{' '}
-          <button className="small" onClick={() => setParams({})}>Train everything</button>
+          Seulement les lignes après <strong>{fromPath ? lineText(fromPath) : 'cette position'}</strong>.{' '}
+          <Button size="sm" variant="ghost" onClick={() => setParams({})}>Tout entraîner</Button>
         </p>
       )}
       {review.error && <p className="error">{review.error.message}</p>}

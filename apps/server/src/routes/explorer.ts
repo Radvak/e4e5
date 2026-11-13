@@ -32,12 +32,12 @@ export async function explorerRoutes(app: FastifyInstance) {
     try {
       fen = fenKey(positionFromFen(q.fen));
     } catch {
-      return reply.code(400).send({ error: 'Invalid FEN' });
+      return reply.code(400).send({ error: 'FEN invalide' });
     }
     if (!q.speeds.length || !q.ratings.length) return reply.code(400).send({ error: 'speeds and ratings required' });
     const token = req.user!.lichessToken ?? env.lichessAppToken;
     const result = await getStats(fen, q.speeds, q.ratings, token, req.log);
-    if (!result.data) return reply.code(404).send({ error: 'No statistics for this position', reason: result.reason });
+    if (!result.data) return reply.code(404).send({ error: 'Aucune statistique pour cette position', reason: result.reason });
     return result;
   });
 
@@ -45,9 +45,9 @@ export async function explorerRoutes(app: FastifyInstance) {
   app.get('/api/explorer/games', { preHandler: requireUser }, async (req, reply) => {
     const q = query.parse(req.query);
     const fen = parseFen(q.fen);
-    if (!fen) return reply.code(400).send({ error: 'Invalid FEN' });
+    if (!fen) return reply.code(400).send({ error: 'FEN invalide' });
     const token = req.user!.lichessToken ?? env.lichessAppToken;
-    if (!token) return reply.code(409).send({ error: 'Connect Lichess in Settings to see games', reason: 'no-token' });
+    if (!token) return reply.code(409).send({ error: 'Liez Lichess dans les paramètres pour voir les parties', reason: 'no-token' });
     const params = new URLSearchParams({
       variant: 'standard',
       fen,
@@ -78,11 +78,11 @@ export async function explorerRoutes(app: FastifyInstance) {
       })
       .parse(req.query);
     const fen = parseFen(q.fen);
-    if (!fen) return reply.code(400).send({ error: 'Invalid FEN' });
+    if (!fen) return reply.code(400).send({ error: 'FEN invalide' });
     const user = req.user!;
-    if (!user.lichessUsername) return reply.code(409).send({ error: 'Link your Lichess account in Settings', reason: 'no-lichess' });
+    if (!user.lichessUsername) return reply.code(409).send({ error: 'Liez votre compte Lichess dans les paramètres', reason: 'no-lichess' });
     const token = user.lichessToken ?? env.lichessAppToken;
-    if (!token) return reply.code(409).send({ error: 'Connect Lichess in Settings', reason: 'no-token' });
+    if (!token) return reply.code(409).send({ error: 'Liez Lichess dans les paramètres', reason: 'no-token' });
     const params = new URLSearchParams({
       variant: 'standard',
       player: user.lichessUsername,
@@ -103,7 +103,7 @@ export async function explorerRoutes(app: FastifyInstance) {
   /** Moves prepared in this position in any of the user's repertoires (both colours). */
   app.get('/api/explorer/repertoires', { preHandler: requireUser }, async (req, reply) => {
     const fen = parseFen(z.object({ fen: z.string().min(10).max(120) }).parse(req.query).fen);
-    if (!fen) return reply.code(400).send({ error: 'Invalid FEN' });
+    if (!fen) return reply.code(400).send({ error: 'FEN invalide' });
     return db
       .select({
         repertoireId: repertoires.id,
@@ -174,9 +174,9 @@ function parseFen(raw: string): string | null {
 
 /** Lichess errors as answers the page can show (rate limit, or Lichess unreachable / failing). */
 function lichessError(e: unknown, reply: FastifyReply) {
-  if (e instanceof RateLimited) return reply.code(429).send({ error: 'Lichess rate limit, try again in a minute', reason: 'rate-limited' });
+  if (e instanceof RateLimited) return reply.code(429).send({ error: 'Limite de Lichess atteinte, réessayez dans une minute', reason: 'rate-limited' });
   reply.log.warn({ err: e }, 'Lichess request failed');
   const status = (e as { statusCode?: number }).statusCode;
-  if (status === 404) return reply.code(404).send({ error: 'Game not found on Lichess' });
-  return reply.code(502).send({ error: 'Lichess could not be reached', reason: 'unreachable' });
+  if (status === 404) return reply.code(404).send({ error: 'Partie introuvable sur Lichess' });
+  return reply.code(502).send({ error: 'Lichess est injoignable', reason: 'unreachable' });
 }
