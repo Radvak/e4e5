@@ -74,9 +74,16 @@ Planned: `review_cards` (FSRS state per user move), `game_syncs`, `inbox_items`.
 - [x] **2c. Statistics page**: repertoire known now (FSRS retrievability), learnt / well known /
   due, training streak and first-try accuracy, activity (30 days, from `review_log`), forecast
   (14 days), breakdown by line, weakest positions.
-- [ ] **4. Gap finder**: probability of reaching each position (product of opponent move
-  frequencies), a "top holes" list, and a coverage score per repertoire. Explorer calls are
-  bounded by a probability cutoff and run in a background queue.
+- [x] **4. Gap finder**: probability of reaching each position (product of opponent move
+  frequencies; split equally between my answers when I have several). Main figure: the
+  **expected preparation depth** (average number of moves a game stays in the lines, until an
+  unprepared opponent move or the end of a line), per colour and per repertoire. All
+  repertoires of one colour are analysed together (a line prepared in one is not a hole in
+  another); each game's end of preparation goes to the repertoire following its line the
+  furthest, past that repertoire's trunk (the line before its first choice). "Top holes" list,
+  with a "prepare in…" menu of all repertoires of the colour, ranked by the same logic. Explores
+  down to 0.01% of games on stored statistics; the cutoff (0.5–5%) only sets which holes are
+  listed and which missing statistics the background queue fetches (deduplicated, waits out 429s).
 - [ ] **5. Game sync** (Lichess and Chess.com): fetch new games (Chess.com: monthly archives
   `/pub/player/{u}/games/{YYYY}/{MM}`, one request at a time) and match each to the best repertoire
   (`bestRepertoire`), then classify with `analyzeGame`:
@@ -87,6 +94,10 @@ Planned: `review_cards` (FSRS state per user move), `game_syncs`, `inbox_items`.
   One click adds the line. Stats per line.
 - [x] **6a. Engine + search**: Stockfish 19 lite (WASM worker, 3 lines, best-move arrow, click to
   play a line as a draft); search box (moves, FEN, comment text) with `/` shortcut.
+- [x] **6b. Explorer page**: free board (flip, reset, ←/→, line kept in the URL), Stockfish, moves of all
+  repertoires in the position (with links into each), Lichess players statistics or **my games**
+  (Lichess player explorer, ndjson stream, indexing on demand; Chess.com games need phase 5),
+  top / recent games, a click replays the game on the board.
 - [ ] **6. Polish**: search/jump to position, mobile
   layout, PWA, sharing a repertoire with a friend (read-only link / copy).
 - [ ] **7. Hosting**: deploy (Fly.io / Railway / VPS), backups of the SQLite file.

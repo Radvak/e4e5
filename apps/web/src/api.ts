@@ -71,6 +71,81 @@ export interface ImportResult {
   games: number; added: number; duplicates: number; unreachable: number; errors: string[];
 }
 
+export interface Gap {
+  kind: 'missing-reply' | 'no-answer';
+  fen: string;
+  move: { uci: string; san: string } | null;
+  prob: number;
+  /** SAN moves from the initial position to `fen`. */
+  line: string[];
+  /** The same moves in UCI. */
+  ucis: string[];
+  /** Repertoire going furthest along this line; null: inside every repertoire's trunk. */
+  repertoireId: string | null;
+  /** Every repertoire of the colour, best suited first. */
+  ranking: string[];
+}
+/** Analysis of all the repertoires of one colour together. */
+export interface GapReport {
+  /** Expected number of moves played in the preparation (a minimum when `unknown` > 0). */
+  depth: number;
+  lost: number;
+  ends: number;
+  /** Share of games reaching positions without statistics. */
+  unknown: number;
+  truncated: boolean;
+  approximate: number;
+  missing: number;
+  pending: number;
+  /** Share of the games whose preparation ends in each repertoire, and their expected depth. */
+  repertoires: { id: string; share: number; depth: number }[];
+  unowned: { share: number; depth: number };
+  gaps: Gap[];
+}
+export interface GapsResponse {
+  live: boolean;
+  white: GapReport | null;
+  black: GapReport | null;
+}
+
+export interface ExplorerGameRef {
+  id: string;
+  winner: 'white' | 'black' | null;
+  speed: string | null;
+  white: { name: string; rating: number };
+  black: { name: string; rating: number };
+  month: string;
+  /** Move played in the position (Lichess players database only). */
+  uci: string | null;
+}
+export interface MyGames {
+  player: string;
+  /** false: Lichess is still indexing the games, ask again. */
+  done: boolean;
+  data: ExplorerResponse;
+  recentGames: ExplorerGameRef[];
+}
+export interface RepertoireMoveHere {
+  repertoireId: string;
+  name: string;
+  color: Color;
+  uci: string;
+  san: string;
+  isMain: boolean;
+  comment: string | null;
+}
+export interface LichessGame {
+  id: string;
+  white: { name: string; rating: number | null };
+  black: { name: string; rating: number | null };
+  winner: 'white' | 'black' | null;
+  status: string;
+  speed: string;
+  date: string;
+  /** SAN moves. */
+  moves: string[];
+}
+
 export const api = {
   me: () => request<Me>('GET', '/api/me'),
   authConfig: () => request<{ guestLogin: boolean }>('GET', '/api/auth/config'),
@@ -97,6 +172,17 @@ export const api = {
   trainingSummary: (dayStart: number, newPerDay: number) =>
     request<TrainingSummary[]>('GET', `/api/training/summary?${new URLSearchParams({ dayStart: String(dayStart), newPerDay: String(newPerDay) })}`),
   statsHistory: (days: number) => request<ReviewLogEntry[]>('GET', `/api/stats/history?days=${days}`),
+  gaps: (speeds: string[], ratings: number[], cutoff: number) =>
+    request<GapsResponse>('GET', `/api/gaps?${new URLSearchParams({ speeds: speeds.join(','), ratings: ratings.join(','), cutoff: String(cutoff) })}`),
+  explorerGames: (fen: string, speeds: string[], ratings: number[]) =>
+    request<{ topGames: ExplorerGameRef[]; recentGames: ExplorerGameRef[] }>(
+      'GET',
+      `/api/explorer/games?${new URLSearchParams({ fen, speeds: speeds.join(','), ratings: ratings.join(',') })}`,
+    ),
+  myGames: (fen: string, color: Color, speeds: string[]) =>
+    request<MyGames>('GET', `/api/explorer/mine?${new URLSearchParams({ fen, color, speeds: speeds.join(',') })}`),
+  repertoireMovesAt: (fen: string) => request<RepertoireMoveHere[]>('GET', `/api/explorer/repertoires?${new URLSearchParams({ fen })}`),
+  lichessGame: (id: string) => request<LichessGame>('GET', `/api/lichess-games/${id}`),
   explorer: (fen: string, speeds: string[], ratings: number[]) =>
     request<Stats>(
       'GET',

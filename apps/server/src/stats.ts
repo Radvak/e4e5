@@ -18,10 +18,10 @@ import {
   positionFromFen,
   type ExplorerResponse,
 } from '@prepa-cahier/core';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { db } from './db/client.js';
 import { positionStats, seedImports } from './db/schema.js';
-import { explorerFetch, RateLimited } from './lichess.js';
+import { explorerCooldownUntil, explorerFetch, RateLimited } from './lichess.js';
 
 /** Stored statistics older than this are refreshed when Lichess is reachable. */
 const REFRESH_AFTER_MS = 30 * 86_400_000;
@@ -135,6 +135,94 @@ export async function getStats(
   if (exact) return toResult(exact, true, reason); // stale but exact
   const near = closest(rows, speeds, ratings);
   return near ? toResult(near, false, reason) : { data: null, reason };
+}
+
+/**
+ * Stored statistics of many positions, without calling Lichess: the exact combination (even if
+ * old), else the closest stored one (`exact: false`). Positions with nothing stored are absent.
+ */
+export async function storedStats(
+  fens: string[],
+  speeds: string[],
+  ratings: number[],
+): Promise<Map<string, { data: ExplorerResponse; exact: boolean }>> {
+  const byFen = new Map<string, Row[]>();
+  for (let i = 0; i < fens.length; i += 500) {
+    const rows = await db.select().from(positionStats).where(inArray(positionStats.fen, fens.slice(i, i + 500)));
+    for (const r of rows) byFen.set(r.fen, [...(byFen.get(r.fen) ?? []), r]);
+  }
+  const out = new Map<string, { data: ExplorerResponse; exact: boolean }>();
+  for (const [fen, rows] of byFen) {
+    const exact = rows.find((r) => r.speeds === csv(speeds) && r.ratings === csv(ratings));
+    const row = exact ?? closest(rows, speeds, ratings);
+    if (row) out.set(fen, { data: row.data, exact: !!exact });
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Background prefetch: positions an analysis needs (e.g. the gap finder), fetched one at a time
+// through the same Lichess queue as live requests, waiting out rate limits.
+
+interface Job {
+  fen: string;
+  speeds: string[];
+  ratings: number[];
+  token: string;
+}
+const jobs = new Map<string, Job>();
+/** Failed jobs are not queued again for a while (Lichess down, invalid token, …). */
+const failedAt = new Map<string, number>();
+const RETRY_FAILED_MS = 10 * 60_000;
+let draining = false;
+
+const jobKey = (fen: string, speeds: string[], ratings: number[]) => `${fen}|${csv(speeds)}|${csv(ratings)}`;
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Queues the positions not queued yet; returns how many of `fens` are waiting to be fetched. */
+export function prefetchStats(
+  fens: string[],
+  speeds: string[],
+  ratings: number[],
+  token: string,
+  log: { warn: (obj: object, msg: string) => void },
+): number {
+  let waiting = 0;
+  for (const fen of fens) {
+    const key = jobKey(fen, speeds, ratings);
+    if (Date.now() - (failedAt.get(key) ?? 0) < RETRY_FAILED_MS) continue;
+    if (!jobs.has(key)) jobs.set(key, { fen, speeds, ratings, token });
+    waiting++;
+  }
+  void drain(log);
+  return waiting;
+}
+
+async function drain(log: { warn: (obj: object, msg: string) => void }) {
+  if (draining) return;
+  draining = true;
+  try {
+    while (jobs.size) {
+      const [key, job] = jobs.entries().next().value!;
+      const wait = explorerCooldownUntil() - Date.now();
+      if (wait > 0) {
+        await sleep(wait + 1000);
+        continue;
+      }
+      try {
+        const res = await getStats(job.fen, job.speeds, job.ratings, job.token, log);
+        const reason = res.data ? res.meta.reason : res.reason;
+        if (reason === 'rate-limited') continue; // retried after the cooldown
+        if (reason) failedAt.set(key, Date.now());
+      } catch (e) {
+        log.warn({ err: e }, 'background stats fetch failed');
+        failedAt.set(key, Date.now());
+      }
+      jobs.delete(key);
+    }
+  } finally {
+    draining = false;
+  }
 }
 
 // ---------------------------------------------------------------------------------------------

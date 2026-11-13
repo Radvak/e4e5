@@ -1,6 +1,8 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, Route, Routes } from 'react-router-dom';
 import { api, ApiError } from './api';
+import { Explorer } from './pages/Explorer';
+import { Gaps } from './pages/Gaps';
 import { Login } from './pages/Login';
 import { RepertoireEditor } from './pages/RepertoireEditor';
 import { RepertoireList } from './pages/RepertoireList';
@@ -24,6 +26,8 @@ export function App() {
         <Link to="/" className="brand">Prepa-cahier</Link>
         <Link to="/train">Train</Link>
         <Link to="/stats">Statistics</Link>
+        <Link to="/gaps">Gaps</Link>
+        <Link to="/explorer">Explorer</Link>
         <div className="spacer" />
         <label title="Time control used for the Lichess statistics">
           Stats for{' '}
@@ -56,6 +60,8 @@ export function App() {
           <Route path="/r/:id/train" element={<Training me={me.data} />} />
           <Route path="/train" element={<Training me={me.data} />} />
           <Route path="/stats" element={<Stats />} />
+          <Route path="/gaps" element={<Gaps me={me.data} />} />
+          <Route path="/explorer" element={<Explorer me={me.data} />} />
           <Route path="/settings" element={<Settings me={me.data} />} />
         </Routes>
       </main>

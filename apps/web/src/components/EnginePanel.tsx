@@ -9,6 +9,7 @@ export function EnginePanel({
   maxDepth,
   firstMoveNumber,
   onPlay,
+  hint = 'Click a move to play the line up to it.',
 }: {
   enabled: boolean;
   onToggle: (on: boolean) => void;
@@ -18,6 +19,8 @@ export function EnginePanel({
   /** Ply count of the analysed position (for move numbers). */
   firstMoveNumber: number;
   onPlay: (moves: PlayedMove[]) => void;
+  /** Help text under the lines. */
+  hint?: string;
 }) {
   return (
     <section className="panel engine">
@@ -53,7 +56,7 @@ export function EnginePanel({
             </span>
           </div>
         ))}
-      {enabled && <p className="muted small-text">Click a move to play the line up to it (as an unsaved variation).</p>}
+      {enabled && <p className="muted small-text">{hint}</p>}
     </section>
   );
 }

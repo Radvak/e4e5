@@ -1,0 +1,404 @@
+import { playSanOn, playUci, positionFromFen, START_FEN, totalGames, type Color, type PlayedMove } from '@prepa-cahier/core';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import type { DrawShape } from 'chessground/draw';
+import type { Key } from 'chessground/types';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { api, ApiError, type ExplorerGameRef, type Me, type RepertoireMoveHere } from '../api';
+import { ARROWS } from '../components/arrows';
+import { Board } from '../components/Board';
+import { EnginePanel } from '../components/EnginePanel';
+import { useEngine } from '../engine/useEngine';
+import { MoveTable } from '../components/MoveTable';
+import { RatingRange } from '../components/RatingRange';
+import { explorerParams, rangeLabel, useSettings } from '../settings';
+
+type Source = 'lichess' | 'mine';
+
+/** Moves from the initial position, as UCI, for links. */
+const ucis = (line: PlayedMove[]) => line.map((m) => m.uci).join(',');
+
+function lineFromUcis(text: string | null): PlayedMove[] {
+  const line: PlayedMove[] = [];
+  for (const uci of text ? text.split(',') : []) {
+    const move = playUci(line.at(-1)?.toFen ?? START_FEN, uci);
+    if (!move) break;
+    line.push(move);
+  }
+  return line;
+}
+
+const STORAGE_KEY = 'explorer';
+/** Last explorer state: the whole line (also the moves ahead of the cursor), cursor, orientation. */
+interface Saved {
+  line: string;
+  ply: number;
+  orientation: Color;
+}
+
+function fromUrl(params: URLSearchParams) {
+  const line = lineFromUcis(params.get('line'));
+  return { line, ply: line.length, orientation: (params.get('color') === 'black' ? 'black' : 'white') as Color };
+}
+
+function restore() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null') as Saved | null;
+    if (saved) {
+      const line = lineFromUcis(saved.line || null);
+      return { line, ply: Math.max(0, Math.min(saved.ply, line.length)), orientation: saved.orientation === 'black' ? 'black' : ('white' as Color) };
+    }
+  } catch {
+    // ignore a corrupt entry
+  }
+  return { line: [] as PlayedMove[], ply: 0, orientation: 'white' as Color };
+}
+
+/**
+ * Free exploration of any position: board, the moves of all your repertoires, Lichess
+ * statistics (players of your level, or only your own games) and the games behind them.
+ */
+export function Explorer({ me }: { me: Me }) {
+  const { speed, range } = useSettings();
+  const ex = explorerParams(me, speed, range);
+  const [params, setParams] = useSearchParams();
+  // The line is kept in the URL (?line=e2e4,e7e5: reload and share keep the position) and in
+  // localStorage, to find it again when coming back from another page without one.
+  const [initial] = useState(() => (params.get('line') || params.get('color') ? fromUrl(params) : restore()));
+  const [line, setLineState] = useState<PlayedMove[]>(initial.line);
+  const [ply, setPlyState] = useState(initial.ply);
+  const [orientation, setOrientation] = useState<Color>(initial.orientation);
+  const [source, setSource] = useState<Source>(() => (localStorage.getItem('explorerSource') === 'mine' ? 'mine' : 'lichess'));
+  const [showGames, setShowGames] = useState(false);
+
+  const sync = (l: PlayedMove[], p: number, o = orientation) => {
+    setParams({ ...(p ? { line: ucis(l.slice(0, p)) } : {}), ...(o === 'black' ? { color: 'black' } : {}) }, { replace: true });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ line: ucis(l), ply: p, orientation: o } satisfies Saved));
+  };
+  // Shown in the URL at once when restored from localStorage.
+  useEffect(() => sync(line, ply), []);
+  const setLine = (l: PlayedMove[], p: number) => {
+    setLineState(l);
+    setPlyState(p);
+    sync(l, p);
+  };
+  const goTo = (n: number) => {
+    const p = Math.max(0, Math.min(n, line.length));
+    setPlyState(p);
+    sync(line, p);
+  };
+  const flip = () => {
+    const o = orientation === 'white' ? 'black' : 'white';
+    setOrientation(o);
+    sync(line, ply, o);
+  };
+  const reset = () => setLine([], 0);
+
+  const fen = line[ply - 1]?.toFen ?? START_FEN;
+  const shown = line.slice(0, ply);
+
+  /** Plays a move: follows the line if it is its next move, else branches off. */
+  const play = (uci: string) => {
+    if (line[ply]?.uci === uci) return goTo(ply + 1);
+    const move = playUci(fen, uci);
+    if (move) setLine([...shown, move], ply + 1);
+  };
+
+  const repMoves = useQuery({ queryKey: ['explorer-reps', fen], queryFn: () => api.repertoireMovesAt(fen) });
+  const lichess = useQuery({
+    queryKey: ['explorer', fen, ex.speeds, ex.ratings],
+    queryFn: () => api.explorer(fen, ex.speeds, ex.ratings),
+    staleTime: Infinity,
+    retry: false,
+    enabled: source === 'lichess',
+  });
+  const mine = useQuery({
+    queryKey: ['explorer-mine', fen, orientation, ex.speeds],
+    queryFn: () => api.myGames(fen, orientation, ex.speeds),
+    enabled: source === 'mine' && !!me.lichess,
+    retry: false,
+    staleTime: 60_000,
+    // Lichess indexes the player's games on the first request: ask again until it is done.
+    refetchInterval: (q) => (q.state.data && !q.state.data.done ? 3000 : false),
+  });
+  const games = useQuery({
+    queryKey: ['explorer-games', fen, ex.speeds, ex.ratings],
+    queryFn: () => api.explorerGames(fen, ex.speeds, ex.ratings),
+    enabled: source === 'lichess' && showGames,
+    staleTime: Infinity,
+    retry: false,
+  });
+
+  // Stockfish, with the same on/off setting as the repertoire editor.
+  const [engineOn, setEngineOn] = useState(() => localStorage.getItem('engine') === 'on');
+  const toggleEngine = (on: boolean) => {
+    localStorage.setItem('engine', on ? 'on' : 'off');
+    setEngineOn(on);
+  };
+  const engine = useEngine(fen, engineOn);
+  const best = engineOn ? engine.lines[0]?.pv[0] : undefined;
+  /** Plays an engine line from the current position (follows the line when it matches). */
+  const playMoves = (moves: PlayedMove[]) => {
+    const follows = moves.every((m, i) => line[ply + i]?.uci === m.uci);
+    if (follows) goTo(ply + moves.length);
+    else setLine([...shown, ...moves], ply + moves.length);
+  };
+
+  const data = source === 'lichess' ? lichess.data?.data : mine.data?.data;
+  const prepared = useMemo(() => groupByMove(repMoves.data ?? []), [repMoves.data]);
+
+  const shapes = useMemo<DrawShape[]>(() => {
+    const total = data ? totalGames(data) : 0;
+    const share = new Map((data?.moves ?? []).map((m) => [m.uci, total ? totalGames(m) / total : 0]));
+    const width = (s: number, min = 5) => Math.max(min, Math.round(5 + 11 * s));
+    const arrow = (uci: string, brush: string, lineWidth: number): DrawShape => ({
+      orig: uci.slice(0, 2) as Key,
+      dest: uci.slice(2, 4) as Key,
+      brush,
+      modifiers: { lineWidth },
+    });
+    const out = [...prepared.keys()].map((uci) => arrow(uci, 'repertoire', width(share.get(uci) ?? 0, 9)));
+    for (const m of data?.moves.slice(0, 6) ?? []) {
+      const s = share.get(m.uci) ?? 0;
+      if (s >= 0.03 && !prepared.has(m.uci)) out.push(arrow(m.uci, 'popular', width(s)));
+    }
+    if (best) out.push(arrow(best.uci, 'engine', 6));
+    return out;
+  }, [data, prepared, best?.uci]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.target as HTMLElement).closest('textarea, input, select')) return;
+      if (e.key.startsWith('Arrow')) e.preventDefault();
+      if (e.key === 'ArrowLeft') goTo(ply - 1);
+      if (e.key === 'ArrowRight') goTo(ply + 1);
+      if (e.key === 'Home') goTo(0);
+      if (e.key === 'End') goTo(line.length);
+      if (e.key === 'f') flip();
+      if (e.key === 'e') toggleEngine(!engineOn);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
+
+  /** Replays a game: its moves become the line, at the current position when it goes through it. */
+  const loadGame = useMutation({
+    mutationFn: api.lichessGame,
+    onSuccess: (g) => {
+      const pos = positionFromFen(START_FEN);
+      const moves: PlayedMove[] = [];
+      for (const san of g.moves) {
+        const m = playSanOn(pos, san);
+        if (!m) break;
+        moves.push(m);
+      }
+      const here = fen === START_FEN ? 0 : moves.findIndex((m) => m.toFen === fen) + 1;
+      setLine(moves, here > 0 ? here : 0);
+    },
+  });
+
+  const chooseSource = (s: Source) => {
+    localStorage.setItem('explorerSource', s);
+    setSource(s);
+  };
+  const last = line[ply - 1];
+  const gameList = source === 'lichess' ? games.data : mine.data ? { topGames: [], recentGames: mine.data.recentGames } : undefined;
+
+  return (
+    <div className="editor">
+      <div className="editor-board">
+        <Board fen={fen} orientation={orientation} lastMove={last?.uci} shapes={shapes} onMove={play} />
+        <div className="nav">
+          <button onClick={() => goTo(0)} title="Start (Home)">⏮</button>
+          <button onClick={() => goTo(ply - 1)} title="Back (←)">◀</button>
+          <button onClick={() => goTo(ply + 1)} title="Forward (→)">▶</button>
+          <button onClick={() => goTo(line.length)} title="End of the line (End)">⏭</button>
+          <button onClick={flip} title="Flip the board (f)">⇅ Flip</button>
+          <button onClick={reset} title="Back to the initial position, clear the line">↺ Reset</button>
+        </div>
+        <p className="legend muted">
+          <span className="legend-item">
+            <span className="swatch" style={{ background: ARROWS.repertoire.color }} />
+            in one of your repertoires
+          </span>
+          <span className="legend-item">
+            <span className="swatch" style={{ background: ARROWS.popular.color }} />
+            popular, in none of them
+          </span>
+          {engineOn && (
+            <span className="legend-item">
+              <span className="swatch" style={{ background: ARROWS.engine.color }} />
+              {ARROWS.engine.label}
+            </span>
+          )}
+        </p>
+      </div>
+
+      <div className="editor-side">
+        <header className="row">
+          <h2>Explorer</h2>
+        </header>
+
+        <section className="panel">
+          <div className="moves-path">
+            <button className={`link ${ply === 0 ? 'current' : ''}`} onClick={() => goTo(0)}>Start</button>
+            {line.map((m, i) => (
+              <button
+                key={i}
+                className={['link', i === ply - 1 ? 'current' : '', i >= ply ? 'ahead' : ''].filter(Boolean).join(' ')}
+                onClick={() => goTo(i + 1)}
+              >
+                {i % 2 === 0 ? `${i / 2 + 1}. ` : ''}{m.san}
+              </button>
+            ))}
+          </div>
+          <p className="muted small-text keys">
+            <kbd>←</kbd><kbd>→</kbd> move · <kbd>f</kbd> flip · <kbd>e</kbd> engine · play moves on the board or click them below
+          </p>
+        </section>
+
+        <section className="panel">
+          <h3>In your repertoires</h3>
+          {repMoves.data && prepared.size === 0 && <p className="muted">No repertoire has a move in this position.</p>}
+          <ul className="rep-moves">
+            {[...prepared.values()].map(({ san, uci, reps }) => (
+              <li key={uci}>
+                <button className="link" onClick={() => play(uci)}>{san}</button>{' '}
+                {reps.map((r) => (
+                  <Link
+                    key={r.repertoireId}
+                    className="rep-tag"
+                    to={`/r/${r.repertoireId}?${new URLSearchParams({ line: ucis([...shown, playUci(fen, uci)!]) })}`}
+                    title={`Open ${r.name} on this move${r.comment ? ` — ${r.comment}` : ''}`}
+                  >
+                    <span className={`dot inline ${r.color}`} /> {r.name}
+                  </Link>
+                ))}
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <EnginePanel
+          enabled={engineOn}
+          onToggle={toggleEngine}
+          lines={engine.lines}
+          depth={engine.depth}
+          maxDepth={engine.maxDepth}
+          firstMoveNumber={ply}
+          onPlay={playMoves}
+        />
+
+        <section className="panel">
+          <div className="row">
+            <div className="tabs inline">
+              <button className={source === 'lichess' ? 'active' : ''} onClick={() => chooseSource('lichess')}>
+                Lichess players
+              </button>
+              <button className={source === 'mine' ? 'active' : ''} onClick={() => chooseSource('mine')}>
+                My games
+              </button>
+            </div>
+            {data?.opening && <small className="muted">{data.opening.eco} {data.opening.name}</small>}
+          </div>
+
+          {source === 'lichess' && (
+            <>
+              <RatingRange current={ex.ratings} />
+              <p className="muted small-text">
+                Lichess players rated {rangeLabel(ex.ratings)}, {ex.speeds.join('+')} games.
+                {lichess.data && !lichess.data.meta.exact && ' No stored data for this range: closest one shown.'}
+              </p>
+              {lichess.isLoading && <p className="muted">Loading…</p>}
+              {lichess.error && <ErrorText error={lichess.error} />}
+            </>
+          )}
+          {source === 'mine' && (
+            <>
+              {!me.lichess ? (
+                <p className="muted">
+                  Link your Lichess account in <Link to="/settings">Settings</Link> to see your own games.
+                  Chess.com games will come with the game sync.
+                </p>
+              ) : (
+                <p className="muted small-text">
+                  Your Lichess games ({mine.data?.player ?? me.lichess.username}) as <strong>{orientation}</strong>,{' '}
+                  {ex.speeds.join('+')} — flip the board for your games as {orientation === 'white' ? 'Black' : 'White'}.
+                  {mine.data && !mine.data.done && ' Lichess is indexing your games…'}
+                </p>
+              )}
+              {mine.isLoading && <p className="muted">Loading your games…</p>}
+              {mine.error && <ErrorText error={mine.error} />}
+            </>
+          )}
+          {data && <MoveTable data={data} inRep={(uci) => prepared.has(uci)} onPick={play} />}
+        </section>
+
+        <details className="panel" open={showGames} onToggle={(e) => setShowGames((e.target as HTMLDetailsElement).open)}>
+          <summary>Games</summary>
+          {source === 'lichess' && games.isLoading && <p className="muted">Loading…</p>}
+          {source === 'lichess' && games.error && <ErrorText error={games.error} />}
+          {gameList && (
+            <>
+              {gameList.topGames.length > 0 && <GameList title="Top games" games={gameList.topGames} onOpen={(id) => loadGame.mutate(id)} />}
+              <GameList title={source === 'mine' ? 'Your recent games' : 'Recent games'} games={gameList.recentGames} onOpen={(id) => loadGame.mutate(id)} />
+            </>
+          )}
+          {loadGame.isPending && <p className="muted small-text">Loading the game…</p>}
+          {loadGame.error && <ErrorText error={loadGame.error} />}
+        </details>
+      </div>
+    </div>
+  );
+}
+
+/** Repertoire moves of the position grouped by move: which repertoires play it. */
+function groupByMove(rows: RepertoireMoveHere[]) {
+  const out = new Map<string, { uci: string; san: string; reps: RepertoireMoveHere[] }>();
+  for (const r of rows) {
+    const g = out.get(r.uci) ?? { uci: r.uci, san: r.san, reps: [] };
+    g.reps.push(r);
+    out.set(r.uci, g);
+  }
+  return out;
+}
+
+const RESULT = { white: '1-0', black: '0-1' } as const;
+
+function GameList({ title, games, onOpen }: { title: string; games: ExplorerGameRef[]; onOpen: (id: string) => void }) {
+  return (
+    <>
+      <h4 className="games-title">{title}</h4>
+      {games.length === 0 ? (
+        <p className="muted small-text">No game.</p>
+      ) : (
+        <table className="lines games">
+          <tbody>
+            {games.map((g) => (
+              <tr key={g.id} className="clickable" onClick={() => onOpen(g.id)} title="Replay this game on the board">
+                <td>
+                  {g.white.name} <span className="muted">{g.white.rating}</span>
+                </td>
+                <td>
+                  {g.black.name} <span className="muted">{g.black.rating}</span>
+                </td>
+                <td>{g.winner ? RESULT[g.winner] : '½-½'}</td>
+                <td className="muted">{[g.speed, g.month].filter(Boolean).join(' · ')}</td>
+                <td>
+                  <a href={`https://lichess.org/${g.id}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} title="Open on Lichess">
+                    ↗
+                  </a>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </>
+  );
+}
+
+function ErrorText({ error }: { error: unknown }) {
+  if (error instanceof ApiError && error.status === 404) return <p className="muted">No statistics stored for this position.</p>;
+  return <p className="error small-text">{error instanceof Error ? error.message : String(error)}</p>;
+}

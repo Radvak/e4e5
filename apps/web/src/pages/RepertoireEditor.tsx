@@ -33,17 +33,25 @@ export function RepertoireEditor({ me }: { me: Me }) {
   const rep = useMemo(() => new Repertoire(data?.color ?? 'white', data?.moves ?? []), [data]);
 
   // ?fen=<position>: open the editor on that position (e.g. from the training progress).
+  // ?line=<uci,uci,…>: open it on that line from the initial position; moves not in the
+  // repertoire are a draft (e.g. a hole from the gap finder, possibly prepared elsewhere).
   const [params, setParams] = useSearchParams();
   const openFen = params.get('fen');
+  const openLine = params.get('line');
   useEffect(() => {
-    if (!openFen || !data) return;
-    const path = pathTo(rep, openFen);
+    if ((!openFen && !openLine) || !data) return;
+    const path: PlayedMove[] | null = openFen ? pathTo(rep, openFen) : [];
+    for (const uci of path && openLine ? openLine.split(',') : []) {
+      const move = playUci(path!.at(-1)?.toFen ?? START_FEN, uci);
+      if (!move) break;
+      path!.push(move);
+    }
     if (path) {
       setLine(path);
       setPly(path.length);
     }
     setParams({}, { replace: true });
-  }, [openFen, data]);
+  }, [openFen, openLine, data]);
   const stored = useMemo(() => new Map((data?.moves ?? []).map((m) => [`${m.fromFen} ${m.uci}`, m])), [data]);
   const storedMove = (m: LineMove) => stored.get(`${m.fromFen} ${m.uci}`);
   const fen = line[ply - 1]?.toFen ?? START_FEN;
@@ -241,6 +249,7 @@ export function RepertoireEditor({ me }: { me: Me }) {
           <h2>{data.name}</h2>
           <span className="muted">({data.color}, {rep.size} moves)</span>
           <Link className="button primary" to={`/r/${id}/train`}>Train</Link>
+          <Link className="button" to={`/gaps?r=${id}`} title="Popular opponent moves you have not prepared">Gaps</Link>
           {ply > 0 &&
             (unsaved.length === 0 ? (
               <Link className="button" to={`/r/${id}/train?from=${encodeURIComponent(fen)}`} title="Train only the lines after this position">
@@ -329,6 +338,7 @@ export function RepertoireEditor({ me }: { me: Me }) {
           maxDepth={engine.maxDepth}
           firstMoveNumber={ply}
           onPlay={playMoves}
+          hint="Click a move to play the line up to it (as an unsaved variation)."
         />
 
         <ExplorerPanel
