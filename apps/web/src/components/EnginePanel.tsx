@@ -37,10 +37,11 @@ export function EngineLines({
   onPlay: (moves: PlayedMove[]) => void;
 }) {
   if (!enabled) return null;
+  // Always 3 rows of one line each, so the block keeps the same height while the engine thinks.
+  const placeholders = Math.max(0, 3 - lines.length);
   return (
     <div className="engine-lines">
-      {lines.length === 0 && <p className="muted small-text">Stockfish réfléchit…</p>}
-      {lines.map((l) => (
+      {lines.slice(0, 3).map((l) => (
         <div key={l.multipv} className={`engine-line ${l.multipv === 1 ? 'best' : ''}`} title={l.multipv === 1 ? 'Meilleure ligne (flèche bleue)' : undefined}>
           <span className={`eval ${('mate' in l.score ? l.score.mate : l.score.cp) >= 0 ? 'w' : 'b'}`}>{formatScore(l.score)}</span>
           <span className="pv">
@@ -57,7 +58,13 @@ export function EngineLines({
           </span>
         </div>
       ))}
-      {lines.length > 0 && <div className="engine-depth muted">Stockfish 19 · profondeur {depth}/{maxDepth}</div>}
+      {Array.from({ length: placeholders }, (_, i) => (
+        <div key={`p${i}`} className="engine-line placeholder">
+          <span className="eval">…</span>
+          <span className="pv muted">{i === 0 && lines.length === 0 ? 'Stockfish réfléchit…' : ''}</span>
+        </div>
+      ))}
+      <div className="engine-depth muted">Stockfish 19 · profondeur {depth}/{maxDepth}</div>
     </div>
   );
 }

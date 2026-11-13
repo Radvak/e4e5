@@ -12,7 +12,7 @@ import { Board } from '../components/Board';
 import { ExplorerPanel } from '../components/ExplorerPanel';
 import { explorerParams, useSettings } from '../settings';
 import { Suggestions } from '../components/Suggestions';
-import { Button, Menu, PageHeader, plural } from '../ui';
+import { Button, Icon, Menu, PageHeader, plural } from '../ui';
 import { depthText, useGaps } from '../useGaps';
 
 /** A move of the line on the board; saved or not is derived from the repertoire. */
@@ -94,7 +94,8 @@ export function RepertoireEditor({ me }: { me: Me }) {
     },
   });
   const deleteMove = useMutation({ mutationFn: (m: StoredMove) => api.deleteMove(id, m.id), onSuccess: refresh });
-  const setMain = useMutation({ mutationFn: (m: StoredMove) => api.updateMove(id, m.id, { isMain: true }), onSuccess: refresh });
+  /** Main move of its position, or not (only one main move per position, kept by the server). */
+  const toggleMain = useMutation({ mutationFn: (m: StoredMove) => api.updateMove(id, m.id, { isMain: !m.isMain }), onSuccess: refresh });
   const setComment = useMutation({
     mutationFn: ({ m, comment }: { m: StoredMove; comment: string }) => api.updateMove(id, m.id, { comment: comment || null }),
     onSuccess: refresh,
@@ -346,13 +347,22 @@ export function RepertoireEditor({ me }: { me: Me }) {
                 <div className="move-main">
                   <div className="row nowrap">
                     <button className="link san" onClick={() => play(m.uci)}>{m.san}</button>
-                    {m.isMain && <span className="badge">principal</span>}
                   </div>
                   {m.comment && <div className="comment move-comment">{m.comment}</div>}
                 </div>
+                <div className="row nowrap move-actions">
+                <button
+                  className={`star ${m.isMain ? 'on' : ''}`}
+                  onClick={() => toggleMain.mutate(m)}
+                  disabled={toggleMain.isPending}
+                  aria-pressed={!!m.isMain}
+                  title={m.isMain ? 'Coup principal (cliquer pour retirer)' : 'Définir comme coup principal'}
+                  aria-label={m.isMain ? 'Retirer le coup principal' : 'Définir comme coup principal'}
+                >
+                  <Icon name="star" filled={!!m.isMain} />
+                </button>
                 <Menu
                   items={[
-                    ...(m.isMain ? [] : [{ label: 'Rendre principal', onClick: () => setMain.mutate(m) }]),
                     {
                       label: 'Supprimer ce coup et la suite',
                       danger: true,
@@ -360,6 +370,7 @@ export function RepertoireEditor({ me }: { me: Me }) {
                     },
                   ]}
                 />
+                </div>
               </li>
             ))}
           </ul>

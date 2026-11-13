@@ -415,3 +415,13 @@ kbd { display: inline-block; min-width: 18px; padding: 0 4px; margin: 0 1px; bor
 .line-row .moves-path { flex: 1; min-width: 0; }
 .comment-note { align-items: center; }
 .comment-note .btn { flex: none; }
+/* Engine lines: fixed height (3 rows of one line), long variations cut with an ellipsis. */
+.engine-lines .engine-line { height: 34px; align-items: center; padding: 0; flex-wrap: nowrap; }
+.engine-lines .engine-line .pv { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 34px; }
+.engine-lines .engine-line.placeholder .eval { background: var(--surface-3); color: var(--muted); }
+.engine-lines .engine-depth { height: 18px; line-height: 18px; }
+.line-row { margin-bottom: 10px; }
+.rep-moves .move-actions { gap: 2px; }
+.star { background: none; border: none; width: 36px; min-height: 36px; padding: 0; color: var(--muted); }
+.star:hover { background: var(--surface-3); color: var(--text); }
+.star.on { color: #e3b341; }
