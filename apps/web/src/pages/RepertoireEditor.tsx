@@ -316,7 +316,7 @@ export function RepertoireEditor({ me }: { me: Me }) {
           {unsaved.length > 0 && (
             <div className="draft">
               <button className="primary" disabled={saveLine.isPending} onClick={() => saveLine.mutate()}>
-                Enregistrer la variante ({plural(unsaved.length, 'nouveau coup', 'nouveaux coups')})
+                Enregistrer la variante
               </button>
               <Button size="sm" variant="ghost" onClick={discard}>Annuler</Button>
             </div>
@@ -333,7 +333,7 @@ export function RepertoireEditor({ me }: { me: Me }) {
             />
           )}
           {here.length === 0 && (
-            <p className="muted">Rien de préparé ici. Jouez des coups sur l’échiquier, puis « Enregistrer la variante ».</p>
+            <p className="muted">Rien de préparé ici.</p>
           )}
           <ul className="rep-moves">
             {options[0] && !rep.has(options[0].fromFen, options[0].uci) && (
