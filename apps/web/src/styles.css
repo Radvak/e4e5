@@ -401,3 +401,5 @@ kbd { display: inline-block; min-width: 18px; padding: 0 4px; margin: 0 1px; bor
 .add-comment { color: var(--muted); font-size: 0.88rem; margin-top: 8px; display: inline-block; }
 .add-comment:hover { color: var(--text); }
 .comment-box .row { margin-top: 6px; }
+.moves-path + .rep-moves, .comment-note + .rep-moves, .add-comment + .rep-moves, .draft + .rep-moves { margin-top: 10px; }
+.add-comment { display: block; }

@@ -287,8 +287,9 @@ export function RepertoireEditor({ me }: { me: Me }) {
 
       <div className="editor-side">
         <section className="panel">
+          <h3>Dans votre répertoire</h3>
+          {line.length > 0 && (
           <div className="moves-path">
-            <button className={`link ${ply === 0 ? 'current' : ''}`} onClick={() => goTo(0)}>Début</button>
             {line.map((m, i) => (
               <button
                 key={i}
@@ -302,6 +303,7 @@ export function RepertoireEditor({ me }: { me: Me }) {
               </button>
             ))}
           </div>
+          )}
 
           {unsaved.length > 0 && (
             <div className="draft">
@@ -316,10 +318,6 @@ export function RepertoireEditor({ me }: { me: Me }) {
           {lastStored && (
             <CommentNote key={lastStored.id} move={lastStored} onSave={(comment) => setComment.mutate({ m: lastStored, comment })} />
           )}
-        </section>
-
-        <section className="panel">
-          <h3>Dans votre répertoire</h3>
           {here.length === 0 && (
             <p className="muted">Rien de préparé ici. Jouez des coups sur l’échiquier, puis « Enregistrer la variante ».</p>
           )}
