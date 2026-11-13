@@ -390,3 +390,14 @@ kbd { display: inline-block; min-width: 18px; padding: 0 4px; margin: 0 1px; bor
 .suggestion.here { background: rgba(240, 136, 62, 0.1); }
 .suggestion .badge.warn { background: rgba(240, 136, 62, 0.18); color: var(--hole); }
 .engine-line.best .pv button.link:first-child { color: var(--engine); font-weight: 700; }
+.engine-toggle { flex: 0 0 auto; width: 48px; color: var(--muted); }
+.engine-toggle.on { color: #fff; background: var(--engine); border-color: var(--engine); }
+.engine-lines { margin: 8px var(--page-pad) 0; padding: 4px 12px 8px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+.engine-lines .engine-line:first-child { border-top: none; }
+.engine-depth { font-size: 0.75rem; text-align: right; margin-top: 2px; }
+@media (min-width: 900px) { .engine-lines { margin: 8px 0 0; } }
+.comment-note { display: flex; gap: 6px; align-items: flex-start; margin: 10px 0 0; }
+.comment-note .comment { flex: 1; }
+.add-comment { color: var(--muted); font-size: 0.88rem; margin-top: 8px; display: inline-block; }
+.add-comment:hover { color: var(--text); }
+.comment-box .row { margin-top: 6px; }

@@ -11,7 +11,7 @@ const pct = (x: number) => `${(100 * x).toLocaleString('fr-FR', { maximumFractio
  */
 export function Suggestions({ gaps, fen, cutoff, pending, onOpen }: { gaps: Gap[] | undefined; fen: string; cutoff: number; pending: boolean; onOpen: (ucis: string[]) => void }) {
   const [all, setAll] = useState(false);
-  if (!gaps) return null;
+  if (!gaps || gaps.length === 0) return null;
   const shown = all ? gaps : gaps.slice(0, 5);
   return (
     <section className="panel suggestions">

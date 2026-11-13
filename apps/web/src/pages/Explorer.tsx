@@ -7,7 +7,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { api, ApiError, type ExplorerGameRef, type Me, type RepertoireMoveHere } from '../api';
 import { isPopular } from '../components/arrows';
 import { Board } from '../components/Board';
-import { EnginePanel } from '../components/EnginePanel';
+import { EngineLines, EngineToggle } from '../components/EnginePanel';
 import { JumpBox } from '../components/JumpBox';
 import { useEngine } from '../engine/useEngine';
 import { MoveTable } from '../components/MoveTable';
@@ -226,7 +226,16 @@ export function Explorer({ me }: { me: Me }) {
           <button onClick={() => goTo(ply - 1)} title="Reculer (←)">◀</button>
           <button onClick={() => goTo(ply + 1)} title="Avancer (→)">▶</button>
           <button onClick={() => goTo(line.length)} title="Fin de la ligne (Fin)">⏭</button>
+          <EngineToggle enabled={engineOn} onToggle={toggleEngine} />
         </div>
+        <EngineLines
+          enabled={engineOn}
+          lines={engine.lines}
+          depth={engine.depth}
+          maxDepth={engine.maxDepth}
+          firstMoveNumber={ply}
+          onPlay={playMoves}
+        />
       </div>
 
       <div className="editor-side">
@@ -271,15 +280,6 @@ export function Explorer({ me }: { me: Me }) {
           </ul>
         </section>
 
-        <EnginePanel
-          enabled={engineOn}
-          onToggle={toggleEngine}
-          lines={engine.lines}
-          depth={engine.depth}
-          maxDepth={engine.maxDepth}
-          firstMoveNumber={ply}
-          onPlay={playMoves}
-        />
 
         <section className="panel">
           <div className="row">

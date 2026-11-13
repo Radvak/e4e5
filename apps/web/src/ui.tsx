@@ -16,6 +16,7 @@ const paths = {
   chevron: 'M9 18l6-6-6-6',
   logout: 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9',
   play: 'M7 4v16l13-8z',
+  engine: 'M13 2 4 14h7l-1 8 9-12h-7z',
 } as const;
 export type IconName = keyof typeof paths;
 

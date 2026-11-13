@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api, type ImportResult, type Me, type StoredMove } from '../api';
 import { isPopular, OUTLINE_EXTRA, type ArrowKind } from '../components/arrows';
-import { EnginePanel } from '../components/EnginePanel';
+import { EngineLines, EngineToggle } from '../components/EnginePanel';
 import { useEngine } from '../engine/useEngine';
 import { Board } from '../components/Board';
 import { ExplorerPanel } from '../components/ExplorerPanel';
@@ -177,6 +177,7 @@ export function RepertoireEditor({ me }: { me: Me }) {
       if (e.key === 'ArrowUp') choose(-1);
       if (e.key === 'Home') goTo(0);
       if (e.key === 'End') goTo(line.length);
+      if (e.key === 'e') toggleEngine(!engineOn);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -272,7 +273,16 @@ export function RepertoireEditor({ me }: { me: Me }) {
           <button onClick={() => goTo(ply - 1)} title="Reculer (←)">◀</button>
           <button onClick={forward} title="Avancer (→)">▶</button>
           <button onClick={() => goTo(line.length)} title="Fin de la ligne (Fin)">⏭</button>
+          <EngineToggle enabled={engineOn} onToggle={toggleEngine} />
         </div>
+        <EngineLines
+          enabled={engineOn}
+          lines={engine.lines}
+          depth={engine.depth}
+          maxDepth={engine.maxDepth}
+          firstMoveNumber={ply}
+          onPlay={playMoves}
+        />
       </div>
 
       <div className="editor-side">
@@ -304,7 +314,7 @@ export function RepertoireEditor({ me }: { me: Me }) {
           {notice && <p className="muted small-text">{notice}</p>}
           {saveLine.error && <p className="error">{saveLine.error.message}</p>}
           {lastStored && (
-            <CommentBox key={lastStored.id} move={lastStored} onSave={(comment) => setComment.mutate({ m: lastStored, comment })} />
+            <CommentNote key={lastStored.id} move={lastStored} onSave={(comment) => setComment.mutate({ m: lastStored, comment })} />
           )}
         </section>
 
@@ -364,16 +374,6 @@ export function RepertoireEditor({ me }: { me: Me }) {
           }}
         />
 
-        <EnginePanel
-          enabled={engineOn}
-          onToggle={toggleEngine}
-          lines={engine.lines}
-          depth={engine.depth}
-          maxDepth={engine.maxDepth}
-          firstMoveNumber={ply}
-          onPlay={playMoves}
-          hint="Touchez un coup pour jouer la ligne jusqu’à lui (en variante non enregistrée)."
-        />
 
         <ExplorerPanel
           fen={fen}
@@ -392,17 +392,34 @@ export function RepertoireEditor({ me }: { me: Me }) {
   );
 }
 
-function CommentBox({ move, onSave }: { move: StoredMove; onSave: (comment: string) => void }) {
+/**
+ * Comment of the move leading to the position: shown as text with ✎, or a discreet "+ Commentaire";
+ * the text area only appears while writing.
+ */
+function CommentNote({ move, onSave }: { move: StoredMove; onSave: (comment: string) => void }) {
+  const [editing, setEditing] = useState(false);
   const [text, setText] = useState(move.comment ?? '');
+  if (!editing) {
+    return move.comment ? (
+      <p className="comment-note">
+        <span className="comment">💬 {move.comment}</span>
+        <button className="link" onClick={() => setEditing(true)} title="Modifier le commentaire" aria-label="Modifier le commentaire">✎</button>
+      </p>
+    ) : (
+      <button className="link add-comment" onClick={() => setEditing(true)}>+ Commentaire sur {move.san}</button>
+    );
+  }
+  const save = () => {
+    if (text.trim() !== (move.comment ?? '')) onSave(text.trim());
+    setEditing(false);
+  };
   return (
     <div className="comment-box">
-      <textarea
-        placeholder={`Commentaire sur ${move.san}…`}
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        onBlur={() => text !== (move.comment ?? '') && onSave(text)}
-        rows={2}
-      />
+      <textarea autoFocus placeholder={`Commentaire sur ${move.san}…`} value={text} onChange={(e) => setText(e.target.value)} rows={3} />
+      <div className="row">
+        <Button size="sm" variant="primary" onClick={save}>Enregistrer</Button>
+        <Button size="sm" variant="ghost" onClick={() => (setText(move.comment ?? ''), setEditing(false))}>Annuler</Button>
+      </div>
     </div>
   );
 }
