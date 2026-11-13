@@ -1,4 +1,4 @@
-# Prepa-cahier
+# Mon cahier
 
 Build and learn chess opening repertoires, with Lichess statistics at your level.
 

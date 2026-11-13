@@ -2,7 +2,7 @@
 import type { ChesscomRatings } from './db/schema.js';
 import { env } from './env.js';
 
-const UA = 'prepa-cahier';
+const UA = 'mon-cahier';
 
 export class ChesscomUserNotFound extends Error {}
 

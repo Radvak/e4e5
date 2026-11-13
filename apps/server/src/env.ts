@@ -15,7 +15,7 @@ export const env = {
   databaseUrl: get('DATABASE_URL', 'file:./data/prepa-cahier.db'),
   cookieSecret: get('COOKIE_SECRET', isProd ? undefined : 'dev-secret-change-me-dev-secret-change-me'),
   lichessHost: get('LICHESS_HOST', 'https://lichess.org'),
-  lichessClientId: get('LICHESS_CLIENT_ID', 'prepa-cahier'),
+  lichessClientId: get('LICHESS_CLIENT_ID', 'mon-cahier'),
   explorerUrl: get('EXPLORER_URL', 'https://explorer.lichess.ovh'),
   /** Login with just a name, without Lichess (testing, or networks where Lichess is blocked). */
   guestLogin: get('GUEST_LOGIN', isProd ? 'false' : 'true') === 'true',

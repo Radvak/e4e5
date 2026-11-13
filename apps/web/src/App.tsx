@@ -24,7 +24,7 @@ export function App() {
   return (
     <div className="app">
       <header className="topbar">
-        <Link to="/" className="brand">Prepa-cahier</Link>
+        <Link to="/" className="brand">Mon cahier</Link>
         <Link to="/train">Train</Link>
         <Link to="/stats">Statistics</Link>
         <Link to="/gaps">Gaps</Link>

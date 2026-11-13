@@ -1,4 +1,4 @@
-# Prepa-cahier: plan
+# Mon cahier: plan
 
 A web app to build and learn chess opening repertoires, shared with friends. Each user logs in
 with their Lichess account.
