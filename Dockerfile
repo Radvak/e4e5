@@ -1,7 +1,13 @@
-FROM node:22-slim AS build
+# Dependencies first, from the package files only: this stage (and the large node_modules
+# layer of the final image) stays cached until a package.json or the lockfile changes, so a
+# normal deploy only uploads the small layers with the code.
+FROM node:22-slim AS deps
 WORKDIR /app
 RUN corepack enable
-COPY . .
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .pnpmfile.cjs ./
+COPY apps/server/package.json apps/server/
+COPY apps/web/package.json apps/web/
+COPY packages/core/package.json packages/core/
 # Optional build secrets for a corporate network (not kept in the image; unused elsewhere):
 #   ca: extra CA of a TLS proxy; npmrc: npm config with a mirror registry (+ token).
 #   docker build --secret id=ca,src=ca.crt --secret id=npmrc,src=npmrc .
@@ -13,12 +19,20 @@ RUN --mount=type=secret,id=ca,required=false \
       token="$(sed -n 's/.*:_authToken=//p' /root/.npmrc | head -1)"; \
       if [ -n "$token" ]; then export COREPACK_NPM_TOKEN="$token"; fi; \
     fi; \
-    pnpm install --frozen-lockfile && pnpm build
+    pnpm install --frozen-lockfile
+
+FROM deps AS build
+COPY . .
+RUN pnpm build
 
 FROM node:22-slim
 WORKDIR /app
 ENV NODE_ENV=production PORT=3000 DATABASE_URL=file:/data/prepa-cahier.db
-COPY --from=build /app /app
+COPY --from=deps /app/node_modules /app/node_modules
+COPY --from=build /app/package.json /app/pnpm-workspace.yaml /app/
+COPY --from=build /app/packages/core /app/packages/core
+COPY --from=build /app/apps/server /app/apps/server
+COPY --from=build /app/apps/web/dist /app/apps/web/dist
 VOLUME /data
 EXPOSE 3000
 # tsx is a dependency of the server package.
