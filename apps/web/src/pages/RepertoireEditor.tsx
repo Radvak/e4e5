@@ -12,7 +12,7 @@ import { Board } from '../components/Board';
 import { ExplorerPanel } from '../components/ExplorerPanel';
 import { explorerParams, useSettings } from '../settings';
 import { Suggestions } from '../components/Suggestions';
-import { Button, Icon, Menu, PageHeader, plural } from '../ui';
+import { Button, Menu, PageHeader, plural } from '../ui';
 import { depthText, useGaps } from '../useGaps';
 
 /** A move of the line on the board; saved or not is derived from the repertoire. */
@@ -95,7 +95,13 @@ export function RepertoireEditor({ me }: { me: Me }) {
   });
   const deleteMove = useMutation({ mutationFn: (m: StoredMove) => api.deleteMove(id, m.id), onSuccess: refresh });
   /** Main move of its position, or not (only one main move per position, kept by the server). */
-  const toggleMain = useMutation({ mutationFn: (m: StoredMove) => api.updateMove(id, m.id, { isMain: !m.isMain }), onSuccess: refresh });
+  /** Makes the line on the board the main line: each of its moves becomes the main move of its position. */
+  const makeMainLine = useMutation({
+    mutationFn: async (moves: StoredMove[]) => {
+      for (const m of moves) if (!m.isMain) await api.updateMove(id, m.id, { isMain: true });
+    },
+    onSuccess: refresh,
+  });
   const setComment = useMutation({
     mutationFn: ({ m, comment }: { m: StoredMove; comment: string }) => api.updateMove(id, m.id, { comment: comment || null }),
     onSuccess: refresh,
@@ -188,6 +194,8 @@ export function RepertoireEditor({ me }: { me: Me }) {
 
   // Warn before leaving the page with an unsaved variation.
   const hasDraft = line.some((m) => !rep.has(m.fromFen, m.uci));
+  /** The saved moves of the line up to the cursor (all of them when there is no draft). */
+  const shownStored = shown.map(storedMove).filter((m): m is StoredMove => !!m);
   useEffect(() => {
     if (!hasDraft) return;
     const warn = (e: BeforeUnloadEvent) => e.preventDefault();
@@ -333,7 +341,18 @@ export function RepertoireEditor({ me }: { me: Me }) {
             />
           )}
           {here.length === 0 && !hasDraft && (
-            <p className="muted">Jouez des coups pour continuer la variante.</p>
+            <>
+              <p className="muted">Jouez des coups pour continuer la variante.</p>
+              {/* End of a saved line: it can become the main line. */}
+              {shownStored.length > 0 &&
+                (shownStored.every((m) => m.isMain) ? (
+                  <p className="muted small-text">✓ Ligne principale</p>
+                ) : (
+                  <Button size="sm" disabled={makeMainLine.isPending} onClick={() => makeMainLine.mutate(shownStored)}>
+                    Définir comme ligne principale
+                  </Button>
+                ))}
+            </>
           )}
           <ul className="rep-moves">
             {options[0] && !rep.has(options[0].fromFen, options[0].uci) && (
@@ -361,20 +380,11 @@ export function RepertoireEditor({ me }: { me: Me }) {
                 <div className="move-main">
                   <div className="row nowrap">
                     <button className="link san">{m.san}</button>
+                    {m.isMain && <span className="badge">principal</span>}
                   </div>
                   {m.comment && <div className="comment move-comment">{m.comment}</div>}
                 </div>
                 <div className="row nowrap move-actions" onClick={(e) => e.stopPropagation()}>
-                <button
-                  className={`star ${m.isMain ? 'on' : ''}`}
-                  onClick={() => toggleMain.mutate(m)}
-                  disabled={toggleMain.isPending}
-                  aria-pressed={!!m.isMain}
-                  title={m.isMain ? 'Coup principal (cliquer pour retirer)' : 'Définir comme coup principal'}
-                  aria-label={m.isMain ? 'Retirer le coup principal' : 'Définir comme coup principal'}
-                >
-                  <Icon name="star" filled={!!m.isMain} />
-                </button>
                 <Menu
                   items={[
                     {
