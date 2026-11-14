@@ -4,7 +4,7 @@ import { useLocation } from 'react-router-dom';
 import { api, type Me } from '../api';
 import { GameSyncRows, useGameSync } from '../components/GameSync';
 import { RatingRange } from '../components/RatingRange';
-import { explorerParams, SPEED_CHOICES, SPEED_NAMES, useSettings, type SpeedChoice } from '../settings';
+import { explorerParams, SPEED_CHOICES, SPEED_NAMES, useSettings, type LearnOrder, type SpeedChoice } from '../settings';
 import { Button, PageHeader } from '../ui';
 
 const PERIODS = [
@@ -206,6 +206,20 @@ export function Settings({ me }: { me: Me }) {
             {[0, 5, 10, 20, 50].map((n) => (
               <option key={n} value={n}>{n}</option>
             ))}
+          </select>
+        </div>
+        <div className="setting">
+          <div className="what">
+            <strong>Ordre des nouvelles positions</strong>
+            <div className="hint">
+              {settings.learnOrder === 'frequency'
+                ? 'D’abord ce que vos adversaires jouent le plus à votre niveau (statistiques Lichess).'
+                : 'L’ordre du répertoire : ligne principale d’abord, puis les variantes (utile pour un cours pensé dans un ordre précis).'}
+            </div>
+          </div>
+          <select value={settings.learnOrder} onChange={(e) => settings.setLearnOrder(e.target.value as LearnOrder)}>
+            <option value="frequency">Les plus jouées à mon niveau</option>
+            <option value="repertoire">Ordre du répertoire</option>
           </select>
         </div>
         <div className="setting">

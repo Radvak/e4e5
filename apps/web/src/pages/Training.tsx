@@ -4,6 +4,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { api, type Grade, type Me } from '../api';
 import { explorerParams, useSettings } from '../settings';
+import { useGaps } from '../useGaps';
 import { Button, PageHeader, Tabs } from '../ui';
 import { lineText } from '../training/common';
 import { PlayMode } from '../training/PlayMode';
@@ -37,7 +38,13 @@ export function Training({ me }: { me: Me }) {
   const ids = useMemo(() => (id ? [id] : (all.data ?? []).filter((r) => r.active).map((r) => r.id)), [id, all.data]);
   const { sources, loading, review } = useTrainingSources(ids, from);
 
-  const { newPerDay, speed, range } = useSettings();
+  const { newPerDay, speed, range, learnOrder } = useSettings();
+  // Order of the new positions: most played at the user's level (reach probabilities of the gap finder).
+  const gaps = useGaps(me, learnOrder === 'frequency');
+  const reachOf = useMemo(() => {
+    if (learnOrder !== 'frequency' || !gaps.data) return undefined;
+    return (source: Source, fen: string) => gaps.data?.[source.color]?.reach[fen];
+  }, [learnOrder, gaps.data]);
   const ex = explorerParams(me, speed, range);
   // ?mode=test opens "Se tester" (e.g. from the home page when nothing is due); else the last mode used.
   const [mode, setModeState] = useState<Mode>(() =>
@@ -92,7 +99,7 @@ export function Training({ me }: { me: Me }) {
       <p className="muted small-text mode-hint">
         {mode === 'review'
           ? 'Les positions à revoir aujourd’hui, au bon moment pour les retenir.'
-          : 'L’adversaire joue les coups les plus fréquents à votre niveau, comme en partie : testez-vous ligne après ligne.'}
+          : 'Sur ce que vous avez appris, sans aide : l’adversaire joue les coups les plus fréquents à votre niveau, comme en partie.'}
       </p>
 
       {mode === 'review' ? (
@@ -103,6 +110,7 @@ export function Training({ me }: { me: Me }) {
           onReview={onReview}
           onCounts={onCounts}
           onTest={() => setMode('play')}
+          reachOf={reachOf}
           idle={<Progress sources={sources} />}
         />
       ) : (
@@ -113,6 +121,7 @@ export function Training({ me }: { me: Me }) {
           speeds={ex.speeds}
           ratings={ex.ratings}
           onReview={onReview}
+          onLearn={() => setMode('review')}
         />
       )}
       {mode === 'play' && <Progress sources={sources} />}

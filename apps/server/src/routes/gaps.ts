@@ -94,6 +94,13 @@ export async function gapRoutes(app: FastifyInstance) {
         missing: report.missingStats.length,
         /** Positions being fetched in the background: ask again later. */
         pending,
+        /**
+         * Probability of reaching each position where it is my turn (the positions to learn),
+         * explored down to EXPLORE: orders the new positions by how often they come up.
+         */
+        reach: Object.fromEntries(
+          [...report.reached].filter(([fen]) => turnOf(fen) === color).map(([fen, p]) => [fen, Math.round(p * 1e6) / 1e6]),
+        ),
         gaps: report.gaps
           .filter((g) => g.prob >= q.cutoff)
           .slice(0, MAX_GAPS)

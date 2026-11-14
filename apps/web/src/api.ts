@@ -97,6 +97,8 @@ export interface GapReport {
   approximate: number;
   missing: number;
   pending: number;
+  /** Probability of reaching each position where it is my turn (positions to learn). */
+  reach: Record<string, number>;
   gaps: Gap[];
 }
 export interface GapsResponse {

@@ -32,6 +32,7 @@ export function ReviewMode({
   onCounts,
   idle,
   onTest,
+  reachOf,
   noNewLimit = false,
 }: {
   sources: Source[];
@@ -44,6 +45,12 @@ export function ReviewMode({
   idle: React.ReactNode;
   /** Switch to "Se tester" (offered when the review is done). */
   onTest?: () => void;
+  /**
+   * Probability of reaching a position at the user's level: when given, new positions are
+   * learnt most likely first (a position always comes after the one leading to it, since the
+   * probability decreases along a line); unknown ones come last, in the repertoire's order.
+   */
+  reachOf?: (source: Source, fen: string) => number | undefined;
 }) {
   const [extraNew, setExtraNew] = useState(0);
   const [ahead, setAhead] = useState(false);
@@ -72,25 +79,30 @@ export function ReviewMode({
     const fresh: Item[] = [];
     const upcoming: (Item & { at: number })[] = [];
     let unseen = 0;
+    const reach = (item: Item) => reachOf?.(item.source, item.target.fen) ?? -1;
     for (const source of sources) {
       const learntToday = source.cardList.filter((c) => Date.parse(c.createdAt) >= today).length;
-      let allowed = noNewLimit ? Infinity : Math.max(0, newPerDay + extraNew - learntToday);
+      const allowed = noNewLimit ? Infinity : Math.max(0, newPerDay + extraNew - learntToday);
+      const unseenHere: Item[] = [];
       for (const target of source.positions) {
         const card: ReviewCard | undefined = source.cards.get(target.fen);
-        if (!card) {
-          unseen++;
-          if (allowed-- > 0) fresh.push({ source, target });
-        } else if (Date.parse(card.due) <= now) due.push({ source, target, at: Date.parse(card.due) });
+        if (!card) unseenHere.push({ source, target });
+        else if (Date.parse(card.due) <= now) due.push({ source, target, at: Date.parse(card.due) });
         else upcoming.push({ source, target, at: Date.parse(card.due) });
       }
+      unseen += unseenHere.length;
+      // Most likely first (stable sort: the repertoire's order for equal or unknown ones).
+      if (reachOf) unseenHere.sort((a, b) => reach(b) - reach(a));
+      fresh.push(...unseenHere.slice(0, allowed));
     }
+    if (reachOf) fresh.sort((a, b) => reach(b) - reach(a));
     due.sort((a, b) => a.at - b.at);
     upcoming.sort((a, b) => a.at - b.at);
     const nextDue = upcoming[0] ? new Date(upcoming[0].at) : undefined;
     const early = upcoming.filter((p) => !answered.current.has(`${p.source.id}|${p.target.fen}`));
     const items: Item[] = [...due, ...fresh, ...(ahead ? early : [])];
     return { due, fresh, items, unseen, nextDue, early: early.length };
-  }, [sources, now, newPerDay, extraNew, noNewLimit, ahead]);
+  }, [sources, now, newPerDay, extraNew, noNewLimit, ahead, reachOf]);
 
   useEffect(() => {
     onCounts({ due: queue.due.length, fresh: queue.fresh.length, ...stats });

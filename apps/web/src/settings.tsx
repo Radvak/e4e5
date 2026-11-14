@@ -41,7 +41,12 @@ interface Settings {
   setGamesDays: (n: number) => void;
   gamesSpeeds: string[];
   setGamesSpeeds: (s: string[]) => void;
+  /** Order of the new positions to learn: most played at my level first, or the repertoire's order. */
+  learnOrder: LearnOrder;
+  setLearnOrder: (o: LearnOrder) => void;
 }
+
+export type LearnOrder = 'frequency' | 'repertoire';
 
 const Ctx = createContext<Settings | null>(null);
 
@@ -78,9 +83,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const [gapCutoff, setGapCutoff] = usePersisted('gapCutoff', 0.01);
   const [gamesDays, setGamesDays] = usePersisted('gamesDays', 90);
   const [gamesSpeeds, setGamesSpeeds] = usePersisted<string[]>('gamesSpeeds', ['blitz', 'rapid', 'classical', 'daily']);
+  const [learnOrder, setLearnOrder] = usePersisted<LearnOrder>('learnOrder', 'frequency');
   return (
     <Ctx.Provider
-      value={{ speed, setSpeed, range, setRange, newPerDay, setNewPerDay, gapCutoff, setGapCutoff, gamesDays, setGamesDays, gamesSpeeds, setGamesSpeeds }}
+      value={{ speed, setSpeed, range, setRange, newPerDay, setNewPerDay, gapCutoff, setGapCutoff, gamesDays, setGamesDays, gamesSpeeds, setGamesSpeeds, learnOrder, setLearnOrder }}
     >
       {children}
     </Ctx.Provider>

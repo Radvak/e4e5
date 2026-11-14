@@ -35,15 +35,28 @@ export function PlayMode({
   speeds,
   ratings,
   onReview,
+  onLearn,
 }: {
   sources: Source[];
   root: string;
   speeds: string[];
   ratings: number[];
   onReview: (source: Source, fen: string, grade: Grade) => void;
+  /** Switch to "Réviser" (offered when nothing is learnt yet). */
+  onLearn?: () => void;
 }) {
   const qc = useQueryClient();
-  const playable = useMemo(() => sources.filter((s) => s.positions.length > 0), [sources]);
+  /**
+   * "Se tester" only covers what is learnt: a position is known once it has a review card. The
+   * opponent only plays replies leading to a known position; the line ends when none does.
+   */
+  const knownReplies = (source: Source, fen: string) => source.rep.movesAt(fen).filter((m) => source.cards.has(m.toFen));
+  /** Where a line goes after a move: opponent to play, my turn, or end of what is known. */
+  const after = (source: Source, fen: string): Phase => {
+    if (source.rep.isMyTurn(fen)) return source.cards.has(fen) && source.rep.movesAt(fen).length > 0 ? 'ask' : 'end';
+    return knownReplies(source, fen).length > 0 ? 'opponent' : 'end';
+  };
+  const playable = useMemo(() => sources.filter((s) => after(s, root) !== 'end'), [sources, root]);
   const [line, setLine] = useState<LineState | null>(null);
   const [resetKey, setResetKey] = useState(0);
   const [score, setScore] = useState({ lines: 0, moves: 0, asked: 0, clean: 0 });
@@ -67,21 +80,14 @@ export function PlayMode({
       new Promise<null>((resolve) => setTimeout(() => resolve(null), STATS_TIMEOUT_MS)),
     ]);
 
-  /** Where a line goes after a move: opponent to play, my turn, or end of the line. */
-  const after = (source: Source, fen: string): Phase => {
-    if (source.rep.movesAt(fen).length === 0) return 'end';
-    return source.rep.isMyTurn(fen) ? 'ask' : 'opponent';
-  };
-
   const startLine = useCallback(() => {
     token.current++;
     if (!playable.length) return setLine(null);
-    // Repertoires are picked in proportion to their size.
-    const total = playable.reduce((n, s) => n + s.positions.length, 0);
+    // Repertoires are picked in proportion to what is learnt in them.
+    const total = playable.reduce((n, s) => n + s.cardList.length, 0);
     let r = Math.random() * total;
-    const source = playable.find((s) => (r -= s.positions.length) < 0) ?? playable[0]!;
-    const phase = after(source, root);
-    setLine({ source, fen: root, history: [], phase, mistakes: 0, revealed: phase === 'ask' && !source.cards.has(root) });
+    const source = playable.find((s) => (r -= s.cardList.length) < 0) ?? playable[0]!;
+    setLine({ source, fen: root, history: [], phase: after(source, root), mistakes: 0, revealed: false });
   }, [playable, root]);
 
   // Latest version (sources change after each review), without restarting timers.
@@ -98,7 +104,7 @@ export function PlayMode({
     const my = ++token.current;
     const started = Date.now();
     void statsOf(line.fen).then((stats) => {
-      const reply = chooseReply(line.source.rep.movesAt(line.fen), stats);
+      const reply = chooseReply(knownReplies(line.source, line.fen), stats);
       const wait = Math.max(0, REPLY_MS - (Date.now() - started));
       setTimeout(() => {
         if (token.current !== my) return;
@@ -110,7 +116,7 @@ export function PlayMode({
           history: [...line.history, reply],
           phase,
           mistakes: 0,
-          revealed: phase === 'ask' && !line.source.cards.has(reply.toFen),
+          revealed: false,
         });
       }, wait);
     });
@@ -160,7 +166,15 @@ export function PlayMode({
     [line?.phase, line?.revealed, line?.fen],
   );
 
-  if (!playable.length) return <div className="panel done"><h3>Rien à entraîner pour l’instant</h3></div>;
+  if (!playable.length) {
+    return (
+      <div className="panel done">
+        <h3>Rien à tester pour l’instant</h3>
+        <p className="muted">« Se tester » porte sur ce que vous avez appris. Apprenez d’abord quelques positions dans « Réviser ».</p>
+        {onLearn && <button className="primary" onClick={onLearn}>Réviser</button>}
+      </div>
+    );
+  }
 
   const isNew = line?.phase === 'ask' && !line.source.cards.has(line.fen);
   return (
@@ -195,7 +209,7 @@ export function PlayMode({
           {line?.phase === 'ask' && !line.revealed && (
             <button className="small" onClick={() => setLine({ ...line, revealed: true })}>Voir la réponse</button>
           )}
-          {line?.phase === 'end' && <p className="success">✓ Fin de la ligne</p>}
+          {line?.phase === 'end' && <p className="success">✓ Fin de ce que vous connaissez</p>}
           <p className="muted small-text">
             {score.lines} ligne(s) · {score.moves} coup(s)
             {score.asked > 0 && ` · ${Math.round((100 * score.clean) / score.asked)} % du premier coup`} · coups adverses
