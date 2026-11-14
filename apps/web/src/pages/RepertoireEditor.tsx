@@ -345,6 +345,15 @@ export function RepertoireEditor({ me }: { me: Me }) {
                 <div className="move-main">
                   <button className="link unsaved san">{options[0].san}</button>
                 </div>
+                <div className="row nowrap move-actions" onClick={(e) => e.stopPropagation()}>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    icon="close"
+                    title="Annuler la suite non enregistrée à partir d’ici"
+                    onClick={() => setLine(line.slice(0, ply))}
+                  />
+                </div>
               </li>
             )}
             {here.map((m) => (
