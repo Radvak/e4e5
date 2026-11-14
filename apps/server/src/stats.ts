@@ -7,8 +7,7 @@
  *   for that position is served instead, flagged `exact: false` so the UI can say so.
  */
 import { readdirSync, readFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import { gunzipSync } from 'node:zlib';
 import {
   fenKey,
@@ -20,6 +19,7 @@ import {
 } from '@prepa-cahier/core';
 import { and, eq, inArray } from 'drizzle-orm';
 import { db } from './db/client.js';
+import { SEED_DIR } from './paths.js';
 import { positionStats, seedImports } from './db/schema.js';
 import { explorerCooldownUntil, explorerFetch, RateLimited } from './lichess.js';
 
@@ -326,7 +326,7 @@ export async function exportEntries(): Promise<StatsSeed> {
   };
 }
 
-export const SEED_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '../seed');
+export { SEED_DIR };
 
 /** At startup: imports each bundled seed (`seed/*.json.gz`) not imported yet. */
 export async function importSeeds(log: { info: (msg: string) => void }) {

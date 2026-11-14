@@ -186,4 +186,14 @@ export const inboxDismissed = sqliteTable(
 );
 
 export type User = typeof users.$inferSelect;
+
+/** The columns of a move needed to build a repertoire graph (lighter than the whole row). */
+export const graphColumns = {
+  repertoireId: repMoves.repertoireId,
+  fromFen: repMoves.fromFen,
+  toFen: repMoves.toFen,
+  uci: repMoves.uci,
+  san: repMoves.san,
+  isMain: repMoves.isMain,
+};
 export type RepMoveRow = typeof repMoves.$inferSelect;

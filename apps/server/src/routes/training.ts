@@ -6,7 +6,7 @@ import { createEmptyCard, fsrs, Rating, type CardInput } from 'ts-fsrs';
 import { z } from 'zod';
 import { requireUser } from '../auth.js';
 import { db } from '../db/client.js';
-import { repertoires, repMoves, reviewCards, reviewLog } from '../db/schema.js';
+import { graphColumns, repertoires, repMoves, reviewCards, reviewLog } from '../db/schema.js';
 
 const scheduler = fsrs({ enable_fuzz: true });
 const GRADES = { again: Rating.Again, hard: Rating.Hard, good: Rating.Good, easy: Rating.Easy } as const;
@@ -125,7 +125,7 @@ export async function trainingRoutes(app: FastifyInstance) {
     if (!reps.length) return [];
     const ids = reps.map((r) => r.id);
     const [moves, cards] = await Promise.all([
-      db.select().from(repMoves).where(inArray(repMoves.repertoireId, ids)),
+      db.select(graphColumns).from(repMoves).where(inArray(repMoves.repertoireId, ids)),
       db.select().from(reviewCards).where(inArray(reviewCards.repertoireId, ids)),
     ]);
     const now = Date.now();

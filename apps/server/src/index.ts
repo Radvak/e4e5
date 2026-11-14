@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { constants as zlib } from 'node:zlib';
+import compress from '@fastify/compress';
 import cookie from '@fastify/cookie';
 import fastifyStatic from '@fastify/static';
 import Fastify from 'fastify';
@@ -8,6 +8,7 @@ import { ZodError } from 'zod';
 import { authRoutes } from './auth.js';
 import { runMigrations } from './db/client.js';
 import { env } from './env.js';
+import { WEB_DIST } from './paths.js';
 import { explorerRoutes } from './routes/explorer.js';
 import { gameRoutes } from './routes/games.js';
 import { gapRoutes } from './routes/gaps.js';
@@ -19,6 +20,12 @@ await runMigrations();
 
 const app = Fastify({ logger: { level: env.isProd ? 'info' : 'debug' }, trustProxy: true });
 await app.register(cookie, { secret: env.cookieSecret });
+// Responses compressed (a repertoire is ~15× smaller): brotli at a fast level, else gzip.
+await app.register(compress, {
+  threshold: 1024,
+  encodings: ['br', 'gzip'],
+  brotliOptions: { params: { [zlib.BROTLI_PARAM_QUALITY]: 4 } },
+});
 
 app.setErrorHandler((err, _req, reply) => {
   if (err instanceof ZodError) {
@@ -40,9 +47,19 @@ await app.register(gapRoutes);
 await app.register(gameRoutes);
 
 // In production the server also serves the built web app (single container).
-const webDist = resolve(dirname(fileURLToPath(import.meta.url)), '../../web/dist');
+const webDist = WEB_DIST;
 if (existsSync(webDist)) {
-  await app.register(fastifyStatic, { root: webDist });
+  await app.register(fastifyStatic, {
+    root: webDist,
+    cacheControl: false,
+    setHeaders: (res, path) => {
+      // Built files have a content hash in their name: cached for good. Stockfish: a day.
+      // index.html is always revalidated, so a new version is picked up at once.
+      if (path.includes('/assets/')) res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      else if (path.includes('/stockfish/')) res.setHeader('Cache-Control', 'public, max-age=86400');
+      else res.setHeader('Cache-Control', 'no-cache');
+    },
+  });
   app.setNotFoundHandler((req, reply) =>
     req.url.startsWith('/api/') ? reply.code(404).send({ error: 'Not found' }) : reply.sendFile('index.html'),
   );

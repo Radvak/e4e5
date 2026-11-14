@@ -1,5 +1,5 @@
 /**
- * Gap finder: expected preparation depth, reach probability of each repertoire, and top holes.
+ * Gap finder ("coups manquants"): the frequent opponent moves the repertoires do not answer.
  *
  * All repertoires of one colour are analysed together, as one merged graph: a line prepared in
  * any of them is not a hole for the others. Each hole is then given to the repertoire going
@@ -9,13 +9,13 @@
  * stored data for the requested range are fetched in the background (`pending`): the client
  * asks again until nothing is pending, and each pass may reach deeper positions.
  */
-import { findGaps, gapCandidate, Repertoire, rankRepertoires, turnOf, type Color, type PrepEnd } from '@prepa-cahier/core';
-import { eq, inArray } from 'drizzle-orm';
+import { findGaps, gapCandidate, Repertoire, rankRepertoires, turnOf, type Color } from '@prepa-cahier/core';
+import { eq, inArray, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireUser } from '../auth.js';
 import { db } from '../db/client.js';
-import { repertoires, repMoves } from '../db/schema.js';
+import { graphColumns, positionStats, repertoires, repMoves } from '../db/schema.js';
 import { env } from '../env.js';
 import { prefetchStats, storedStats } from '../stats.js';
 import { statsParams } from './explorer.js';
@@ -24,8 +24,14 @@ const gapsQuery = statsParams.extend({
   /** Holes listed, and statistics fetched, from this probability. */
   cutoff: z.coerce.number().min(0.002).max(0.2).default(0.01),
 });
-/** The analysis itself explores down to this probability (depth figures barely depend on it). */
-const EXPLORE = 0.0001;
+/**
+ * The analysis explores down to a quarter of the listed cutoff: enough for the holes (a hole
+ * reached by several move orders adds up), much faster than a fine exploration.
+ */
+const exploreFor = (cutoff: number) => cutoff / 4;
+/** Answers kept until the repertoires, the settings or the stored statistics change. */
+const cache = new Map<string, { signature: string; at: number; body: unknown }>();
+const CACHE_MS = 10 * 60_000;
 /** Per colour (shared by its repertoires). */
 const MAX_GAPS = 200;
 
@@ -33,9 +39,27 @@ export async function gapRoutes(app: FastifyInstance) {
   app.get('/api/gaps', { preHandler: requireUser }, async (req, reply) => {
     const q = gapsQuery.parse(req.query);
     if (!q.speeds.length || !q.ratings.length) return reply.code(400).send({ error: 'speeds and ratings required' });
-    const reps = await db.select().from(repertoires).where(eq(repertoires.userId, req.user!.id));
-    const moves = reps.length ? await db.select().from(repMoves).where(inArray(repMoves.repertoireId, reps.map((r) => r.id))) : [];
+    const userId = req.user!.id;
+    const reps = await db.select().from(repertoires).where(eq(repertoires.userId, userId));
     const token = req.user!.lichessToken ?? env.lichessAppToken;
+    const EXPLORE = exploreFor(q.cutoff);
+
+    // Cheap signature of what the answer depends on: the moves (added / deleted), the
+    // repertoires (colour), and the stored statistics (they grow with background fetches).
+    const ids = reps.map((r) => r.id);
+    const [sig] = ids.length
+      ? await db
+          .select({ n: sql<number>`count(*)`, sum: sql<number>`coalesce(sum(${repMoves.id}), 0)` })
+          .from(repMoves)
+          .where(inArray(repMoves.repertoireId, ids))
+      : [{ n: 0, sum: 0 }];
+    const [stats] = await db.select({ n: sql<number>`count(*)` }).from(positionStats);
+    const key = `${userId}|${q.speeds.join(',')}|${q.ratings.join(',')}|${q.cutoff}`;
+    const signature = [reps.map((r) => `${r.id}:${r.color}`).join(','), sig!.n, sig!.sum, stats!.n].join('|');
+    const hit = cache.get(key);
+    if (hit && hit.signature === signature && Date.now() - hit.at < CACHE_MS) return hit.body;
+
+    const moves = ids.length ? await db.select(graphColumns).from(repMoves).where(inArray(repMoves.repertoireId, ids)) : [];
 
     const analyse = async (color: Color) => {
       const own = reps.filter((r) => r.color === color);
@@ -47,8 +71,7 @@ export async function gapRoutes(app: FastifyInstance) {
       const opponentFens = [...new Set(colorMoves.map((m) => m.fromFen))].filter((f) => turnOf(f) !== color);
       const stored = await storedStats(opponentFens, q.speeds, q.ratings);
       const statsAt = (fen: string) => stored.get(fen)?.data;
-      const ends: PrepEnd[] = [];
-      const report = findGaps(merged, statsAt, { cutoff: EXPLORE, onEnd: (e) => ends.push(e) });
+      const report = findGaps(merged, statsAt, { cutoff: EXPLORE });
 
       // Fetched in the background: positions without exact statistics, reached often enough.
       const often = (fen: string) => (report.reached.get(fen) ?? 0) >= q.cutoff;
@@ -57,20 +80,6 @@ export async function gapRoutes(app: FastifyInstance) {
       const pending = token ? prefetchStats(toFetch, q.speeds, q.ratings, token, req.log) : 0;
 
       const candidates = own.map((r) => gapCandidate(r.id, new Repertoire(color, colorMoves.filter((m) => m.repertoireId === r.id))));
-      // Each game ends its preparation somewhere: that place goes to the best suited repertoire.
-      const perRep = new Map<string | null, { share: number; plies: number }>();
-      for (const e of ends) {
-        const best = rankRepertoires(e, candidates)[0];
-        const key = best?.owns ? best.key : null;
-        const acc = perRep.get(key) ?? { share: 0, plies: 0 };
-        acc.share += e.prob;
-        acc.plies += e.prob * e.ply;
-        perRep.set(key, acc);
-      }
-      const summary = (key: string | null) => {
-        const acc = perRep.get(key) ?? { share: 0, plies: 0 };
-        return { share: acc.share, depth: acc.share ? acc.plies / acc.share / 2 : 0 };
-      };
       return {
         /** Expected number of moves played in the preparation (a lower bound when `unknown` > 0). */
         depth: report.depth / 2,
@@ -85,13 +94,6 @@ export async function gapRoutes(app: FastifyInstance) {
         missing: report.missingStats.length,
         /** Positions being fetched in the background: ask again later. */
         pending,
-        /**
-         * Per repertoire: share of the games whose preparation ends in it, and their expected
-         * number of moves in the preparation. The shares add up to 100% with `unowned`.
-         */
-        repertoires: own.map((r) => ({ id: r.id, ...summary(r.id) })),
-        /** Games whose preparation ends inside every repertoire's trunk. */
-        unowned: summary(null),
         gaps: report.gaps
           .filter((g) => g.prob >= q.cutoff)
           .slice(0, MAX_GAPS)
@@ -113,6 +115,9 @@ export async function gapRoutes(app: FastifyInstance) {
       };
     };
 
-    return { live: !!token, white: await analyse('white'), black: await analyse('black') };
+    const body = { live: !!token, white: await analyse('white'), black: await analyse('black') };
+    // Not cached while statistics are being fetched: the next call must see them.
+    if (!body.white?.pending && !body.black?.pending) cache.set(key, { signature, at: Date.now(), body });
+    return body;
   });
 }

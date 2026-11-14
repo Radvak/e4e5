@@ -97,9 +97,6 @@ export interface GapReport {
   approximate: number;
   missing: number;
   pending: number;
-  /** Share of the games whose preparation ends in each repertoire, and their expected depth. */
-  repertoires: { id: string; share: number; depth: number }[];
-  unowned: { share: number; depth: number };
   gaps: Gap[];
 }
 export interface GapsResponse {

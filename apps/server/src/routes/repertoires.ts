@@ -76,7 +76,19 @@ export async function repertoireRoutes(app: FastifyInstance) {
   app.get<{ Params: Params }>('/api/repertoires/:id', async (req, reply) => {
     const rep = await ownRepertoire(req, reply);
     if (!rep) return;
-    return { ...rep, moves: await loadMoves(rep.id) };
+    // Only what the web app uses, without empty fields (a big repertoire is several MB otherwise).
+    const moves = (await loadMoves(rep.id)).map((m) => ({
+      id: m.id,
+      fromFen: m.fromFen,
+      toFen: m.toFen,
+      uci: m.uci,
+      san: m.san,
+      isMain: m.isMain,
+      source: m.source,
+      ...(m.comment ? { comment: m.comment } : {}),
+      ...(m.nags?.length ? { nags: m.nags } : {}),
+    }));
+    return { ...rep, moves };
   });
 
   app.patch<{ Params: Params }>('/api/repertoires/:id', async (req, reply) => {

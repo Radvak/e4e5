@@ -35,6 +35,6 @@ COPY --from=build /app/apps/server /app/apps/server
 COPY --from=build /app/apps/web/dist /app/apps/web/dist
 VOLUME /data
 EXPOSE 3000
-# tsx is a dependency of the server package.
+# The server is compiled to dist/index.js at build time (fast start, no TypeScript at boot).
 WORKDIR /app/apps/server
-CMD ["node_modules/.bin/tsx", "src/index.ts"]
+CMD ["node", "--enable-source-maps", "dist/index.js"]
