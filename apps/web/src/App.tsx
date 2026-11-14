@@ -30,16 +30,16 @@ export function App() {
   const { pathname } = useLocation();
   const me = useQuery({ queryKey: ['me'], queryFn: api.me, retry: false });
   const { newPerDay } = useSettings();
-  // Badge of the Entraîner tab: positions waiting today (due + new).
+  // Badge of the Entraîner tab: lines to go through today (due and new positions grouped by line).
   const summary = useQuery({
     queryKey: ['training-summary', newPerDay],
     queryFn: () => api.trainingSummary(dayStart(), newPerDay),
     enabled: !!me.data,
     staleTime: 30_000,
   });
-  const toTrain = (summary.data ?? []).filter((s) => s.active).reduce((n, s) => n + s.due + s.new, 0);
+  const toTrain = (summary.data ?? []).filter((s) => s.active).reduce((n, s) => n + s.lines, 0);
   const badge = (to: string) =>
-    to === '/train' && toTrain > 0 ? <span className="tab-badge" aria-label={`${toTrain} à faire`}>{toTrain > 99 ? '99+' : toTrain}</span> : null;
+    to === '/train' && toTrain > 0 ? <span className="tab-badge" aria-label={`${toTrain} lignes à revoir`} title={`${toTrain} lignes à revoir aujourd’hui`}>{toTrain > 99 ? '99+' : toTrain}</span> : null;
 
   if (me.isLoading) return null;
   if (me.error instanceof ApiError && me.error.status === 401) return <Login />;

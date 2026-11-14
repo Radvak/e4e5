@@ -66,7 +66,7 @@ export interface ReviewCard {
   createdAt: string;
 }
 export interface ReviewLogEntry { repertoireId: string; grade: Grade; isNew: boolean; reviewedAt: string }
-export interface TrainingSummary { repertoireId: string; active: boolean; total: number; due: number; new: number }
+export interface TrainingSummary { repertoireId: string; active: boolean; total: number; due: number; new: number; /** Lines to go through today. */ lines: number; /** Lines of the repertoire. */ totalLines: number }
 export interface ImportResult {
   games: number; added: number; duplicates: number; unreachable: number; errors: string[];
 }

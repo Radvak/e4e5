@@ -118,7 +118,7 @@ export async function trainingRoutes(app: FastifyInstance) {
       .orderBy(reviewLog.reviewedAt);
   });
 
-  /** Per repertoire: positions due now, new positions available today, and total. */
+  /** Per repertoire: positions due now, new positions available today, lines to go through, and total. */
   app.get('/api/training/summary', async (req) => {
     const { dayStart, newPerDay } = summaryQuery.parse(req.query);
     const reps = await db.select().from(repertoires).where(eq(repertoires.userId, req.user!.id));
@@ -130,18 +130,31 @@ export async function trainingRoutes(app: FastifyInstance) {
     ]);
     const now = Date.now();
     return reps.map((r) => {
-      const positions = new Set(
-        trainingPositions(new Repertoire(r.color, moves.filter((m) => m.repertoireId === r.id))).map((p) => p.fen),
-      );
+      const graph = new Repertoire(r.color, moves.filter((m) => m.repertoireId === r.id));
+      const list = trainingPositions(graph);
+      // Lines of the repertoire: its distinct line ends (positions with no move after them).
+      const totalLines = [...graph.reachable()].filter((f) => graph.movesAt(f).length === 0).length;
+      const positions = new Set(list.map((p) => p.fen));
       const own = cards.filter((c) => c.repertoireId === r.id && positions.has(c.fen));
       const learntToday = own.filter((c) => c.createdAt.getTime() >= dayStart).length;
       const unseen = positions.size - own.length;
+      const fresh = Math.min(unseen, Math.max(0, newPerDay - learntToday));
+      // Lines to go through: the review follows a line from one waiting position to the next, so
+      // a waiting position whose previous position of mine (two plies earlier) also waits does
+      // not start a new line. New positions: the first ones in the repertoire's order.
+      const known = new Set(own.map((c) => c.fen));
+      const dueSet = new Set(own.filter((c) => c.due.getTime() <= now).map((c) => c.fen));
+      const waiting = new Set([...dueSet, ...list.filter((p) => !known.has(p.fen)).slice(0, fresh).map((p) => p.fen)]);
+      const lines = list.filter((p) => waiting.has(p.fen) && !(p.path.length >= 2 && waiting.has(p.path.at(-2)!.fromFen))).length;
       return {
         repertoireId: r.id,
         active: r.active,
         total: positions.size,
-        due: own.filter((c) => c.due.getTime() <= now).length,
-        new: Math.min(unseen, Math.max(0, newPerDay - learntToday)),
+        due: dueSet.size,
+        new: fresh,
+        /** Lines to go through today (due and new positions grouped by line). */
+        lines,
+        totalLines,
       };
     });
   });

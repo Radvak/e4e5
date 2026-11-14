@@ -123,10 +123,11 @@ function RepertoireCard({ rep, counts, missing }: { rep: RepertoireSummary; coun
       <div className="info">
         <Link className="name" to={`/r/${rep.id}`} onClick={stop}>{rep.name}</Link>
         <div className="meta">
-          {counts ? plural(counts.total, 'position', 'positions') : '…'}
+          {counts ? plural(counts.totalLines, 'ligne', 'lignes') : '…'}
           {!rep.active && <> · en pause</>}
-          {rep.active && counts && counts.due > 0 && <> · <span className="due">{counts.due} à revoir</span></>}
-          {rep.active && counts && counts.new > 0 && <> · {plural(counts.new, 'nouvelle', 'nouvelles')}</>}
+          {rep.active && counts && counts.lines > 0 && (
+            <> · <span className="due" title="Lignes avec des positions à revoir ou à apprendre aujourd’hui">{counts.lines} à revoir</span></>
+          )}
           {!!missing && (
             <>
               {' · '}
