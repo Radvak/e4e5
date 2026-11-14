@@ -8,6 +8,7 @@ import { Button, PageHeader, Tabs } from '../ui';
 import { lineText } from '../training/common';
 import { PlayMode } from '../training/PlayMode';
 import { Progress } from '../training/Progress';
+import { Stats } from './Stats';
 import { ReviewMode } from '../training/ReviewMode';
 import { useTrainingSources, type Source } from '../training/useTrainingSources';
 
@@ -114,6 +115,14 @@ export function Training({ me }: { me: Me }) {
         />
       )}
       {mode === 'play' && <Progress sources={sources} />}
+
+      {/* Progress of every repertoire (was the Bilan page): activity, forecast, weak positions. */}
+      {!id && (
+        <details className="panel progress-all">
+          <summary>Progrès</summary>
+          <Stats />
+        </details>
+      )}
     </div>
   );
 }

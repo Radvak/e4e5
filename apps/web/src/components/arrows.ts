@@ -8,6 +8,7 @@ export const ARROWS = {
   next: { color: '#3fb950', label: 'coup suivant (→)' },
   popular: { color: '#f0883e', label: 'joué souvent, pas dans votre répertoire' },
   engine: { color: '#58a6ff', label: 'meilleur coup du moteur' },
+  mistake: { color: '#e5534b', label: 'coup joué à la place du coup préparé' },
 } as const;
 
 export type ArrowKind = keyof typeof ARROWS;

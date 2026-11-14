@@ -1,4 +1,4 @@
-import type { Color } from '@prepa-cahier/core';
+import { playSanOn, positionFromFen, type Color } from '@prepa-cahier/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -6,7 +6,8 @@ import { api, type GamesReport, type InboxItem, type RepertoireSummary, type Res
 import { lineText, moveText } from '../chessText';
 import { GameSyncInline, useGameSync } from '../components/GameSync';
 import { SPEED_NAMES, useSettings } from '../settings';
-import { Button, EmptyState, Tabs, plural } from '../ui';
+import { MiniBoard, type MiniArrow } from '../components/MiniBoard';
+import { Button, EmptyState, PageHeader, Tabs, plural } from '../ui';
 
 const PERIOD: Record<number, string> = { 30: '30 derniers jours', 90: '3 derniers mois', 365: '12 derniers mois', 0: 'toutes les parties' };
 const pct = (x: number) => `${Math.round(100 * x)} %`;
@@ -17,9 +18,18 @@ const score = (r: Results) => {
 const date = (iso: string) => new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
 
 /** Bilan › Parties: statistics per repertoire, inbox, recent games. */
+const PAGE = 20;
+const KIND_HINT = {
+  novelties: 'L’adversaire a joué un coup que vous n’avez pas préparé.',
+  deviations: 'Vous avez joué autre chose que votre coup préparé.',
+  ends: 'La partie a continué après la fin de votre ligne.',
+} as const;
+
+/** Mes parties: what the games show (cards with a thumbnail), results per repertoire, recent games. */
 export function Games() {
   const { gamesDays, gamesSpeeds } = useSettings();
   const [tab, setTab] = useState<'novelties' | 'deviations' | 'ends'>('novelties');
+  const [shown, setShown] = useState(PAGE);
   const reps = useQuery({ queryKey: ['repertoires'], queryFn: api.repertoires });
   const { running } = useGameSync();
   const report = useQuery({
@@ -31,15 +41,20 @@ export function Games() {
   const restore = useMutation({ mutationFn: api.restoreInbox, onSuccess: () => qc.invalidateQueries({ queryKey: ['games-report'] }) });
   const byId = new Map((reps.data ?? []).map((r) => [r.id, r]));
   const r = report.data;
+  const items = r?.inbox[tab] ?? [];
 
   return (
-    <div className="stack">
-      <div className="row">
-        <Link className="chip" to="/settings#parties" title="Changer dans les paramètres">
-          {PERIOD[gamesDays] ?? `${gamesDays} jours`} · {gamesSpeeds.map((s) => SPEED_NAMES[s] ?? s).join(', ')}
-        </Link>
-        {r && <span className="muted small-text" style={{ margin: 0 }}>{plural(r.games, 'partie', 'parties')}</span>}
-      </div>
+    <div className="games-page stack">
+      <PageHeader
+        title="Mes parties"
+        subtitle={
+          <Link to="/settings#parties" title="Changer dans les paramètres" className="muted">
+            {r ? `${plural(r.games, 'partie', 'parties')} · ` : ''}
+            {PERIOD[gamesDays] ?? `${gamesDays} jours`} · {gamesSpeeds.map((s) => SPEED_NAMES[s] ?? s).join(', ')}
+          </Link>
+        }
+        menu={[{ label: 'Réafficher les éléments ignorés', onClick: () => restore.mutate() }]}
+      />
       <GameSyncInline />
 
       {report.isLoading && <p className="muted">Analyse de vos parties…</p>}
@@ -52,33 +67,27 @@ export function Games() {
 
       {r && r.games > 0 && (
         <>
-          <section className="card">
-            <div className="card-head">
-              <h3>À traiter</h3>
-              <Button size="sm" variant="ghost" onClick={() => restore.mutate()} title="Réafficher les éléments ignorés">Réafficher</Button>
-            </div>
-            <Tabs
-              block
-              value={tab}
-              onChange={setTab}
-              tabs={[
-                { id: 'novelties', label: `Nouveautés (${r.inbox.novelties.length})` },
-                { id: 'deviations', label: `Vos écarts (${r.inbox.deviations.length})` },
-                { id: 'ends', label: `Fins de ligne (${r.inbox.ends.length})` },
-              ]}
-            />
-            <p className="muted small-text" style={{ marginTop: 8 }}>
-              {tab === 'novelties' && 'L’adversaire a joué un coup que vous n’avez pas préparé.'}
-              {tab === 'deviations' && 'Vous avez joué autre chose que votre coup préparé.'}
-              {tab === 'ends' && 'La partie a continué après la fin de votre ligne.'} Regroupé par position, du plus fréquent au moins fréquent.
-            </p>
-            {r.inbox[tab].length === 0 && <p className="muted">Rien ici.</p>}
-            <ul className="inbox">
-              {r.inbox[tab].map((item) => (
-                <InboxRow key={item.key} item={item} rep={byId.get(item.repertoireId)} />
-              ))}
-            </ul>
-          </section>
+          <Tabs
+            block
+            value={tab}
+            onChange={(t) => {
+              setTab(t);
+              setShown(PAGE);
+            }}
+            tabs={[
+              { id: 'novelties', label: `Nouveautés (${r.inbox.novelties.length})` },
+              { id: 'deviations', label: `Écarts (${r.inbox.deviations.length})` },
+              { id: 'ends', label: `Fins de ligne (${r.inbox.ends.length})` },
+            ]}
+          />
+          <p className="muted small-text" style={{ margin: 0 }}>{KIND_HINT[tab]} Du plus fréquent au moins fréquent.</p>
+          {items.length === 0 && <p className="muted">Rien ici.</p>}
+          {items.slice(0, shown).map((item) => (
+            <InboxRow key={item.key} item={item} rep={byId.get(item.repertoireId)} />
+          ))}
+          {items.length > shown && (
+            <Button variant="ghost" onClick={() => setShown(shown + PAGE)}>Voir plus ({items.length - shown})</Button>
+          )}
 
           <RepertoireStats report={r} reps={byId} />
           <RecentGames report={r} reps={byId} />
@@ -181,8 +190,22 @@ function InboxRow({ item, rep }: { item: InboxItem; rep: RepertoireSummary | und
   const editor = `/r/${item.repertoireId}?${new URLSearchParams({ line: afterMove.join(',') })}`;
   const error = add.error ?? review.error ?? dismiss.error;
 
+  // Thumbnail: the position, with the opponent's move (orange) or my move (red) and the prepared ones (green).
+  const arrows: MiniArrow[] =
+    item.kind === 'deviation'
+      ? [
+          ...item.expected.flatMap((san) => {
+            const m = playSanOn(positionFromFen(item.fen), san);
+            return m ? [{ uci: m.uci, kind: 'repertoire' as const }] : [];
+          }),
+          { uci: item.move.uci, kind: 'mistake' },
+        ]
+      : [{ uci: item.move.uci, kind: 'popular' }];
+
   return (
-    <li className="inbox-item">
+    <article className="card game-card">
+      <MiniBoard fen={item.fen} orientation={rep?.color ?? 'white'} arrows={arrows} />
+      <div className="game-card-body">
       <div className="inbox-head">
         <span className="muted">{lineText(line) || 'Position initiale'} </span>
         <span className="hole-move">{moveText(line, item.move.san)}</span>
@@ -236,7 +259,8 @@ function InboxRow({ item, rep }: { item: InboxItem; rep: RepertoireSummary | und
       </div>
       {done && <p className="success-text small-text">{done}</p>}
       {error && <p className="error small-text">{error.message}</p>}
-    </li>
+      </div>
+    </article>
   );
 }
 

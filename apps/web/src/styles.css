@@ -432,3 +432,17 @@ kbd { display: inline-block; min-width: 18px; padding: 0 4px; margin: 0 1px; bor
 .rep-moves li.draft-move, .rep-moves li.draft-move.selected { box-shadow: inset 3px 0 0 var(--hole); }
 .rep-card .meta .missing { color: var(--hole); font-weight: 600; }
 .mode-hint { margin: -4px 0 12px; }
+
+/* Mes parties: one card per thing to work on, with a thumbnail of the position. */
+.games-page { max-width: 860px; margin: 0 auto; width: 100%; }
+.game-card { display: grid; grid-template-columns: 112px 1fr; gap: 14px; align-items: start; }
+.mini-board { width: 112px; height: 112px; border-radius: 6px; overflow: hidden; }
+.game-card-body { min-width: 0; }
+.game-card .inbox-head { line-height: 1.5; }
+.game-card .inbox-actions .btn { margin: 0; }
+@media (min-width: 640px) { .game-card { grid-template-columns: 136px 1fr; } .mini-board { width: 136px; height: 136px; } }
+.tab-badge { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; margin-left: 6px; border-radius: 9px; background: var(--accent); color: #fff; font-size: 0.7rem; font-weight: 700; line-height: 1; }
+.tabbar a { position: relative; }
+.tabbar .tab-badge { position: absolute; top: 6px; left: calc(50% + 6px); margin: 0; }
+@media (max-width: 480px) { .games-page .tabs.block button { padding: 0 4px; font-size: 0.84rem; } }
+.game-card .inbox-actions { gap: 4px; }
