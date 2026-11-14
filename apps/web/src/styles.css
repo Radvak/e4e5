@@ -446,3 +446,11 @@ kbd { display: inline-block; min-width: 18px; padding: 0 4px; margin: 0 1px; bor
 .tabbar .tab-badge { position: absolute; top: 6px; left: calc(50% + 6px); margin: 0; }
 @media (max-width: 480px) { .games-page .tabs.block button { padding: 0 4px; font-size: 0.84rem; } }
 .game-card .inbox-actions { gap: 4px; }
+
+/* Board screens: grid columns never wider than the screen (long engine lines are cut with
+   an ellipsis instead of widening the page, which made it move while the engine computes). */
+.editor { grid-template-columns: minmax(0, 1fr); }
+.editor-board, .editor-side { min-width: 0; }
+.engine-lines { min-width: 0; overflow: hidden; }
+.engine-lines .engine-line { min-width: 0; overflow: hidden; }
+@media (min-width: 900px) { .editor { grid-template-columns: minmax(360px, 600px) minmax(0, 1fr); } }
