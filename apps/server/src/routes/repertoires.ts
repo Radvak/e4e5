@@ -189,14 +189,19 @@ export async function repertoireRoutes(app: FastifyInstance) {
 
     const existing = await loadMoves(rep.id);
     const graph = new Repertoire(rep.color, existing);
+    // Positions that already have their moves: existing main-line choices are kept.
     const hadMoves = new Set(existing.map((m) => m.fromFen));
+    /** Positions given a main move by this import: one per position, even across games. */
+    const mainSet = new Set<string>();
     const fresh: RepMove[] = [];
     let duplicates = 0;
     for (const m of parsed.moves) {
-      // Keep existing main-line choices; imported main line only where the position is new.
-      const move = { ...m, isMain: !!m.isMain && !hadMoves.has(m.fromFen) };
-      if (graph.add(move)) fresh.push(move);
-      else duplicates++;
+      const isMain = !!m.isMain && !hadMoves.has(m.fromFen) && !mainSet.has(m.fromFen);
+      const move = { ...m, isMain };
+      if (graph.add(move)) {
+        fresh.push(move);
+        if (isMain) mainSet.add(m.fromFen);
+      } else duplicates++;
     }
     const reachable = graph.reachable();
     const toInsert = fresh.filter((m) => reachable.has(m.fromFen));
