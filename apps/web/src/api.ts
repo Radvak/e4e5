@@ -51,7 +51,7 @@ export interface Me {
   /** Live explorer statistics available (own Lichess token or the app's); stored ones are always served. */
   explorer: boolean;
 }
-export interface RepertoireSummary { id: string; name: string; color: Color; createdAt: string }
+export interface RepertoireSummary { id: string; name: string; color: Color; createdAt: string; /** false: paused. */ active: boolean }
 export interface StoredMove extends RepMove { id: number; source: string }
 export interface RepertoireDetail extends RepertoireSummary { moves: StoredMove[] }
 export type Grade = 'again' | 'hard' | 'good' | 'easy';
@@ -66,7 +66,7 @@ export interface ReviewCard {
   createdAt: string;
 }
 export interface ReviewLogEntry { repertoireId: string; grade: Grade; isNew: boolean; reviewedAt: string }
-export interface TrainingSummary { repertoireId: string; total: number; due: number; new: number }
+export interface TrainingSummary { repertoireId: string; active: boolean; total: number; due: number; new: number }
 export interface ImportResult {
   games: number; added: number; duplicates: number; unreachable: number; errors: string[];
 }
@@ -211,6 +211,7 @@ export const api = {
   repertoires: () => request<RepertoireSummary[]>('GET', '/api/repertoires'),
   createRepertoire: (name: string, color: Color) => request<RepertoireSummary>('POST', '/api/repertoires', { name, color }),
   renameRepertoire: (id: string, name: string) => request<RepertoireSummary>('PATCH', `/api/repertoires/${id}`, { name }),
+  setRepertoireActive: (id: string, active: boolean) => request<RepertoireSummary>('PATCH', `/api/repertoires/${id}`, { active }),
   deleteRepertoire: (id: string) => request<{ ok: true }>('DELETE', `/api/repertoires/${id}`),
   repertoire: (id: string) => request<RepertoireDetail>('GET', `/api/repertoires/${id}`),
   saveLine: (id: string, ucis: string[]) =>

@@ -18,7 +18,11 @@ import { db } from '../db/client.js';
 import { repertoires, repMoves, type RepMoveRow } from '../db/schema.js';
 
 const createBody = z.object({ name: z.string().trim().min(1).max(100), color: z.enum(['white', 'black']) });
-const renameBody = z.object({ name: z.string().trim().min(1).max(100) });
+const patchBody = z.object({
+  name: z.string().trim().min(1).max(100).optional(),
+  /** false: paused (left out of "train all" and of the games analysis). */
+  active: z.boolean().optional(),
+});
 const moveBody = z.object({ fromFen: z.string().min(10).max(120), uci: z.string().regex(/^[a-h][1-8][a-h][1-8][qrbn]?$/) });
 const patchMoveBody = z.object({
   comment: z.string().max(2000).nullable().optional(),
@@ -94,9 +98,9 @@ export async function repertoireRoutes(app: FastifyInstance) {
   app.patch<{ Params: Params }>('/api/repertoires/:id', async (req, reply) => {
     const rep = await ownRepertoire(req, reply);
     if (!rep) return;
-    const { name } = renameBody.parse(req.body);
-    await db.update(repertoires).set({ name }).where(eq(repertoires.id, rep.id));
-    return { ...rep, name };
+    const patch = patchBody.parse(req.body);
+    if (Object.keys(patch).length) await db.update(repertoires).set(patch).where(eq(repertoires.id, rep.id));
+    return { ...rep, ...patch };
   });
 
   app.delete<{ Params: Params }>('/api/repertoires/:id', async (req, reply) => {

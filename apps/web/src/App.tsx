@@ -37,7 +37,7 @@ export function App() {
     enabled: !!me.data,
     staleTime: 30_000,
   });
-  const toTrain = (summary.data ?? []).reduce((n, s) => n + s.due + s.new, 0);
+  const toTrain = (summary.data ?? []).filter((s) => s.active).reduce((n, s) => n + s.due + s.new, 0);
   const badge = (to: string) =>
     to === '/train' && toTrain > 0 ? <span className="tab-badge" aria-label={`${toTrain} à faire`}>{toTrain > 99 ? '99+' : toTrain}</span> : null;
 

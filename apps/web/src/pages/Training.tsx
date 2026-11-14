@@ -33,7 +33,8 @@ export function Training({ me }: { me: Me }) {
   }, [fromParam]);
 
   const all = useQuery({ queryKey: ['repertoires'], queryFn: api.repertoires, enabled: !id });
-  const ids = useMemo(() => (id ? [id] : (all.data ?? []).map((r) => r.id)), [id, all.data]);
+  // All repertoires: the active ones only (paused ones are left out).
+  const ids = useMemo(() => (id ? [id] : (all.data ?? []).filter((r) => r.active).map((r) => r.id)), [id, all.data]);
   const { sources, loading, review } = useTrainingSources(ids, from);
 
   const { newPerDay, speed, range } = useSettings();
@@ -54,7 +55,7 @@ export function Training({ me }: { me: Me }) {
   if (id && !sources.length) return <p className="error">Impossible de charger le répertoire.</p>;
 
   const fromPath = from && sources[0] ? sources[0].positions.find((p) => p.fen === from)?.path : undefined;
-  const title = id ? sources[0]!.name : 'Tous les répertoires';
+  const title = id ? sources[0]!.name : 'Tous les répertoires actifs';
 
   return (
     <div className="training">

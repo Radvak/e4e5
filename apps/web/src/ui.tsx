@@ -170,5 +170,14 @@ export function EmptyState({ title, children, action }: { title: string; childre
   );
 }
 
+/** On/off switch (e.g. a repertoire in training or paused). */
+export function Switch({ on, onChange, label, disabled }: { on: boolean; onChange: () => void; label: string; disabled?: boolean }) {
+  return (
+    <button role="switch" aria-checked={on} aria-label={label} title={label} disabled={disabled} className={`switch-toggle ${on ? 'on' : ''}`} onClick={onChange}>
+      <span className="knob" />
+    </button>
+  );
+}
+
 /** French plural: "1 partie", "3 parties". */
 export const plural = (n: number, one: string, many: string) => `${n.toLocaleString('fr-FR')} ${n > 1 ? many : one}`;

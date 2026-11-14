@@ -82,8 +82,10 @@ export async function gameRoutes(app: FastifyInstance) {
       loadRepertoires(userId),
       db.select({ key: inboxDismissed.key }).from(inboxDismissed).where(eq(inboxDismissed.userId, userId)),
     ]);
+    // Every repertoire is used to recognise the games; the paused ones are then left out.
     const reports = analyseGames(rows, reps);
     const hidden = new Set(dismissed.map((d) => d.key));
+    const paused = new Set(reps.filter((r) => !r.active).map((r) => r.id));
 
     // Per repertoire (and outside them, per colour and first move of mine).
     const perRep = new Map<string, { games: number; results: Results; plies: number }>();
@@ -100,6 +102,7 @@ export async function gameRoutes(app: FastifyInstance) {
         outside.set(key, o);
         continue;
       }
+      if (paused.has(r.repertoireId)) continue;
       const s = perRep.get(r.repertoireId) ?? { games: 0, results: emptyResults(), plies: 0 };
       s.games++;
       s.results[result]++;
@@ -112,7 +115,7 @@ export async function gameRoutes(app: FastifyInstance) {
     const items = [...inbox.values()].sort(byGames);
     return {
       games: rows.length,
-      repertoires: reps.map((r) => {
+      repertoires: reps.filter((r) => !paused.has(r.id)).map((r) => {
         const s = perRep.get(r.id);
         return { id: r.id, games: s?.games ?? 0, results: s?.results ?? emptyResults(), bookMoves: s?.games ? s.plies / s.games / 2 : 0 };
       }),

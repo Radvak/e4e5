@@ -138,6 +138,7 @@ export async function trainingRoutes(app: FastifyInstance) {
       const unseen = positions.size - own.length;
       return {
         repertoireId: r.id,
+        active: r.active,
         total: positions.size,
         due: own.filter((c) => c.due.getTime() <= now).length,
         new: Math.min(unseen, Math.max(0, newPerDay - learntToday)),

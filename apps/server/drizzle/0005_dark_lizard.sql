@@ -1,0 +1,1 @@
+ALTER TABLE `repertoires` ADD `active` integer DEFAULT true NOT NULL;

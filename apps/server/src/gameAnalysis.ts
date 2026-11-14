@@ -22,6 +22,8 @@ export interface RepInfo {
   id: string;
   name: string;
   color: Color;
+  /** false: paused by the user. */
+  active: boolean;
   rep: Repertoire;
   gap: GapCandidate<string>;
 }
@@ -32,7 +34,7 @@ export async function loadRepertoires(userId: string): Promise<RepInfo[]> {
   const moves = await db.select(graphColumns).from(repMoves).where(inArray(repMoves.repertoireId, reps.map((r) => r.id)));
   return reps.map((r) => {
     const rep = new Repertoire(r.color, moves.filter((m) => m.repertoireId === r.id));
-    return { id: r.id, name: r.name, color: r.color, rep, gap: gapCandidate(r.id, rep) };
+    return { id: r.id, name: r.name, color: r.color, active: r.active, rep, gap: gapCandidate(r.id, rep) };
   });
 }
 

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api, type Me, type RepertoireSummary, type TrainingSummary } from '../api';
 import { dayStart, useSettings } from '../settings';
-import { Button, EmptyState, PageHeader, Tabs, plural } from '../ui';
+import { Button, EmptyState, PageHeader, Switch, Tabs, plural } from '../ui';
 import { useGaps } from '../useGaps';
 
 const COLORS: { color: Color; label: string }[] = [
@@ -110,18 +110,23 @@ export function Repertoires({ me }: { me: Me }) {
 
 function RepertoireCard({ rep, counts, missing }: { rep: RepertoireSummary; counts?: TrainingSummary; missing?: number }) {
   const navigate = useNavigate();
-  const toTrain = counts ? counts.due + counts.new : 0;
-  // The whole card opens the repertoire; its buttons stop the click.
+  const qc = useQueryClient();
+  const toggle = useMutation({
+    mutationFn: () => api.setRepertoireActive(rep.id, !rep.active),
+    onSuccess: () => Promise.all([qc.invalidateQueries({ queryKey: ['repertoires'] }), qc.invalidateQueries({ queryKey: ['training-summary'] }), qc.invalidateQueries({ queryKey: ['games-report'] })]),
+  });
+  // The whole card opens the repertoire; the switch stops the click.
   const stop = (e: React.MouseEvent) => e.stopPropagation();
   return (
-    <div className="card rep-card clickable" onClick={() => navigate(`/r/${rep.id}`)}>
+    <div className={`card rep-card clickable ${rep.active ? '' : 'paused'}`} onClick={() => navigate(`/r/${rep.id}`)}>
       <span className={`dot ${rep.color}`} />
       <div className="info">
         <Link className="name" to={`/r/${rep.id}`} onClick={stop}>{rep.name}</Link>
         <div className="meta">
           {counts ? plural(counts.total, 'position', 'positions') : '…'}
-          {counts && counts.due > 0 && <> · <span className="due">{counts.due} à revoir</span></>}
-          {counts && counts.new > 0 && <> · {plural(counts.new, 'nouvelle', 'nouvelles')}</>}
+          {!rep.active && <> · en pause</>}
+          {rep.active && counts && counts.due > 0 && <> · <span className="due">{counts.due} à revoir</span></>}
+          {rep.active && counts && counts.new > 0 && <> · {plural(counts.new, 'nouvelle', 'nouvelles')}</>}
           {!!missing && (
             <>
               {' · '}
@@ -132,12 +137,13 @@ function RepertoireCard({ rep, counts, missing }: { rep: RepertoireSummary; coun
           )}
         </div>
       </div>
-      <div className="row nowrap" onClick={stop}>
-        {toTrain > 0 && (
-          <Button size="sm" variant={counts!.due > 0 ? 'primary' : 'secondary'} onClick={() => navigate(`/r/${rep.id}/train`)}>
-            Entraîner
-          </Button>
-        )}
+      <div onClick={stop}>
+        <Switch
+          on={rep.active}
+          disabled={toggle.isPending}
+          onChange={() => toggle.mutate()}
+          label={rep.active ? `Mettre ${rep.name} en pause` : `Reprendre l’entraînement de ${rep.name}`}
+        />
       </div>
     </div>
   );

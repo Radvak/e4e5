@@ -86,6 +86,11 @@ export function RepertoireEditor({ me }: { me: Me }) {
     mutationFn: (name: string) => api.renameRepertoire(id, name),
     onSuccess: () => Promise.all([refresh(), qc.invalidateQueries({ queryKey: ['repertoires'] })]),
   });
+  const toggleActive = useMutation({
+    mutationFn: () => api.setRepertoireActive(id, !data!.active),
+    onSuccess: () =>
+      Promise.all([refresh(), qc.invalidateQueries({ queryKey: ['repertoires'] }), qc.invalidateQueries({ queryKey: ['training-summary'] })]),
+  });
   const deleteRep = useMutation({
     mutationFn: () => api.deleteRepertoire(id),
     onSuccess: async () => {
@@ -252,7 +257,7 @@ export function RepertoireEditor({ me }: { me: Me }) {
     <PageHeader
       back="/repertoires"
       title={data.name}
-      subtitle={`${data.color === 'white' ? 'Blancs' : 'Noirs'} · ${plural(rep.size, 'coup', 'coups')}`}
+      subtitle={`${data.color === 'white' ? 'Blancs' : 'Noirs'} · ${plural(rep.size, 'coup', 'coups')}${data.active ? '' : ' · en pause'}`}
       actions={<Button variant="primary" icon="play" to={`/r/${id}/train`}>S’entraîner</Button>}
       menu={[
         ...(ply > 0 && unsaved.length === 0
@@ -260,6 +265,7 @@ export function RepertoireEditor({ me }: { me: Me }) {
           : []),
         { label: 'Importer un PGN', onClick: () => setImportOpen(true) },
         { label: 'Exporter en PGN', onClick: () => (location.href = `/api/repertoires/${id}/pgn`) },
+        { label: data.active ? 'Mettre en pause' : 'Reprendre l’entraînement', onClick: () => toggleActive.mutate() },
         {
           label: 'Renommer',
           onClick: () => {

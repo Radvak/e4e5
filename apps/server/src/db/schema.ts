@@ -42,6 +42,8 @@ export const repertoires = sqliteTable(
     userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
     color: text('color', { enum: ['white', 'black'] }).notNull(),
+    /** false: paused (left out of "train all", the badge and the games analysis). */
+    active: integer('active', { mode: 'boolean' }).notNull().default(true),
     createdAt: createdAt(),
   },
   (t) => [index('repertoires_user').on(t.userId)],
