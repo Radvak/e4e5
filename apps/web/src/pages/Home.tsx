@@ -71,8 +71,8 @@ export function Home({ me }: { me: Me }) {
             <div className="big-number">✓ <span className="tile-unit">tout est à jour</span></div>
           )}
         </div>
-        <Button variant={due + fresh > 0 ? 'primary' : 'secondary'} size="lg" icon="play" to="/train">
-          {due + fresh > 0 ? 'S’entraîner' : 'Jouer les lignes'}
+        <Button variant={due + fresh > 0 ? 'primary' : 'secondary'} size="lg" icon="play" to={due + fresh > 0 ? '/train' : '/train?mode=test'}>
+          {due + fresh > 0 ? 'S’entraîner' : 'Se tester'}
         </Button>
       </section>
 

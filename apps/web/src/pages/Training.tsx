@@ -37,7 +37,10 @@ export function Training({ me }: { me: Me }) {
 
   const { newPerDay, speed, range } = useSettings();
   const ex = explorerParams(me, speed, range);
-  const [mode, setModeState] = useState<Mode>(() => (localStorage.getItem('trainingMode') as Mode | null) ?? 'review');
+  // ?mode=test opens "Se tester" (e.g. from the home page when nothing is due); else the last mode used.
+  const [mode, setModeState] = useState<Mode>(() =>
+    params.get('mode') === 'test' ? 'play' : ((localStorage.getItem('trainingMode') as Mode | null) ?? 'review'),
+  );
   const setMode = (m: Mode) => {
     localStorage.setItem('trainingMode', m);
     setModeState(m);
@@ -72,7 +75,7 @@ export function Training({ me }: { me: Me }) {
           onChange={setMode}
           tabs={[
             { id: 'review', label: 'Réviser' },
-            { id: 'play', label: 'Jouer les lignes' },
+            { id: 'play', label: 'Se tester' },
           ]}
         />
       </div>
@@ -84,6 +87,12 @@ export function Training({ me }: { me: Me }) {
       )}
       {review.error && <p className="error">{review.error.message}</p>}
 
+      <p className="muted small-text mode-hint">
+        {mode === 'review'
+          ? 'Les positions à revoir aujourd’hui, au bon moment pour les retenir.'
+          : 'L’adversaire joue les coups les plus fréquents à votre niveau, comme en partie : testez-vous ligne après ligne.'}
+      </p>
+
       {mode === 'review' ? (
         <ReviewMode
           sources={sources}
@@ -91,6 +100,7 @@ export function Training({ me }: { me: Me }) {
           noNewLimit={!!from}
           onReview={onReview}
           onCounts={onCounts}
+          onTest={() => setMode('play')}
           idle={<Progress sources={sources} />}
         />
       ) : (

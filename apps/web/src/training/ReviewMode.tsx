@@ -31,6 +31,7 @@ export function ReviewMode({
   onReview,
   onCounts,
   idle,
+  onTest,
   noNewLimit = false,
 }: {
   sources: Source[];
@@ -41,6 +42,8 @@ export function ReviewMode({
   onCounts: (c: { due: number; fresh: number; reviewed: number; asked: number; firstTry: number }) => void;
   /** Shown when nothing is left to review. */
   idle: React.ReactNode;
+  /** Switch to "Se tester" (offered when the review is done). */
+  onTest?: () => void;
 }) {
   const [extraNew, setExtraNew] = useState(0);
   const [ahead, setAhead] = useState(false);
@@ -158,6 +161,11 @@ export function ReviewMode({
               }}
             >
               Réviser en avance ({queue.early} apprises, pas encore dues)
+            </button>
+          )}
+          {onTest && sources.some((s) => s.positions.length > 0) && (
+            <button className={queue.unseen > 0 ? '' : 'primary'} onClick={onTest} title="L’adversaire joue les coups les plus fréquents à votre niveau">
+              Se tester
             </button>
           )}
         </div>
