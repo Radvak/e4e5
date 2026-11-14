@@ -4,7 +4,7 @@ import { useLocation } from 'react-router-dom';
 import { api, type Me } from '../api';
 import { GameSyncRows, useGameSync } from '../components/GameSync';
 import { RatingRange } from '../components/RatingRange';
-import { explorerParams, SPEED_CHOICES, SPEED_NAMES, useSettings, type LearnOrder, type SpeedChoice } from '../settings';
+import { explorerParams, NO_LIMIT, SPEED_CHOICES, SPEED_NAMES, useSettings, type LearnOrder, type SpeedChoice } from '../settings';
 import { Button, PageHeader } from '../ui';
 
 const PERIODS = [
@@ -200,11 +200,11 @@ export function Settings({ me }: { me: Me }) {
         <div className="setting">
           <div className="what">
             <strong>Nouvelles lignes par jour</strong>
-            <div className="hint">Par répertoire. Chaque ligne est apprise en entier.</div>
+            <div className="hint">Pour tous les répertoires actifs ensemble. Chaque ligne est apprise en entier ; les lignes à revoir ne sont jamais limitées.</div>
           </div>
           <select value={settings.newPerDay} onChange={(e) => settings.setNewPerDay(Number(e.target.value))}>
-            {[0, 1, 2, 3, 5, 10].map((n) => (
-              <option key={n} value={n}>{n}</option>
+            {[1, 3, 5, 10, 20, NO_LIMIT].map((n) => (
+              <option key={n} value={n}>{n === NO_LIMIT ? 'Sans limite' : n}</option>
             ))}
           </select>
         </div>

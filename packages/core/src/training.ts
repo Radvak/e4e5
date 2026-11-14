@@ -110,26 +110,27 @@ export function lineStarts<T extends { fen: string; path: RepMove[] }>(items: T[
 }
 
 /**
- * New positions to learn today, by whole lines: `ordered` = the unlearnt positions in learning
- * order (a position after the one leading to it). A position continues a chosen line when its
- * previous position of mine is chosen and has no continuation yet; otherwise it starts a new
- * line, while fewer than `lines` lines are started. Returns the chosen positions and the
- * number of lines started.
+ * Positions grouped into whole lines, `ordered` in learning order (a position after the one
+ * leading to it): a position continues the line of its previous position of mine (two plies
+ * earlier) when that one is in a line without continuation yet; otherwise it starts a line.
  */
-export function pickNewLines<T extends { fen: string; path: RepMove[] }>(ordered: T[], lines: number): { chosen: T[]; lines: number } {
-  const chosen: T[] = [];
-  const picked = new Set<string>();
+export function groupLines<T extends { fen: string; path: RepMove[] }>(ordered: T[]): T[][] {
+  const lines: T[][] = [];
+  const lineOf = new Map<string, T[]>();
   const continued = new Set<string>();
-  let started = 0;
   for (const p of ordered) {
     const prev = p.path.length >= 2 ? p.path.at(-2)!.fromFen : null;
-    if (prev && picked.has(prev) && !continued.has(prev)) {
-      continued.add(prev);
-    } else if (started < lines) {
-      started++;
-    } else continue;
-    picked.add(p.fen);
-    chosen.push(p);
+    let line = prev && !continued.has(prev) ? lineOf.get(prev) : undefined;
+    if (line) continued.add(prev!);
+    else lines.push((line = []));
+    line.push(p);
+    lineOf.set(p.fen, line);
   }
-  return { chosen, lines: started };
+  return lines;
+}
+
+/** The first `lines` whole lines of `ordered` (see groupLines), flattened. */
+export function pickNewLines<T extends { fen: string; path: RepMove[] }>(ordered: T[], lines: number): { chosen: T[]; lines: number } {
+  const picked = groupLines(ordered).slice(0, lines);
+  return { chosen: picked.flat(), lines: picked.length };
 }

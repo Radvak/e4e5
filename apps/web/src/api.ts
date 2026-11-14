@@ -66,7 +66,24 @@ export interface ReviewCard {
   createdAt: string;
 }
 export interface ReviewLogEntry { repertoireId: string; grade: Grade; isNew: boolean; reviewedAt: string }
-export interface TrainingSummary { repertoireId: string; active: boolean; total: number; due: number; new: number; /** Lines to go through today, split into to review / new. */ lines: number; dueLines: number; newLines: number; /** Lines of the repertoire. */ totalLines: number }
+export interface TrainingSummary {
+  repertoireId: string;
+  active: boolean;
+  /** Positions to train, and lines of the repertoire. */
+  total: number;
+  totalLines: number;
+  /** Positions due, and the lines they form. */
+  due: number;
+  dueLines: number;
+  /** Lines learnt today, and whole lines not learnt yet. */
+  learntTodayLines: number;
+  availableLines: number;
+  /** New lines still allowed today, all repertoires together. */
+  remainingNewLines: number;
+  /** New lines this repertoire can take today, and lines to go through today (to review + new). */
+  newLines: number;
+  lines: number;
+}
 export interface ImportResult {
   games: number; added: number; duplicates: number; unreachable: number; errors: string[];
 }

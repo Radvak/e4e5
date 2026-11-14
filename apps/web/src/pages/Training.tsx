@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useCallback, useMemo, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { api, type Grade, type Me } from '../api';
-import { explorerParams, useSettings } from '../settings';
+import { dayStart, explorerParams, useSettings } from '../settings';
 import { useGaps } from '../useGaps';
 import { Button, PageHeader, Tabs, plural } from '../ui';
 import { lineText } from '../training/common';
@@ -41,6 +41,9 @@ export function Training({ me }: { me: Me }) {
   const { newPerDay, speed, range, learnOrder } = useSettings();
   // Order of the new positions: most played at the user's level (reach probabilities of the gap finder).
   const gaps = useGaps(me, learnOrder === 'frequency');
+  // The daily limit of new lines is shared by all repertoires: lines learnt today elsewhere count.
+  const summary = useQuery({ queryKey: ['training-summary', newPerDay], queryFn: () => api.trainingSummary(dayStart(), newPerDay) });
+  const learntElsewhere = (summary.data ?? []).filter((s) => !ids.includes(s.repertoireId)).reduce((n, s) => n + s.learntTodayLines, 0);
   const reachOf = useMemo(() => {
     if (learnOrder !== 'frequency' || !gaps.data) return undefined;
     return (source: Source, fen: string) => gaps.data?.[source.color]?.reach[fen];
@@ -113,6 +116,7 @@ export function Training({ me }: { me: Me }) {
           onCounts={onCounts}
           onTest={() => setMode('play')}
           reachOf={reachOf}
+          learntElsewhere={learntElsewhere}
           idle={<Progress sources={sources} />}
         />
       ) : (

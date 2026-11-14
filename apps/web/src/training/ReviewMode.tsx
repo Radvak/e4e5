@@ -1,4 +1,4 @@
-import { lineStarts, pickNewLines, START_FEN, type RepMove, type TrainingPosition } from '@prepa-cahier/core';
+import { groupLines, lineStarts, START_FEN, type RepMove, type TrainingPosition } from '@prepa-cahier/core';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Grade, ReviewCard } from '../api';
 import { Board } from '../components/Board';
@@ -33,6 +33,7 @@ export function ReviewMode({
   idle,
   onTest,
   reachOf,
+  learntElsewhere = 0,
   noNewLimit = false,
 }: {
   sources: Source[];
@@ -51,6 +52,8 @@ export function ReviewMode({
    * probability decreases along a line); unknown ones come last, in the repertoire's order.
    */
   reachOf?: (source: Source, fen: string) => number | undefined;
+  /** Lines learnt today in the repertoires not in this session (the daily limit is shared). */
+  learntElsewhere?: number;
 }) {
   const [extraNew, setExtraNew] = useState(0);
   const [ahead, setAhead] = useState(false);
@@ -76,17 +79,15 @@ export function ReviewMode({
   const queue = useMemo(() => {
     const today0 = dayStart();
     const due: (Item & { at: number })[] = [];
-    const fresh: Item[] = [];
     const upcoming: (Item & { at: number })[] = [];
-    let unseenLines = 0;
-    let freshLines = 0;
     const reach = (item: Item) => reachOf?.(item.source, item.target.fen) ?? -1;
-    // Everything in lines (a review always goes through a whole line): new positions are picked
-    // by whole lines, up to "new lines per day" minus the lines learnt today.
+    // Everything in lines (a review always goes through a whole line). New lines: one daily
+    // limit for all repertoires, minus the lines learnt today here and elsewhere.
+    let learntToday = learntElsewhere;
+    const linesBySource: Item[][][] = [];
     for (const source of sources) {
       const today = new Set(source.cardList.filter((c) => Date.parse(c.createdAt) >= today0).map((c) => c.fen));
-      const learntTodayLines = lineStarts(source.positions.filter((p) => today.has(p.fen)), (f) => today.has(f)).length;
-      const allowed = noNewLimit ? Infinity : Math.max(0, newPerDay + extraNew - learntTodayLines);
+      learntToday += lineStarts(source.positions.filter((p) => today.has(p.fen)), (f) => today.has(f)).length;
       const unseenHere: Item[] = [];
       for (const target of source.positions) {
         const card: ReviewCard | undefined = source.cards.get(target.fen);
@@ -96,11 +97,24 @@ export function ReviewMode({
       }
       // Most likely first (stable sort: the repertoire's order for equal or unknown ones).
       if (reachOf) unseenHere.sort((a, b) => reach(b) - reach(a));
-      const picked = pickNewLines(unseenHere.map((i) => ({ ...i, fen: i.target.fen, path: i.target.path })), allowed);
-      unseenLines += lineStarts(unseenHere.map((i) => ({ fen: i.target.fen, path: i.target.path })), () => true).length - picked.lines;
-      freshLines += picked.lines;
-      fresh.push(...picked.chosen.map(({ source, target }) => ({ source, target })));
+      const lines = groupLines(unseenHere.map((i) => ({ ...i, fen: i.target.fen, path: i.target.path })));
+      linesBySource.push(lines.map((line) => line.map(({ source, target }) => ({ source, target }))));
     }
+    const remaining = noNewLimit ? Infinity : Math.max(0, newPerDay + extraNew - learntToday);
+    let chosen: Item[][];
+    if (reachOf) {
+      // By frequency: the most likely lines first, all repertoires together.
+      chosen = linesBySource.flat().sort((a, b) => reach(b[0]!) - reach(a[0]!)).slice(0, remaining);
+    } else {
+      // Repertoire order: one line of each repertoire in turn, so that none is left behind.
+      chosen = [];
+      for (let k = 0; chosen.length < remaining && linesBySource.some((l) => l.length > k); k++) {
+        for (const lines of linesBySource) if (lines[k] && chosen.length < remaining) chosen.push(lines[k]!);
+      }
+    }
+    const fresh: Item[] = chosen.flat();
+    const freshLines = chosen.length;
+    const unseenLines = linesBySource.reduce((n, l) => n + l.length, 0) - freshLines;
     if (reachOf) fresh.sort((a, b) => reach(b) - reach(a));
     due.sort((a, b) => a.at - b.at);
     upcoming.sort((a, b) => a.at - b.at);
@@ -113,7 +127,7 @@ export function ReviewMode({
       return n + lineStarts(source.positions.filter((p) => set.has(p.fen)), (f) => set.has(f)).length;
     }, 0);
     return { due, fresh, items, unseenLines, nextDue, early: early.length, dueLines, freshLines };
-  }, [sources, now, newPerDay, extraNew, noNewLimit, ahead, reachOf]);
+  }, [sources, now, newPerDay, extraNew, noNewLimit, ahead, reachOf, learntElsewhere]);
 
   useEffect(() => {
     onCounts({ dueLines: queue.dueLines, freshLines: queue.freshLines, ...stats });

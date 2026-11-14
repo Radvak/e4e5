@@ -30,14 +30,18 @@ export function App() {
   const { pathname } = useLocation();
   const me = useQuery({ queryKey: ['me'], queryFn: api.me, retry: false });
   const { newPerDay } = useSettings();
-  // Badge of the Entraîner tab: lines to go through today (due and new positions grouped by line).
+  // Badge of the Entraîner tab: lines to review today, plus the new lines still allowed today
+  // (one daily limit for all repertoires).
   const summary = useQuery({
     queryKey: ['training-summary', newPerDay],
     queryFn: () => api.trainingSummary(dayStart(), newPerDay),
     enabled: !!me.data,
     staleTime: 30_000,
   });
-  const toTrain = (summary.data ?? []).filter((s) => s.active).reduce((n, s) => n + s.lines, 0);
+  const active = (summary.data ?? []).filter((s) => s.active);
+  const toTrain =
+    active.reduce((n, s) => n + s.dueLines, 0) +
+    Math.min(summary.data?.[0]?.remainingNewLines ?? 0, active.reduce((n, s) => n + s.availableLines, 0));
   const badge = (to: string) =>
     to === '/train' && toTrain > 0 ? <span className="tab-badge" aria-label={`${toTrain} lignes à revoir`} title={`${toTrain} lignes à revoir aujourd’hui`}>{toTrain > 99 ? '99+' : toTrain}</span> : null;
 

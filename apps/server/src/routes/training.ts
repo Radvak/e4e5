@@ -1,5 +1,5 @@
 /** Training: spaced-repetition reviews (FSRS) of the positions where it is the user's turn. */
-import { lineStarts, pickNewLines, Repertoire, trainingPositions } from '@prepa-cahier/core';
+import { groupLines, lineStarts, Repertoire, trainingPositions } from '@prepa-cahier/core';
 import { and, eq, gte, inArray } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { createEmptyCard, fsrs, Rating, type CardInput } from 'ts-fsrs';
@@ -18,8 +18,8 @@ const reviewBody = z.object({
 const summaryQuery = z.object({
   /** Start of the user's day (ms), for the daily limit of new positions. */
   dayStart: z.coerce.number().int().nonnegative(),
-  /** New lines to learn per day and per repertoire. */
-  newPerDay: z.coerce.number().int().min(0).max(50).default(3),
+  /** New lines to learn per day, all repertoires together (1000: no limit). */
+  newPerDay: z.coerce.number().int().min(0).max(1000).default(5),
 });
 
 type CardRow = typeof reviewCards.$inferSelect;
@@ -130,34 +130,41 @@ export async function trainingRoutes(app: FastifyInstance) {
       db.select().from(reviewCards).where(inArray(reviewCards.repertoireId, ids)),
     ]);
     const now = Date.now();
-    return reps.map((r) => {
+    // New lines: one daily limit for all repertoires (lines learnt today anywhere count).
+    const rows = reps.map((r) => {
       const graph = new Repertoire(r.color, moves.filter((m) => m.repertoireId === r.id));
       const list = trainingPositions(graph);
-      // Lines of the repertoire: its distinct line ends (positions with no move after them).
-      const totalLines = [...graph.reachable()].filter((f) => graph.movesAt(f).length === 0).length;
       const positions = new Set(list.map((p) => p.fen));
       const own = cards.filter((c) => c.repertoireId === r.id && positions.has(c.fen));
-      // Everything counted in lines (a review always goes through a whole line).
       const known = new Set(own.map((c) => c.fen));
       const today = new Set(own.filter((c) => c.createdAt.getTime() >= dayStart).map((c) => c.fen));
-      const learntTodayLines = lineStarts(list.filter((p) => today.has(p.fen)), (f) => today.has(f)).length;
-      const fresh = pickNewLines(list.filter((p) => !known.has(p.fen)), Math.max(0, newPerDay - learntTodayLines));
       const dueSet = new Set(own.filter((c) => c.due.getTime() <= now).map((c) => c.fen));
-      // To review: the lines formed by the due positions. New: the new lines picked for today
-      // (their number does not depend on the learning order, so it matches the training page).
-      const dueLines = lineStarts(list.filter((p) => dueSet.has(p.fen)), (f) => dueSet.has(f)).length;
-      const lines = dueLines + fresh.lines;
+      return {
+        r,
+        total: positions.size,
+        /** Lines of the repertoire: its distinct line ends. */
+        totalLines: [...graph.reachable()].filter((f) => graph.movesAt(f).length === 0).length,
+        due: dueSet.size,
+        /** Lines formed by the due positions. */
+        dueLines: lineStarts(list.filter((p) => dueSet.has(p.fen)), (f) => dueSet.has(f)).length,
+        learntTodayLines: lineStarts(list.filter((p) => today.has(p.fen)), (f) => today.has(f)).length,
+        /** Whole lines not learnt yet. */
+        availableLines: groupLines(list.filter((p) => !known.has(p.fen))).length,
+      };
+    });
+    const remaining = Math.max(0, newPerDay - rows.reduce((n, x) => n + x.learntTodayLines, 0));
+    return rows.map(({ r, ...x }) => {
+      // New lines this repertoire can take today (the daily limit is shared by all of them).
+      const newLines = r.active ? Math.min(remaining, x.availableLines) : 0;
       return {
         repertoireId: r.id,
         active: r.active,
-        total: positions.size,
-        due: dueSet.size,
-        new: fresh.chosen.length,
-        /** Lines to go through today (due and new positions grouped by line), of which to review. */
-        lines,
-        dueLines,
-        newLines: lines - dueLines,
-        totalLines,
+        ...x,
+        /** Lines still to learn today, all repertoires together (same for every item). */
+        remainingNewLines: remaining,
+        newLines,
+        /** Lines to go through today in this repertoire: to review + new. */
+        lines: x.dueLines + newLines,
       };
     });
   });
