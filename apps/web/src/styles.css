@@ -425,3 +425,6 @@ kbd { display: inline-block; min-width: 18px; padding: 0 4px; margin: 0 1px; bor
 .star { background: none; border: none; width: 36px; min-height: 36px; padding: 0; color: var(--muted); }
 .star:hover { background: var(--surface-3); color: var(--text); }
 .star.on { color: #e3b341; }
+.rep-moves li.clickable { cursor: pointer; }
+.rep-moves li.clickable:hover { background: var(--surface-2); }
+.rep-moves li.clickable .san { pointer-events: none; }

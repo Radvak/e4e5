@@ -332,25 +332,25 @@ export function RepertoireEditor({ me }: { me: Me }) {
               onSave={(comment) => setComment.mutate({ m: lastStored, comment })}
             />
           )}
-          {here.length === 0 && (
+          {here.length === 0 && !hasDraft && (
             <p className="muted">Rien de préparé ici.</p>
           )}
           <ul className="rep-moves">
             {options[0] && !rep.has(options[0].fromFen, options[0].uci) && (
-              <li className={selected === 0 ? 'selected' : ''}>
-                <button className="link unsaved san" onClick={() => play(options[0]!.uci)}>{options[0].san}</button>
+              <li className={`clickable ${selected === 0 ? 'selected' : ''}`} onClick={() => play(options[0]!.uci)}>
+                <button className="link unsaved san">{options[0].san}</button>
                 <span className="muted small-text" style={{ margin: 0 }}>suite de votre ligne, pas enregistrée</span>
               </li>
             )}
             {here.map((m) => (
-              <li key={m.id} className={options[selected]?.uci === m.uci ? 'selected' : ''}>
+              <li key={m.id} className={`clickable ${options[selected]?.uci === m.uci ? 'selected' : ''}`} onClick={() => play(m.uci)}>
                 <div className="move-main">
                   <div className="row nowrap">
-                    <button className="link san" onClick={() => play(m.uci)}>{m.san}</button>
+                    <button className="link san">{m.san}</button>
                   </div>
                   {m.comment && <div className="comment move-comment">{m.comment}</div>}
                 </div>
-                <div className="row nowrap move-actions">
+                <div className="row nowrap move-actions" onClick={(e) => e.stopPropagation()}>
                 <button
                   className={`star ${m.isMain ? 'on' : ''}`}
                   onClick={() => toggleMain.mutate(m)}
