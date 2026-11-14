@@ -333,7 +333,7 @@ export function RepertoireEditor({ me }: { me: Me }) {
             />
           )}
           {here.length === 0 && !hasDraft && (
-            <p className="muted">Rien de préparé ici.</p>
+            <p className="muted">Jouez des coups pour continuer la variante.</p>
           )}
           <ul className="rep-moves">
             {options[0] && !rep.has(options[0].fromFen, options[0].uci) && (
