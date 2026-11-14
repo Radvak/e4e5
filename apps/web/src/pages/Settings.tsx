@@ -169,7 +169,7 @@ export function Settings({ me }: { me: Me }) {
       <section className="card" id="statistiques">
         <h3>Statistiques d’ouvertures</h3>
         <p className="muted small-text">
-          Les coups joués par les joueurs Lichess de votre niveau : flèches, tableaux, trous de préparation, adversaire de l’entraînement.
+          Les coups joués par les joueurs Lichess de votre niveau : flèches, tableaux, coups manquants, adversaire de l’entraînement.
         </p>
         <div className="setting">
           <div className="what"><strong>Cadence</strong></div>
@@ -210,7 +210,7 @@ export function Settings({ me }: { me: Me }) {
         </div>
         <div className="setting">
           <div className="what">
-            <strong>Trous affichés</strong>
+            <strong>Coups manquants</strong>
             <div className="hint">Coups adverses non préparés joués dans au moins cette part des parties.</div>
           </div>
           <select value={settings.gapCutoff} onChange={(e) => settings.setGapCutoff(Number(e.target.value))}>
