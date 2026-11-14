@@ -337,9 +337,14 @@ export function RepertoireEditor({ me }: { me: Me }) {
           )}
           <ul className="rep-moves">
             {options[0] && !rep.has(options[0].fromFen, options[0].uci) && (
-              <li className={`clickable ${selected === 0 ? 'selected' : ''}`} onClick={() => play(options[0]!.uci)}>
-                <button className="link unsaved san">{options[0].san}</button>
-                <span className="muted small-text" style={{ margin: 0 }}>suite de votre ligne, pas enregistrée</span>
+              <li
+                className={`clickable draft-move ${selected === 0 ? 'selected' : ''}`}
+                onClick={() => play(options[0]!.uci)}
+                title="Suite de votre ligne, pas encore enregistrée"
+              >
+                <div className="move-main">
+                  <button className="link unsaved san">{options[0].san}</button>
+                </div>
               </li>
             )}
             {here.map((m) => (
