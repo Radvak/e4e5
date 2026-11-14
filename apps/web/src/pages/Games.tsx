@@ -170,13 +170,6 @@ function InboxRow({ item, rep }: { item: InboxItem; rep: RepertoireSummary | und
     await qc.invalidateQueries({ queryKey: ['games-report'] });
     await qc.invalidateQueries({ queryKey: ['repertoire', item.repertoireId] });
   };
-  const add = useMutation({
-    mutationFn: (ucis: string[]) => api.saveLine(item.repertoireId, ucis),
-    onSuccess: async (res) => {
-      setDone(`${plural(res.added, 'coup ajouté', 'coups ajoutés')} à ${rep?.name ?? 'votre répertoire'}.`);
-      await refresh();
-    },
-  });
   const review = useMutation({
     mutationFn: () => api.reviewNow(item.repertoireId, item.fen),
     onSuccess: () => setDone('À revoir dès maintenant.'),
@@ -186,9 +179,11 @@ function InboxRow({ item, rep }: { item: InboxItem; rep: RepertoireSummary | und
   const line = item.line.sans;
   const afterMove = [...item.line.ucis, item.move.uci];
   const after = [...line, item.move.san];
-  const explorer = `/explorer?${new URLSearchParams({ line: afterMove.join(','), ...(rep?.color === 'black' ? { color: 'black' } : {}) })}`;
-  const editor = `/r/${item.repertoireId}?${new URLSearchParams({ line: afterMove.join(',') })}`;
-  const error = add.error ?? review.error ?? dismiss.error;
+  // Opened on the line with the move (and, after an opponent's move, your usual reply) as a draft:
+  // nothing is saved until "Enregistrer la variante".
+  const draft = item.kind !== 'deviation' && item.replies[0] ? [...afterMove, item.replies[0].uci] : afterMove;
+  const editor = `/r/${item.repertoireId}?${new URLSearchParams({ line: draft.join(',') })}`;
+  const error = review.error ?? dismiss.error;
 
   // Thumbnail: the position, with the opponent's move (orange) or my move (red) and the prepared ones (green).
   const arrows: MiniArrow[] =
@@ -233,28 +228,18 @@ function InboxRow({ item, rep }: { item: InboxItem; rep: RepertoireSummary | und
       </div>
       <div className="row inbox-actions">
         {item.kind === 'deviation' && (
-          <>
-            <Button size="sm" variant="primary" disabled={review.isPending} onClick={() => review.mutate()} title="Rendre cette position à revoir maintenant">
-              Revoir maintenant
-            </Button>
-            <Button size="sm" disabled={add.isPending} onClick={() => add.mutate(afterMove)} title="Accepter votre coup comme autre réponse">
-              Ajouter {moveText(line, item.move.san, true)}
-            </Button>
-          </>
-        )}
-        {item.kind !== 'deviation' &&
-          item.replies.slice(0, 2).map((x, i) => (
-            <Button key={x.uci} size="sm" variant={i === 0 ? 'primary' : 'secondary'} disabled={add.isPending} onClick={() => add.mutate([...afterMove, x.uci])}>
-              Ajouter {moveText(line, item.move.san, true)} {moveText(after, x.san)}
-            </Button>
-          ))}
-        {item.kind === 'end' && item.replies.length === 0 && (
-          <Button size="sm" variant="primary" disabled={add.isPending} onClick={() => add.mutate(afterMove)}>
-            Ajouter {moveText(line, item.move.san, true)}
+          <Button size="sm" variant="primary" disabled={review.isPending} onClick={() => review.mutate()} title="Rendre cette position à revoir maintenant">
+            Revoir maintenant
           </Button>
         )}
-        <Button size="sm" variant="ghost" to={explorer} title="Statistiques, parties et moteur pour cette position">Explorer</Button>
-        <Button size="sm" variant="ghost" to={editor} title="Choisir un autre coup dans l’éditeur">Éditeur</Button>
+        <Button
+          size="sm"
+          variant={item.kind === 'deviation' ? 'ghost' : 'primary'}
+          to={editor}
+          title="Ouvrir le répertoire sur cette ligne (rien n’est enregistré sans votre accord)"
+        >
+          Préparer dans l’éditeur
+        </Button>
         <Button size="sm" variant="ghost" disabled={dismiss.isPending} onClick={() => dismiss.mutate()} title="Masquer cet élément">Ignorer</Button>
       </div>
       {done && <p className="success-text small-text">{done}</p>}
