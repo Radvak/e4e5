@@ -13,7 +13,7 @@ import { ExplorerPanel } from '../components/ExplorerPanel';
 import { explorerParams, useSettings } from '../settings';
 import { Suggestions } from '../components/Suggestions';
 import { Button, Menu, PageHeader, plural } from '../ui';
-import { depthText, useGaps } from '../useGaps';
+import { useGaps } from '../useGaps';
 
 /** A move of the line on the board; saved or not is derived from the repertoire. */
 type LineMove = PlayedMove;
@@ -242,7 +242,6 @@ export function RepertoireEditor({ me }: { me: Me }) {
   if (isLoading) return <p className="muted">Chargement…</p>;
   const colorReport = data ? gapReport.data?.[data.color] : undefined;
   const holes = colorReport?.gaps.filter((g) => g.repertoireId === id);
-  const depth = colorReport?.repertoires.find((x) => x.id === id && x.share > 0)?.depth;
   if (error || !data) return <p className="error">Impossible de charger le répertoire.</p>;
 
   const last = line[ply - 1];
@@ -253,7 +252,7 @@ export function RepertoireEditor({ me }: { me: Me }) {
     <PageHeader
       back="/repertoires"
       title={data.name}
-      subtitle={`${data.color === 'white' ? 'Blancs' : 'Noirs'} · ${plural(rep.size, 'coup', 'coups')}${depth !== undefined ? ` · profondeur ${depthText(depth)}` : ''}`}
+      subtitle={`${data.color === 'white' ? 'Blancs' : 'Noirs'} · ${plural(rep.size, 'coup', 'coups')}`}
       actions={<Button variant="primary" icon="play" to={`/r/${id}/train`}>S’entraîner</Button>}
       menu={[
         ...(ply > 0 && unsaved.length === 0

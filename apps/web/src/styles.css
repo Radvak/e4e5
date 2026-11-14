@@ -430,3 +430,4 @@ kbd { display: inline-block; min-width: 18px; padding: 0 4px; margin: 0 1px; bor
 .rep-moves li.clickable .san { pointer-events: none; }
 /* Next move of the line, not saved yet: orange bar (green for repertoire moves). */
 .rep-moves li.draft-move, .rep-moves li.draft-move.selected { box-shadow: inset 3px 0 0 var(--hole); }
+.rep-card .meta .missing { color: var(--hole); font-weight: 600; }

@@ -18,5 +18,3 @@ export function useGaps(me: Me, enabled = true) {
   });
 }
 
-/** "6,2" */
-export const depthText = (n: number) => n.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });

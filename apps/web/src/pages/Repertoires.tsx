@@ -5,7 +5,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { api, type Me, type RepertoireSummary, type TrainingSummary } from '../api';
 import { dayStart, useSettings } from '../settings';
 import { Button, EmptyState, PageHeader, Tabs, plural } from '../ui';
-import { depthText, useGaps } from '../useGaps';
+import { useGaps } from '../useGaps';
 
 const COLORS: { color: Color; label: string }[] = [
   { color: 'white', label: 'Avec les Blancs' },
@@ -20,8 +20,11 @@ export function Repertoires({ me }: { me: Me }) {
   const summary = useQuery({ queryKey: ['training-summary', newPerDay], queryFn: () => api.trainingSummary(dayStart(), newPerDay) });
   const counts = new Map((summary.data ?? []).map((s) => [s.repertoireId, s]));
   const gaps = useGaps(me, (reps.data?.length ?? 0) > 0);
-  // Preparation depth of each repertoire: average number of moves its games stay in the lines.
-  const depths = new Map([...(gaps.data?.white?.repertoires ?? []), ...(gaps.data?.black?.repertoires ?? [])].filter((x) => x.share > 0).map((x) => [x.id, x.depth]));
+  // Missing moves of each repertoire: frequent opponent moves it does not answer (gap finder).
+  const missing = new Map<string, number>();
+  for (const g of [...(gaps.data?.white?.gaps ?? []), ...(gaps.data?.black?.gaps ?? [])]) {
+    if (g.repertoireId) missing.set(g.repertoireId, (missing.get(g.repertoireId) ?? 0) + 1);
+  }
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState('');
   const [color, setColor] = useState<Color>('white');
@@ -94,7 +97,7 @@ export function Repertoires({ me }: { me: Me }) {
                   key={r.id}
                   rep={r}
                   counts={counts.get(r.id)}
-                  depth={depths.get(r.id)}
+                  missing={gaps.data ? missing.get(r.id) ?? 0 : undefined}
                 />
               ))}
             </div>
@@ -105,7 +108,7 @@ export function Repertoires({ me }: { me: Me }) {
   );
 }
 
-function RepertoireCard({ rep, counts, depth }: { rep: RepertoireSummary; counts?: TrainingSummary; depth?: number }) {
+function RepertoireCard({ rep, counts, missing }: { rep: RepertoireSummary; counts?: TrainingSummary; missing?: number }) {
   const navigate = useNavigate();
   const toTrain = counts ? counts.due + counts.new : 0;
   // The whole card opens the repertoire; its buttons stop the click.
@@ -116,10 +119,17 @@ function RepertoireCard({ rep, counts, depth }: { rep: RepertoireSummary; counts
       <div className="info">
         <Link className="name" to={`/r/${rep.id}`} onClick={stop}>{rep.name}</Link>
         <div className="meta">
-          {depth !== undefined && <span title="Nombre moyen de coups qu’une partie reste dans ce répertoire">profondeur {depthText(depth)} coups · </span>}
           {counts ? plural(counts.total, 'position', 'positions') : '…'}
           {counts && counts.due > 0 && <> · <span className="due">{counts.due} à revoir</span></>}
           {counts && counts.new > 0 && <> · {plural(counts.new, 'nouvelle', 'nouvelles')}</>}
+          {!!missing && (
+            <>
+              {' · '}
+              <span className="missing" title="Coups adverses fréquents que ce répertoire ne prévoit pas encore">
+                {plural(missing, 'coup manquant', 'coups manquants')}
+              </span>
+            </>
+          )}
         </div>
       </div>
       <div className="row nowrap" onClick={stop}>
