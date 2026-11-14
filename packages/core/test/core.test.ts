@@ -4,6 +4,9 @@ import {
   bestRepertoires,
   GameLine,
   gameMovesFromPgn,
+  lineStarts,
+  pickNewLines,
+  trainingPositions,
   bucketsFor,
   pgnToMoves,
   playUci,
@@ -212,5 +215,21 @@ describe('played games', () => {
       ['scotch', 'opponent-novelty', 3],
       ['petrov', 'opponent-novelty', 3],
     ]);
+  });
+});
+
+describe('new lines to learn', () => {
+  it('picks whole lines, one continuation per position', () => {
+    // My answers after 1. e4 e5 (2. Nf3), 1... c5 (2. Nf3) and 1... e6 (2. d4): three lines.
+    const rep = new Repertoire('white', pgnToMoves('1. e4 e5 (1... c5 2. Nf3 d6 3. d4) (1... e6 2. d4) 2. Nf3 Nc6 3. Bb5 *').moves);
+    const positions = trainingPositions(rep);
+    const one = pickNewLines(positions, 1);
+    expect(one.lines).toBe(1);
+    // The first line from the start: 1. e4, then the main line (2. Nf3, 3. Bb5).
+    expect(one.chosen.map((p) => rep.movesAt(p.fen)[0]!.san)).toEqual(['e4', 'Nf3', 'Bb5']);
+    const all = pickNewLines(positions, 10);
+    expect(all.lines).toBe(3);
+    expect(all.chosen).toHaveLength(positions.length);
+    expect(lineStarts(positions, (f) => positions.some((p) => p.fen === f))).toHaveLength(3);
   });
 });

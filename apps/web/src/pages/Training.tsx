@@ -5,7 +5,7 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import { api, type Grade, type Me } from '../api';
 import { explorerParams, useSettings } from '../settings';
 import { useGaps } from '../useGaps';
-import { Button, PageHeader, Tabs } from '../ui';
+import { Button, PageHeader, Tabs, plural } from '../ui';
 import { lineText } from '../training/common';
 import { PlayMode } from '../training/PlayMode';
 import { Progress } from '../training/Progress';
@@ -54,7 +54,7 @@ export function Training({ me }: { me: Me }) {
     localStorage.setItem('trainingMode', m);
     setModeState(m);
   };
-  const [counts, setCounts] = useState({ due: 0, fresh: 0, reviewed: 0, asked: 0, firstTry: 0 });
+  const [counts, setCounts] = useState({ dueLines: 0, freshLines: 0, reviewed: 0, asked: 0, firstTry: 0 });
   const onCounts = useCallback((c: typeof counts) => setCounts(c), []);
   const onReview = (source: Source, fen: string, grade: Grade) => review.mutate({ source, fen, grade });
 
@@ -71,8 +71,10 @@ export function Training({ me }: { me: Me }) {
         title="Entraînement"
         subtitle={
           mode === 'review'
-            ? `${title} · ${counts.due} à revoir · ${counts.fresh} nouvelles · ${counts.reviewed} faites${
-                counts.asked > 0 ? ` (${Math.round((100 * counts.firstTry) / counts.asked)} % du premier coup)` : ''
+            ? `${title} · ${plural(counts.dueLines, 'ligne', 'lignes')} à revoir · ${plural(counts.freshLines, 'nouvelle', 'nouvelles')}${
+                counts.reviewed > 0
+                  ? ` · ${plural(counts.reviewed, 'réponse', 'réponses')}${counts.asked > 0 ? ` (${Math.round((100 * counts.firstTry) / counts.asked)} % du premier coup)` : ''}`
+                  : ''
               }`
             : title
         }

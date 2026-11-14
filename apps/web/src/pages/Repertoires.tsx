@@ -125,9 +125,10 @@ function RepertoireCard({ rep, counts, missing }: { rep: RepertoireSummary; coun
         <div className="meta">
           {counts ? plural(counts.totalLines, 'ligne', 'lignes') : '…'}
           {!rep.active && <> · en pause</>}
-          {rep.active && counts && counts.lines > 0 && (
-            <> · <span className="due" title="Lignes avec des positions à revoir ou à apprendre aujourd’hui">{counts.lines} à revoir</span></>
+          {rep.active && counts && counts.dueLines > 0 && (
+            <> · <span className="due" title="Lignes à revoir aujourd’hui">{counts.dueLines} à revoir</span></>
           )}
+          {rep.active && counts && counts.newLines > 0 && <> · {plural(counts.newLines, 'nouvelle', 'nouvelles')}</>}
           {!!missing && (
             <>
               {' · '}

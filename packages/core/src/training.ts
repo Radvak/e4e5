@@ -90,3 +90,46 @@ export function pathTo(rep: Repertoire, fen: string): RepMove[] | null {
   }
   return null;
 }
+
+/**
+ * The positions that start a line, among `items` (in learning order: a position after the one
+ * leading to it). A position continues the line of its previous position of mine (two plies
+ * earlier) when that one is in the set and has no continuation yet; otherwise it starts a line
+ * (a second branch from the same position is another line).
+ */
+export function lineStarts<T extends { fen: string; path: RepMove[] }>(items: T[], inSet: (fen: string) => boolean): T[] {
+  const continued = new Set<string>();
+  return items.filter((p) => {
+    const prev = p.path.length >= 2 ? p.path.at(-2)!.fromFen : null;
+    if (prev && inSet(prev) && !continued.has(prev)) {
+      continued.add(prev);
+      return false;
+    }
+    return true;
+  });
+}
+
+/**
+ * New positions to learn today, by whole lines: `ordered` = the unlearnt positions in learning
+ * order (a position after the one leading to it). A position continues a chosen line when its
+ * previous position of mine is chosen and has no continuation yet; otherwise it starts a new
+ * line, while fewer than `lines` lines are started. Returns the chosen positions and the
+ * number of lines started.
+ */
+export function pickNewLines<T extends { fen: string; path: RepMove[] }>(ordered: T[], lines: number): { chosen: T[]; lines: number } {
+  const chosen: T[] = [];
+  const picked = new Set<string>();
+  const continued = new Set<string>();
+  let started = 0;
+  for (const p of ordered) {
+    const prev = p.path.length >= 2 ? p.path.at(-2)!.fromFen : null;
+    if (prev && picked.has(prev) && !continued.has(prev)) {
+      continued.add(prev);
+    } else if (started < lines) {
+      started++;
+    } else continue;
+    picked.add(p.fen);
+    chosen.push(p);
+  }
+  return { chosen, lines: started };
+}

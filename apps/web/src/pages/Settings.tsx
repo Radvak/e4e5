@@ -199,18 +199,18 @@ export function Settings({ me }: { me: Me }) {
         <h3>Entraînement et préparation</h3>
         <div className="setting">
           <div className="what">
-            <strong>Nouvelles positions par jour</strong>
-            <div className="hint">Par répertoire.</div>
+            <strong>Nouvelles lignes par jour</strong>
+            <div className="hint">Par répertoire. Chaque ligne est apprise en entier.</div>
           </div>
           <select value={settings.newPerDay} onChange={(e) => settings.setNewPerDay(Number(e.target.value))}>
-            {[0, 5, 10, 20, 50].map((n) => (
+            {[0, 1, 2, 3, 5, 10].map((n) => (
               <option key={n} value={n}>{n}</option>
             ))}
           </select>
         </div>
         <div className="setting">
           <div className="what">
-            <strong>Ordre des nouvelles positions</strong>
+            <strong>Ordre des nouvelles lignes</strong>
             <div className="hint">
               {settings.learnOrder === 'frequency'
                 ? 'D’abord ce que vos adversaires jouent le plus à votre niveau (statistiques Lichess).'

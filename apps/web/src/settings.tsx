@@ -30,7 +30,7 @@ interface Settings {
   /** null: automatic, from the user's own rating. */
   range: RatingRange | null;
   setRange: (r: RatingRange | null) => void;
-  /** New positions to learn per day and per repertoire. */
+  /** New lines to learn per day and per repertoire. */
   newPerDay: number;
   setNewPerDay: (n: number) => void;
   /** Gap finder: holes listed from this share of games. */
@@ -79,7 +79,7 @@ function usePersisted<T>(key: string, fallback: T): [T, (v: T) => void] {
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [speed, setSpeed] = usePersisted<SpeedChoice>('speed', 'both');
   const [range, setRange] = usePersisted<RatingRange | null>('ratingRange', null);
-  const [newPerDay, setNewPerDay] = usePersisted('newPerDay', 10);
+  const [newPerDay, setNewPerDay] = usePersisted('newLinesPerDay', 3);
   const [gapCutoff, setGapCutoff] = usePersisted('gapCutoff', 0.01);
   const [gamesDays, setGamesDays] = usePersisted('gamesDays', 90);
   const [gamesSpeeds, setGamesSpeeds] = usePersisted<string[]>('gamesSpeeds', ['blitz', 'rapid', 'classical', 'daily']);

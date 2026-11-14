@@ -1,5 +1,5 @@
 /** Training: spaced-repetition reviews (FSRS) of the positions where it is the user's turn. */
-import { Repertoire, trainingPositions } from '@prepa-cahier/core';
+import { lineStarts, pickNewLines, Repertoire, trainingPositions } from '@prepa-cahier/core';
 import { and, eq, gte, inArray } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { createEmptyCard, fsrs, Rating, type CardInput } from 'ts-fsrs';
@@ -18,7 +18,8 @@ const reviewBody = z.object({
 const summaryQuery = z.object({
   /** Start of the user's day (ms), for the daily limit of new positions. */
   dayStart: z.coerce.number().int().nonnegative(),
-  newPerDay: z.coerce.number().int().min(0).max(200).default(10),
+  /** New lines to learn per day and per repertoire. */
+  newPerDay: z.coerce.number().int().min(0).max(50).default(3),
 });
 
 type CardRow = typeof reviewCards.$inferSelect;
@@ -136,24 +137,26 @@ export async function trainingRoutes(app: FastifyInstance) {
       const totalLines = [...graph.reachable()].filter((f) => graph.movesAt(f).length === 0).length;
       const positions = new Set(list.map((p) => p.fen));
       const own = cards.filter((c) => c.repertoireId === r.id && positions.has(c.fen));
-      const learntToday = own.filter((c) => c.createdAt.getTime() >= dayStart).length;
-      const unseen = positions.size - own.length;
-      const fresh = Math.min(unseen, Math.max(0, newPerDay - learntToday));
-      // Lines to go through: the review follows a line from one waiting position to the next, so
-      // a waiting position whose previous position of mine (two plies earlier) also waits does
-      // not start a new line. New positions: the first ones in the repertoire's order.
+      // Everything counted in lines (a review always goes through a whole line).
       const known = new Set(own.map((c) => c.fen));
+      const today = new Set(own.filter((c) => c.createdAt.getTime() >= dayStart).map((c) => c.fen));
+      const learntTodayLines = lineStarts(list.filter((p) => today.has(p.fen)), (f) => today.has(f)).length;
+      const fresh = pickNewLines(list.filter((p) => !known.has(p.fen)), Math.max(0, newPerDay - learntTodayLines));
       const dueSet = new Set(own.filter((c) => c.due.getTime() <= now).map((c) => c.fen));
-      const waiting = new Set([...dueSet, ...list.filter((p) => !known.has(p.fen)).slice(0, fresh).map((p) => p.fen)]);
-      const lines = list.filter((p) => waiting.has(p.fen) && !(p.path.length >= 2 && waiting.has(p.path.at(-2)!.fromFen))).length;
+      // To review: the lines formed by the due positions. New: the new lines picked for today
+      // (their number does not depend on the learning order, so it matches the training page).
+      const dueLines = lineStarts(list.filter((p) => dueSet.has(p.fen)), (f) => dueSet.has(f)).length;
+      const lines = dueLines + fresh.lines;
       return {
         repertoireId: r.id,
         active: r.active,
         total: positions.size,
         due: dueSet.size,
-        new: fresh,
-        /** Lines to go through today (due and new positions grouped by line). */
+        new: fresh.chosen.length,
+        /** Lines to go through today (due and new positions grouped by line), of which to review. */
         lines,
+        dueLines,
+        newLines: lines - dueLines,
         totalLines,
       };
     });

@@ -1,4 +1,4 @@
-import { START_FEN, type RepMove, type TrainingPosition } from '@prepa-cahier/core';
+import { lineStarts, pickNewLines, START_FEN, type RepMove, type TrainingPosition } from '@prepa-cahier/core';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Grade, ReviewCard } from '../api';
 import { Board } from '../components/Board';
@@ -40,7 +40,7 @@ export function ReviewMode({
   /** All unseen positions are available (e.g. training a chosen subtree). */
   noNewLimit?: boolean;
   onReview: (source: Source, fen: string, grade: Grade) => void;
-  onCounts: (c: { due: number; fresh: number; reviewed: number; asked: number; firstTry: number }) => void;
+  onCounts: (c: { dueLines: number; freshLines: number; reviewed: number; asked: number; firstTry: number }) => void;
   /** Shown when nothing is left to review. */
   idle: React.ReactNode;
   /** Switch to "Se tester" (offered when the review is done). */
@@ -74,15 +74,19 @@ export function ReviewMode({
   }, []);
 
   const queue = useMemo(() => {
-    const today = dayStart();
+    const today0 = dayStart();
     const due: (Item & { at: number })[] = [];
     const fresh: Item[] = [];
     const upcoming: (Item & { at: number })[] = [];
-    let unseen = 0;
+    let unseenLines = 0;
+    let freshLines = 0;
     const reach = (item: Item) => reachOf?.(item.source, item.target.fen) ?? -1;
+    // Everything in lines (a review always goes through a whole line): new positions are picked
+    // by whole lines, up to "new lines per day" minus the lines learnt today.
     for (const source of sources) {
-      const learntToday = source.cardList.filter((c) => Date.parse(c.createdAt) >= today).length;
-      const allowed = noNewLimit ? Infinity : Math.max(0, newPerDay + extraNew - learntToday);
+      const today = new Set(source.cardList.filter((c) => Date.parse(c.createdAt) >= today0).map((c) => c.fen));
+      const learntTodayLines = lineStarts(source.positions.filter((p) => today.has(p.fen)), (f) => today.has(f)).length;
+      const allowed = noNewLimit ? Infinity : Math.max(0, newPerDay + extraNew - learntTodayLines);
       const unseenHere: Item[] = [];
       for (const target of source.positions) {
         const card: ReviewCard | undefined = source.cards.get(target.fen);
@@ -90,10 +94,12 @@ export function ReviewMode({
         else if (Date.parse(card.due) <= now) due.push({ source, target, at: Date.parse(card.due) });
         else upcoming.push({ source, target, at: Date.parse(card.due) });
       }
-      unseen += unseenHere.length;
       // Most likely first (stable sort: the repertoire's order for equal or unknown ones).
       if (reachOf) unseenHere.sort((a, b) => reach(b) - reach(a));
-      fresh.push(...unseenHere.slice(0, allowed));
+      const picked = pickNewLines(unseenHere.map((i) => ({ ...i, fen: i.target.fen, path: i.target.path })), allowed);
+      unseenLines += lineStarts(unseenHere.map((i) => ({ fen: i.target.fen, path: i.target.path })), () => true).length - picked.lines;
+      freshLines += picked.lines;
+      fresh.push(...picked.chosen.map(({ source, target }) => ({ source, target })));
     }
     if (reachOf) fresh.sort((a, b) => reach(b) - reach(a));
     due.sort((a, b) => a.at - b.at);
@@ -101,12 +107,17 @@ export function ReviewMode({
     const nextDue = upcoming[0] ? new Date(upcoming[0].at) : undefined;
     const early = upcoming.filter((p) => !answered.current.has(`${p.source.id}|${p.target.fen}`));
     const items: Item[] = [...due, ...fresh, ...(ahead ? early : [])];
-    return { due, fresh, items, unseen, nextDue, early: early.length };
+    // To review: the lines formed by the due positions (per repertoire). New: the lines picked.
+    const dueLines = sources.reduce((n, source) => {
+      const set = new Set(due.filter((i) => i.source === source).map((i) => i.target.fen));
+      return n + lineStarts(source.positions.filter((p) => set.has(p.fen)), (f) => set.has(f)).length;
+    }, 0);
+    return { due, fresh, items, unseenLines, nextDue, early: early.length, dueLines, freshLines };
   }, [sources, now, newPerDay, extraNew, noNewLimit, ahead, reachOf]);
 
   useEffect(() => {
-    onCounts({ due: queue.due.length, fresh: queue.fresh.length, ...stats });
-  }, [queue.due.length, queue.fresh.length, stats, onCounts]);
+    onCounts({ dueLines: queue.dueLines, freshLines: queue.freshLines, ...stats });
+  }, [queue.dueLines, queue.freshLines, stats, onCounts]);
 
   const ask = (q: Question | null) => {
     setCurrent(q);
@@ -160,9 +171,9 @@ export function ReviewMode({
         )}
         {queue.nextDue && <p>Prochaine révision {inTime(queue.nextDue)}.</p>}
         <div className="row">
-          {queue.unseen > 0 && (
-            <button className="primary" onClick={() => setExtraNew((n) => n + 10)}>
-              Apprendre {Math.min(10, queue.unseen)} nouvelles positions ({queue.unseen} pas encore apprises)
+          {queue.unseenLines > 0 && (
+            <button className="primary" onClick={() => setExtraNew((n) => n + 3)}>
+              Apprendre {Math.min(3, queue.unseenLines)} nouvelles lignes ({queue.unseenLines} pas encore apprises)
             </button>
           )}
           {queue.early > 0 && (
@@ -172,11 +183,11 @@ export function ReviewMode({
                 setNow(Date.now());
               }}
             >
-              Réviser en avance ({queue.early} apprises, pas encore dues)
+              Réviser en avance
             </button>
           )}
           {onTest && sources.some((s) => s.positions.length > 0) && (
-            <button className={queue.unseen > 0 ? '' : 'primary'} onClick={onTest} title="L’adversaire joue les coups les plus fréquents à votre niveau">
+            <button className={queue.unseenLines > 0 ? '' : 'primary'} onClick={onTest} title="L’adversaire joue les coups les plus fréquents à votre niveau">
               Se tester
             </button>
           )}
