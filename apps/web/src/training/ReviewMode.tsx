@@ -213,12 +213,14 @@ function Drill({
     mistakes: 0,
     revealed: isNew,
     played: null as RepMove | null,
+    /** Position looked at while navigating back in the line (plies from the start), null: the question. */
+    view: null as number | null,
   });
   const [state, setState] = useState(fresh);
   // New question: reset the state during render (keeps the board mounted, no flash).
   const current = state.round === round ? state : fresh();
   if (state.round !== round) setState(current);
-  const { replied, shown, mistakes, revealed, played } = current;
+  const { replied, shown, mistakes, revealed, played, view } = current;
   const update = (patch: Partial<typeof current>) => setState((s) => ({ ...s, ...patch }));
   const [resetKey, setResetKey] = useState(0);
   const answers = source.rep.movesAt(target.fen);
@@ -235,7 +237,28 @@ function Drill({
     return () => clearTimeout(t);
   }, [shown, plies, round]);
 
-  const asking = replied && shown >= plies && !played;
+  const ready = replied && shown >= plies && !played;
+  /** Answering only from the question position (not while looking back in the line). */
+  const asking = ready && view === null;
+  /** Navigation in the line, once it has been replayed: 0 = start, plies = the question. */
+  const goTo = (n: number) => update({ view: n >= plies ? null : Math.max(0, n) });
+  const at = view ?? plies;
+
+  useEffect(() => {
+    if (!ready) return;
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.target as HTMLElement).closest('textarea, input, select')) return;
+      if (e.key === 'ArrowLeft') goTo(at - 1);
+      else if (e.key === 'ArrowRight') goTo(at + 1);
+      else if (e.key === 'Home') goTo(0);
+      else if (e.key === 'End') goTo(plies);
+      else return;
+      e.preventDefault();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
+
   const play = (uci: string) => {
     if (!asking) return;
     const answer = answers.find((m) => m.uci === uci);
@@ -252,6 +275,7 @@ function Drill({
   let boardFen: string;
   let lastMove: string | undefined;
   if (played) [boardFen, lastMove] = [played.toFen, played.uci];
+  else if (ready && view !== null) [boardFen, lastMove] = [target.path[view - 1]?.toFen ?? START_FEN, target.path[view - 1]?.uci];
   else if (!replied && lead) [boardFen, lastMove] = [lead.mine.toFen, lead.mine.uci];
   else if (shown < plies) [boardFen, lastMove] = [target.path[shown - 1]?.toFen ?? START_FEN, target.path[shown - 1]?.uci];
   else [boardFen, lastMove] = [target.fen, (lead?.reply ?? target.path.at(-1))?.uci];
@@ -269,11 +293,34 @@ function Drill({
           onMove={asking ? play : undefined}
           resetKey={resetKey}
         />
+        {plies > 0 && (
+          <div className="nav">
+            <button onClick={() => goTo(0)} disabled={!ready || at === 0} title="Début de la ligne (Origine)">⏮</button>
+            <button onClick={() => goTo(at - 1)} disabled={!ready || at === 0} title="Coup précédent (←)">◀</button>
+            <button onClick={() => goTo(at + 1)} disabled={!ready || view === null} title="Coup suivant (→)">▶</button>
+            <button onClick={() => goTo(plies)} disabled={!ready || view === null} title="Revenir à la question (Fin)">⏭</button>
+          </div>
+        )}
       </div>
       <div className="editor-side">
         <section className="panel">
           {showName && <p className="muted small-text">{source.name}</p>}
-          <p className="muted">{lineText(target.path.slice(0, shown)) || 'Position initiale'}</p>
+          {ready && plies > 0 ? (
+            <div className="moves-path">
+              {target.path.map((m, i) => (
+                <button key={i} className={`link ${i === at - 1 ? 'current' : ''}`} onClick={() => goTo(i + 1)}>
+                  {i % 2 === 0 ? `${i / 2 + 1}. ` : ''}{m.san}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="muted">{lineText(target.path.slice(0, shown)) || 'Position initiale'}</p>
+          )}
+          {view !== null && (
+            <p className="muted small-text">
+              Vous regardez la ligne : <button className="link" onClick={() => goTo(plies)}>revenir à la question</button> pour répondre.
+            </p>
+          )}
           {replied && shown >= plies && <OpponentComment move={lead?.reply ?? target.path.at(-1)} />}
           {played ? (
             <p className="success">✓ {played.san}</p>
