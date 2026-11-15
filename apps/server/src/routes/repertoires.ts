@@ -207,13 +207,14 @@ export async function repertoireRoutes(app: FastifyInstance) {
   /** Merges a PGN (any number of games, variations included) into the repertoire. */
   /**
    * Sync from a source (tools/sync): merges the PGN into the repertoire, keeping the training
-   * progress (see planSync). ?dryRun=1: only answers what would change.
+   * progress (see planSync). ?dryRun=1: only answers what would change. ?mode=hard: the
+   * repertoire becomes exactly the source (moves added by hand removed too).
    */
-  app.put<{ Params: Params; Querystring: { dryRun?: string } }>('/api/repertoires/:id/sync', { bodyLimit: 12_000_000 }, async (req, reply) => {
+  app.put<{ Params: Params; Querystring: { dryRun?: string; mode?: string } }>('/api/repertoires/:id/sync', { bodyLimit: 12_000_000 }, async (req, reply) => {
     const rep = await ownRepertoire(req, reply);
     if (!rep) return;
     const { pgn } = z.object({ pgn: z.string().min(1).max(10_000_000) }).parse(req.body);
-    const plan = planSync(rep.color, await loadMoves(rep.id), pgn);
+    const plan = planSync(rep.color, await loadMoves(rep.id), pgn, req.query.mode === 'hard' ? 'hard' : 'merge');
     const summary = {
       added: plan.add.length,
       removed: plan.remove.length,

@@ -34,4 +34,23 @@ describe('sync of a repertoire from its source', () => {
     expect(plan.update).toContainEqual({ id: nf3.id, comment: 'Italian or Scotch' });
     expect(plan.add.find((m) => m.san === 'd4')!.isMain).toBe(true); // new position: its only move
   });
+
+  it('hard mode: the repertoire becomes exactly the source', () => {
+    const own = [...before, ...stored('1. e4 e5 2. Nf3 Nc6 3. Bc4 *', 'manual', 100).filter((m) => m.san === 'Bc4')];
+    const bb5 = own.find((m) => m.san === 'Bb5')!;
+    const bc4 = own.find((m) => m.san === 'Bc4')!;
+    bb5.comment = 'my note';
+    bb5.isMain = false;
+    bc4.isMain = true;
+    // The source: 3. d4 main, 3. Bb5 as an alternative, no 1... c5.
+    const plan = planSync('white', own, '1. e4 e5 2. Nf3 Nc6 3. d4 (3. Bb5) *', 'hard');
+    expect(san(plan.remove)).toEqual(['Bc4', 'Nf3', 'c5']); // hand-added Bc4 removed too
+    expect(plan.add.map((m) => [m.san, m.isMain])).toEqual([['d4', true]]);
+    expect(plan.update).toContainEqual({ id: bb5.id, comment: null });
+    expect(plan.update.find((u) => u.id === bb5.id)?.isMain).toBeUndefined(); // already not main
+    // Nothing else changes: running it again on the result is a no-op.
+    const after = own.filter((m) => !plan.remove.includes(m)).map((m) => (m.id === bb5.id ? { ...m, comment: null } : m));
+    const again = planSync('white', [...after, ...plan.add.map((m, i) => ({ ...m, id: 1000 + i, source: 'pgn', comment: null }))], '1. e4 e5 2. Nf3 Nc6 3. d4 (3. Bb5) *', 'hard');
+    expect([again.add.length, again.remove.length, again.update.length]).toEqual([0, 0, 0]);
+  });
 });
