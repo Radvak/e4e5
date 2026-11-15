@@ -1,4 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect } from 'react';
 import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { api, ApiError } from './api';
 import { Explorer } from './pages/Explorer';
@@ -9,7 +10,7 @@ import { Repertoires } from './pages/Repertoires';
 import { Settings } from './pages/Settings';
 import { Training } from './pages/Training';
 import { dayStart, useSettings } from './settings';
-import { Icon, Menu, type IconName } from './ui';
+import { Button, Icon, Menu, type IconName } from './ui';
 
 /** The four sections: build, learn, explore, and what the games show. */
 const SECTIONS: { to: string; label: string; icon: IconName; active: (path: string) => boolean }[] = [
@@ -23,6 +24,29 @@ const SECTIONS: { to: string; label: string; icon: IconName; active: (path: stri
 function Redirect({ to }: { to: string }) {
   const { search } = useLocation();
   return <Navigate to={to + search} replace />;
+}
+
+/**
+ * The server cannot be reached. The installed app still opens offline (service worker), so say
+ * whether the phone is offline, and try again by itself when the connection comes back.
+ */
+function Unreachable({ retry, retrying }: { retry: () => void; retrying: boolean }) {
+  useEffect(() => {
+    window.addEventListener('online', retry);
+    return () => window.removeEventListener('online', retry);
+  }, [retry]);
+  return (
+    <div className="page narrow stack">
+      <p className="notice error">
+        {navigator.onLine ? 'Le serveur ne répond pas.' : 'Pas de connexion Internet : Mon cahier a besoin du réseau pour charger vos répertoires.'}
+      </p>
+      <div>
+        <Button onClick={retry} disabled={retrying}>
+          Réessayer
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 export function App() {
@@ -47,7 +71,7 @@ export function App() {
 
   if (me.isLoading) return null;
   if (me.error instanceof ApiError && me.error.status === 401) return <Login />;
-  if (!me.data) return <p className="error">Le serveur ne répond pas.</p>;
+  if (!me.data) return <Unreachable retry={() => void me.refetch()} retrying={me.isFetching} />;
 
   const logout = async () => {
     await api.logout();

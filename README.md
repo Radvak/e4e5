@@ -31,6 +31,23 @@ pnpm typecheck
 There is no Lichess app to register: OAuth uses PKCE, and the client id is just a name.
 Set `LICHESS_APP_TOKEN` (see `.env.example`) so users without a linked Lichess account get statistics.
 
+## Installable app (PWA)
+
+The web app can be installed on a phone or a computer (home screen icon, full screen):
+Android/Chrome/Edge "Install app", iPhone Safari Share → "Sur l’écran d’accueil". Settings →
+Application explains it to users (with an install button where the browser offers one).
+
+- `apps/web/public/manifest.webmanifest`: name, colours, icons.
+- `apps/web/public/sw.js`: service worker (production builds only). The app shell and the
+  hashed `/assets/` are cached, so the app opens offline; `/api/` is never cached (without
+  network the app says so and reloads when the connection is back). Bump `VERSION` in it to
+  drop every cache.
+- Icons: `apps/web/scripts/icons/*.svg` → `apps/web/scripts/make-icons.sh` (rsvg-convert) →
+  `apps/web/public/icons/` (committed).
+
+Installing needs HTTPS (or localhost). To try it: `pnpm --filter web build`, run the server, open
+it in Chrome. DevTools → Application shows the manifest and the service worker.
+
 ## Position statistics
 
 Lichess explorer answers are stored in the `position_stats` table and reused by every user.

@@ -85,8 +85,10 @@ button.link:hover { background: var(--surface-3); }
 /* --- Layout ---------------------------------------------------------------------------------- */
 .shell { min-height: 100dvh; display: flex; flex-direction: column; }
 .appbar {
-  position: sticky; top: 0; z-index: 20; height: var(--appbar-h); display: flex; align-items: center; gap: 8px;
-  padding: 0 var(--page-pad); background: rgba(19, 18, 16, 0.92); backdrop-filter: blur(8px);
+  position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 8px;
+  /* the safe-area insets: notch / status bar and rounded corners when installed full screen */
+  height: calc(var(--appbar-h) + env(safe-area-inset-top)); padding: env(safe-area-inset-top) max(var(--page-pad), env(safe-area-inset-right)) 0 max(var(--page-pad), env(safe-area-inset-left));
+  background: rgba(19, 18, 16, 0.92); backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--border);
 }
 .brand { display: inline-flex; align-items: center; gap: 8px; color: var(--text); font-weight: 700; font-size: 1.05rem; }
