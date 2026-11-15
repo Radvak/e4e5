@@ -5,3 +5,6 @@ data/
 *.log
 .DS_Store
 apps/web/public/stockfish/
+# Sync tool: personal config (credentials) and downloaded data
+tools/sync/sync.config.json
+tools/sync/.cache/

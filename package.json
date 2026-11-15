@@ -9,6 +9,7 @@
     "start": "pnpm --filter server start",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck",
-    "db:generate": "pnpm --filter server db:generate"
+    "db:generate": "pnpm --filter server db:generate",
+    "sync": "pnpm --silent --filter sync sync"
   }
 }

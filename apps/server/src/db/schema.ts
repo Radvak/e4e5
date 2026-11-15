@@ -44,9 +44,14 @@ export const repertoires = sqliteTable(
     color: text('color', { enum: ['white', 'black'] }).notNull(),
     /** false: paused (left out of "train all", the badge and the games analysis). */
     active: integer('active', { mode: 'boolean' }).notNull().default(true),
+    /**
+     * Where the repertoire comes from, for the sync tool (tools/sync), e.g.
+     * "alphaechecs:sicilienne:Sozin 6.Fc4": matched on each sync, even after a rename.
+     */
+    sourceKey: text('source_key'),
     createdAt: createdAt(),
   },
-  (t) => [index('repertoires_user').on(t.userId)],
+  (t) => [index('repertoires_user').on(t.userId), uniqueIndex('repertoires_source').on(t.userId, t.sourceKey)],
 );
 
 export const repMoves = sqliteTable(

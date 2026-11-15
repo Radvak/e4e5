@@ -16,12 +16,20 @@ import { z } from 'zod';
 import { requireUser } from '../auth.js';
 import { db } from '../db/client.js';
 import { repertoires, repMoves, type RepMoveRow } from '../db/schema.js';
+import { planSync } from '../repertoireSync.js';
 
-const createBody = z.object({ name: z.string().trim().min(1).max(100), color: z.enum(['white', 'black']) });
+const createBody = z.object({
+  name: z.string().trim().min(1).max(100),
+  color: z.enum(['white', 'black']),
+  /** Set by the sync tool (tools/sync): where the repertoire comes from. */
+  sourceKey: z.string().trim().min(1).max(200).optional(),
+});
 const patchBody = z.object({
   name: z.string().trim().min(1).max(100).optional(),
   /** false: paused (left out of "train all" and of the games analysis). */
   active: z.boolean().optional(),
+  /** Set by the sync tool to adopt an existing repertoire (keeps its progress). */
+  sourceKey: z.string().trim().min(1).max(200).optional(),
 });
 const moveBody = z.object({ fromFen: z.string().min(10).max(120), uci: z.string().regex(/^[a-h][1-8][a-h][1-8][qrbn]?$/) });
 const patchMoveBody = z.object({
@@ -197,6 +205,40 @@ export async function repertoireRoutes(app: FastifyInstance) {
   });
 
   /** Merges a PGN (any number of games, variations included) into the repertoire. */
+  /**
+   * Sync from a source (tools/sync): merges the PGN into the repertoire, keeping the training
+   * progress (see planSync). ?dryRun=1: only answers what would change.
+   */
+  app.put<{ Params: Params; Querystring: { dryRun?: string } }>('/api/repertoires/:id/sync', { bodyLimit: 12_000_000 }, async (req, reply) => {
+    const rep = await ownRepertoire(req, reply);
+    if (!rep) return;
+    const { pgn } = z.object({ pgn: z.string().min(1).max(10_000_000) }).parse(req.body);
+    const plan = planSync(rep.color, await loadMoves(rep.id), pgn);
+    const summary = {
+      added: plan.add.length,
+      removed: plan.remove.length,
+      updated: plan.update.length,
+      unreachable: plan.unreachable,
+      errors: plan.errors.slice(0, 20),
+    };
+    if (req.query.dryRun) return { ...summary, dryRun: true };
+    const ids = plan.remove.map((m) => m.id);
+    for (let i = 0; i < ids.length; i += 500) await db.delete(repMoves).where(inArray(repMoves.id, ids.slice(i, i + 500)));
+    for (const u of plan.update) {
+      const { id, ...patch } = u;
+      await db.update(repMoves).set(patch).where(and(eq(repMoves.id, id), eq(repMoves.repertoireId, rep.id)));
+    }
+    for (let i = 0; i < plan.add.length; i += 500) {
+      await db
+        .insert(repMoves)
+        .values(plan.add.slice(i, i + 500).map((m) => ({ ...m, isMain: !!m.isMain, comment: m.comment ?? null, nags: m.nags ?? null, repertoireId: rep.id, source: 'pgn' as const })))
+        .onConflictDoNothing();
+    }
+    // Moves left without a way from the initial position (their parent line was removed).
+    const pruned = await pruneOrphans(rep.id, rep.color);
+    return { ...summary, pruned };
+  });
+
   app.post<{ Params: Params }>('/api/repertoires/:id/import-pgn', { bodyLimit: 6_000_000 }, async (req, reply) => {
     const rep = await ownRepertoire(req, reply);
     if (!rep) return;

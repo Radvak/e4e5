@@ -12,6 +12,7 @@ import { WEB_DIST } from './paths.js';
 import { explorerRoutes } from './routes/explorer.js';
 import { gameRoutes } from './routes/games.js';
 import { gapRoutes } from './routes/gaps.js';
+import { syncRoutes } from './routes/sync.js';
 import { repertoireRoutes } from './routes/repertoires.js';
 import { trainingRoutes } from './routes/training.js';
 import { importSeeds } from './stats.js';
@@ -45,6 +46,7 @@ await app.register(explorerRoutes);
 await app.register(trainingRoutes);
 await app.register(gapRoutes);
 await app.register(gameRoutes);
+await app.register(syncRoutes);
 
 // In production the server also serves the built web app (single container).
 const webDist = WEB_DIST;

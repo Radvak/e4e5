@@ -25,4 +25,9 @@ export const env = {
    */
   lichessAppToken: process.env.LICHESS_APP_TOKEN || null,
   chesscomApi: get('CHESSCOM_API', 'https://api.chess.com'),
+  /**
+   * Secret of the sync tool (tools/sync) to send position statistics computed from Lichess
+   * games (shared by every account). Unset: that import is disabled.
+   */
+  syncToken: process.env.SYNC_TOKEN || null,
 };
