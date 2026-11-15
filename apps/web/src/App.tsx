@@ -3,14 +3,14 @@ import { useEffect } from 'react';
 import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { api, ApiError } from './api';
 import { Explorer } from './pages/Explorer';
-import { Games } from './pages/Games';
+import { Games, useGamesReport } from './pages/Games';
 import { Login } from './pages/Login';
 import { RepertoireEditor } from './pages/RepertoireEditor';
 import { Repertoires } from './pages/Repertoires';
 import { Settings } from './pages/Settings';
 import { Training } from './pages/Training';
 import { dayStart, useSettings } from './settings';
-import { Button, Icon, Menu, type IconName } from './ui';
+import { Button, Icon, Menu, plural, type IconName } from './ui';
 
 /** The four sections: build, learn, explore, and what the games show. */
 const SECTIONS: { to: string; label: string; icon: IconName; active: (path: string) => boolean }[] = [
@@ -49,6 +49,21 @@ function Unreachable({ retry, retrying }: { retry: () => void; retrying: boolean
   );
 }
 
+function Badge({ n, label }: { n: number; label: string }) {
+  if (n <= 0) return null;
+  return (
+    <span className="tab-badge" aria-label={label} title={label}>
+      {n > 99 ? '99+' : n}
+    </span>
+  );
+}
+
+/** Mes parties: the errors of my games (moves played instead of the prepared ones), not ignored. */
+function GamesBadge() {
+  const n = useGamesReport().data?.inbox.errorCount ?? 0;
+  return <Badge n={n} label={`${plural(n, 'erreur', 'erreurs')} dans vos parties`} />;
+}
+
 export function App() {
   const qc = useQueryClient();
   const { pathname } = useLocation();
@@ -67,7 +82,11 @@ export function App() {
     active.reduce((n, s) => n + s.dueLines, 0) +
     Math.min(summary.data?.[0]?.remainingNewLines ?? 0, active.reduce((n, s) => n + s.availableLines, 0));
   const badge = (to: string) =>
-    to === '/train' && toTrain > 0 ? <span className="tab-badge" aria-label={`${toTrain} lignes à revoir`} title={`${toTrain} lignes à revoir aujourd’hui`}>{toTrain > 99 ? '99+' : toTrain}</span> : null;
+    to === '/train' ? (
+      <Badge n={toTrain} label={`${toTrain} lignes à revoir aujourd’hui`} />
+    ) : to === '/parties' ? (
+      <GamesBadge />
+    ) : null;
 
   if (me.isLoading) return null;
   if (me.error instanceof ApiError && me.error.status === 401) return <Login />;

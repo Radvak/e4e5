@@ -49,9 +49,14 @@ export function Training({ me }: { me: Me }) {
     return (source: Source, fen: string) => gaps.data?.[source.color]?.reach[fen];
   }, [learnOrder, gaps.data]);
   const ex = explorerParams(me, speed, range);
-  // ?mode=test opens "Se tester" (e.g. from the home page when nothing is due); else the last mode used.
+  // ?mode=test opens "Se tester" (e.g. from the home page when nothing is due), ?mode=review
+  // "Réviser" (e.g. an error of Mes parties); else the last mode used.
   const [mode, setModeState] = useState<Mode>(() =>
-    params.get('mode') === 'test' ? 'play' : ((localStorage.getItem('trainingMode') as Mode | null) ?? 'review'),
+    params.get('mode') === 'test'
+      ? 'play'
+      : params.get('mode') === 'review'
+        ? 'review'
+        : ((localStorage.getItem('trainingMode') as Mode | null) ?? 'review'),
   );
   const setMode = (m: Mode) => {
     localStorage.setItem('trainingMode', m);

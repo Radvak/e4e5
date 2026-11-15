@@ -80,11 +80,11 @@ export async function gameRoutes(app: FastifyInstance) {
     const [rows, reps, dismissed] = await Promise.all([
       db.select().from(games).where(and(...where)).orderBy(games.playedAt),
       loadRepertoires(userId),
-      db.select({ key: inboxDismissed.key }).from(inboxDismissed).where(eq(inboxDismissed.userId, userId)),
+      db.select({ key: inboxDismissed.key, createdAt: inboxDismissed.createdAt }).from(inboxDismissed).where(eq(inboxDismissed.userId, userId)),
     ]);
     // Every repertoire is used to recognise the games; the paused ones are then left out.
     const reports = analyseGames(rows, reps);
-    const hidden = new Set(dismissed.map((d) => d.key));
+    const hidden = new Map(dismissed.map((d) => [d.key, d.createdAt]));
     const paused = new Set(reps.filter((r) => !r.active).map((r) => r.id));
 
     // Per repertoire (and outside them, per colour and first move of mine).
@@ -113,6 +113,9 @@ export async function gameRoutes(app: FastifyInstance) {
 
     const byGames = (a: InboxItem, b: InboxItem) => b.games - a.games || b.lastPlayedAt.localeCompare(a.lastPlayedAt);
     const items = [...inbox.values()].sort(byGames);
+    // Two lists: my own deviations (errors), and what the opponents brought that the repertoire
+    // does not answer: a novelty within a line or a move after its end, the same thing to me.
+    const errors = items.filter((i) => i.kind === 'deviation');
     return {
       games: rows.length,
       repertoires: reps.filter((r) => !paused.has(r.id)).map((r) => {
@@ -121,9 +124,10 @@ export async function gameRoutes(app: FastifyInstance) {
       }),
       outside: [...outside.values()].sort((a, b) => b.games - a.games),
       inbox: {
-        novelties: items.filter((i) => i.kind === 'novelty').slice(0, MAX_ITEMS),
-        deviations: items.filter((i) => i.kind === 'deviation').slice(0, MAX_ITEMS),
-        ends: items.filter((i) => i.kind === 'end').slice(0, MAX_ITEMS),
+        errors: errors.slice(0, MAX_ITEMS),
+        novelties: items.filter((i) => i.kind !== 'deviation').slice(0, MAX_ITEMS),
+        /** All errors not ignored (the list is cut at MAX_ITEMS): the badge of the Mes parties tab. */
+        errorCount: errors.length,
       },
       recent: reports
         .slice(-30)
@@ -149,7 +153,12 @@ export async function gameRoutes(app: FastifyInstance) {
   /** Hides an inbox item (dealt with, or not interesting). */
   app.post('/api/games/inbox/dismiss', async (req) => {
     const { key } = z.object({ key: z.string().min(3).max(300) }).parse(req.body);
-    await db.insert(inboxDismissed).values({ userId: req.user!.id, key }).onConflictDoNothing();
+    // Dismissed again (an error that came back): from now on.
+    const createdAt = new Date();
+    await db
+      .insert(inboxDismissed)
+      .values({ userId: req.user!.id, key, createdAt })
+      .onConflictDoUpdate({ target: [inboxDismissed.userId, inboxDismissed.key], set: { createdAt } });
     return { ok: true };
   });
 
@@ -166,11 +175,17 @@ const lineText = (sans: string[]) => sans.map((san, i) => (i % 2 === 0 ? `${i / 
 const KINDS = { 'opponent-novelty': 'novelty', 'my-deviation': 'deviation', 'end-of-prep': 'end' } as const;
 
 /** Groups the games by the place they left the repertoire. */
-function addToInbox(inbox: Map<string, InboxItem>, r: GameReport, hidden: Set<string>) {
+/**
+ * Adds a game to its inbox item. A dismissed item stays hidden, except an error (my deviation):
+ * it was dealt with (sent to review, or ignored) when dismissed, so a game played after that
+ * makes it come back, with the games since then only.
+ */
+function addToInbox(inbox: Map<string, InboxItem>, r: GameReport, hidden: Map<string, Date>) {
   if (!(r.kind in KINDS) || !r.played || !r.repertoireId) return;
   const kind = KINDS[r.kind as keyof typeof KINDS];
   const key = `${kind}|${r.repertoireId}|${r.fen}|${r.played.uci}`;
-  if (hidden.has(key)) return;
+  const dismissedAt = hidden.get(key);
+  if (dismissedAt && (kind !== 'deviation' || r.game.playedAt <= dismissedAt)) return;
   let item = inbox.get(key);
   if (!item) {
     item = {

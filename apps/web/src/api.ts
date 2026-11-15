@@ -198,7 +198,8 @@ export interface GamesReport {
   games: number;
   repertoires: { id: string; games: number; results: Results; bookMoves: number }[];
   outside: { color: Color; move: string; games: number; results: Results }[];
-  inbox: { novelties: InboxItem[]; deviations: InboxItem[]; ends: InboxItem[] };
+  /** errors: my deviations; novelties: opponents' new moves, within a line or after its end. */
+  inbox: { errors: InboxItem[]; novelties: InboxItem[]; errorCount: number };
   recent: {
     id: string;
     url: string;

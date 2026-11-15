@@ -1,8 +1,8 @@
 import { playSanOn, positionFromFen, type Color } from '@prepa-cahier/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { api, type GamesReport, type InboxItem, type RepertoireSummary, type Results } from '../api';
+import { Link, useNavigate } from 'react-router-dom';
+import { api, ApiError, type GamesReport, type InboxItem, type RepertoireSummary, type Results } from '../api';
 import { lineText, moveText } from '../chessText';
 import { GameSyncInline, useGameSync } from '../components/GameSync';
 import { SPEED_NAMES, useSettings } from '../settings';
@@ -17,26 +17,35 @@ const score = (r: Results) => {
 };
 const date = (iso: string) => new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
 
-/** Bilan › Parties: statistics per repertoire, inbox, recent games. */
 const PAGE = 20;
 const KIND_HINT = {
-  novelties: 'L’adversaire a joué un coup que vous n’avez pas préparé.',
-  deviations: 'Vous avez joué autre chose que votre coup préparé.',
-  ends: 'La partie a continué après la fin de votre ligne.',
+  errors: 'Vous avez joué autre chose que votre coup préparé.',
+  novelties: 'L’adversaire a joué un coup auquel votre répertoire ne répond pas (en cours de ligne ou après sa fin).',
 } as const;
+
+/**
+ * The games compared with the repertoires (period and speeds of the settings). Shared by the page
+ * and the badge of the Mes parties tab (same query, computed once).
+ */
+export function useGamesReport() {
+  const { gamesDays, gamesSpeeds } = useSettings();
+  const { running } = useGameSync();
+  return useQuery({
+    queryKey: ['games-report', gamesDays, gamesSpeeds, running],
+    queryFn: () => api.gamesReport(gamesDays, gamesSpeeds),
+    enabled: !running,
+    staleTime: 60_000,
+  });
+}
 
 /** Mes parties: what the games show (cards with a thumbnail), results per repertoire, recent games. */
 export function Games() {
   const { gamesDays, gamesSpeeds } = useSettings();
-  const [tab, setTab] = useState<'novelties' | 'deviations' | 'ends'>('novelties');
+  const [tab, setTab] = useState<'errors' | 'novelties'>('errors');
   const [shown, setShown] = useState(PAGE);
+  const [notice, setNotice] = useState<string | null>(null);
   const reps = useQuery({ queryKey: ['repertoires'], queryFn: api.repertoires });
-  const { running } = useGameSync();
-  const report = useQuery({
-    queryKey: ['games-report', gamesDays, gamesSpeeds, running],
-    queryFn: () => api.gamesReport(gamesDays, gamesSpeeds),
-    enabled: !running,
-  });
+  const report = useGamesReport();
   const qc = useQueryClient();
   const restore = useMutation({ mutationFn: api.restoreInbox, onSuccess: () => qc.invalidateQueries({ queryKey: ['games-report'] }) });
   const byId = new Map((reps.data ?? []).map((r) => [r.id, r]));
@@ -73,17 +82,22 @@ export function Games() {
             onChange={(t) => {
               setTab(t);
               setShown(PAGE);
+              setNotice(null);
             }}
             tabs={[
-              { id: 'novelties', label: `Nouveautés (${r.inbox.novelties.length})` },
-              { id: 'deviations', label: `Écarts (${r.inbox.deviations.length})` },
-              { id: 'ends', label: `Fins de ligne (${r.inbox.ends.length})` },
+              { id: 'errors', label: 'Erreurs' },
+              { id: 'novelties', label: 'Nouveautés' },
             ]}
           />
           <p className="muted small-text" style={{ margin: 0 }}>{KIND_HINT[tab]} Du plus fréquent au moins fréquent.</p>
+          {notice && (
+            <p className="notice success">
+              {notice} <Link to="/train">Entraîner</Link>
+            </p>
+          )}
           {items.length === 0 && <p className="muted">Rien ici.</p>}
           {items.slice(0, shown).map((item) => (
-            <InboxRow key={item.key} item={item} rep={byId.get(item.repertoireId)} />
+            <InboxRow key={item.key} item={item} rep={byId.get(item.repertoireId)} onDone={setNotice} />
           ))}
           {items.length > shown && (
             <Button variant="ghost" onClick={() => setShown(shown + PAGE)}>Voir plus ({items.length - shown})</Button>
@@ -163,18 +177,67 @@ function RepertoireStats({ report, reps }: { report: GamesReport; reps: Map<stri
   );
 }
 
-function InboxRow({ item, rep }: { item: InboxItem; rep: RepertoireSummary | undefined }) {
-  const qc = useQueryClient();
-  const [done, setDone] = useState<string | null>(null);
-  const refresh = async () => {
-    await qc.invalidateQueries({ queryKey: ['games-report'] });
-    await qc.invalidateQueries({ queryKey: ['repertoire', item.repertoireId] });
+/** The report without one inbox item (shown at once, before the server's new report). */
+function withoutItem(r: GamesReport, item: InboxItem): GamesReport {
+  const keep = (i: InboxItem) => i.key !== item.key;
+  const wasError = r.inbox.errors.some((i) => i.key === item.key);
+  return {
+    ...r,
+    inbox: {
+      errors: r.inbox.errors.filter(keep),
+      novelties: r.inbox.novelties.filter(keep),
+      errorCount: Math.max(0, r.inbox.errorCount - (wasError ? 1 : 0)),
+    },
   };
-  const review = useMutation({
-    mutationFn: () => api.reviewNow(item.repertoireId, item.fen),
-    onSuccess: () => setDone('À revoir dès maintenant.'),
+}
+
+function InboxRow({ item, rep, onDone }: { item: InboxItem; rep: RepertoireSummary | undefined; onDone: (message: string) => void }) {
+  const qc = useQueryClient();
+  const navigate = useNavigate();
+  // Dealt with: off the list (and the badge of Mes parties) at once, then the new report; the
+  // Entraîner badge counts a position sent to review.
+  const hide = () => {
+    qc.setQueriesData<GamesReport>({ queryKey: ['games-report'] }, (r) => r && withoutItem(r, item));
+    void qc.invalidateQueries({ queryKey: ['games-report'] });
+    void qc.invalidateQueries({ queryKey: ['training-summary'] });
+  };
+  /**
+   * An error sent to review: the position is due now (if learnt: else it comes with the new
+   * lines), and the error is dismissed (it comes back if played again in a later game).
+   * Returns whether the position was learnt.
+   */
+  const sendToReview = async () => {
+    let learnt = true;
+    try {
+      await api.reviewNow(item.repertoireId, item.fen);
+    } catch (e) {
+      if (!(e instanceof ApiError && e.status === 404)) throw e;
+      learnt = false;
+    }
+    await api.dismissInbox(item.key);
+    return learnt;
+  };
+  const position = lineText(item.line.sans) || 'la position initiale';
+  const now = useMutation({
+    mutationFn: sendToReview,
+    onSuccess: () => {
+      hide();
+      navigate(`/r/${item.repertoireId}/train?${new URLSearchParams({ from: item.fen, mode: 'review' })}`);
+    },
   });
-  const dismiss = useMutation({ mutationFn: () => api.dismissInbox(item.key), onSuccess: refresh });
+  const later = useMutation({
+    mutationFn: sendToReview,
+    onSuccess: (learnt) => {
+      hide();
+      onDone(
+        learnt
+          ? `Ajoutée à vos révisions du jour : après ${position}.`
+          : `Après ${position} : position pas encore apprise, elle viendra avec vos nouvelles lignes.`,
+      );
+    },
+  });
+  const dismiss = useMutation({ mutationFn: () => api.dismissInbox(item.key), onSuccess: hide });
+  const busy = now.isPending || later.isPending || dismiss.isPending;
 
   const line = item.line.sans;
   const afterMove = [...item.line.ucis, item.move.uci];
@@ -183,7 +246,7 @@ function InboxRow({ item, rep }: { item: InboxItem; rep: RepertoireSummary | und
   // nothing is saved until "Enregistrer la variante".
   const draft = item.kind !== 'deviation' && item.replies[0] ? [...afterMove, item.replies[0].uci] : afterMove;
   const editor = `/r/${item.repertoireId}?${new URLSearchParams({ line: draft.join(',') })}`;
-  const error = review.error ?? dismiss.error;
+  const error = now.error ?? later.error ?? dismiss.error;
 
   // Thumbnail: the position, with the opponent's move (orange) or my move (red) and the prepared ones (green).
   const arrows: MiniArrow[] =
@@ -228,9 +291,14 @@ function InboxRow({ item, rep }: { item: InboxItem; rep: RepertoireSummary | und
       </div>
       <div className="row inbox-actions">
         {item.kind === 'deviation' && (
-          <Button size="sm" variant="primary" disabled={review.isPending} onClick={() => review.mutate()} title="Rendre cette position à revoir maintenant">
-            Revoir maintenant
-          </Button>
+          <>
+            <Button size="sm" variant="primary" disabled={busy} onClick={() => now.mutate()} title="Réviser cette position maintenant">
+              Réviser
+            </Button>
+            <Button size="sm" disabled={busy} onClick={() => later.mutate()} title="Ajouter cette position à vos révisions du jour">
+              Plus tard
+            </Button>
+          </>
         )}
         <Button
           size="sm"
@@ -240,9 +308,8 @@ function InboxRow({ item, rep }: { item: InboxItem; rep: RepertoireSummary | und
         >
           Préparer dans l’éditeur
         </Button>
-        <Button size="sm" variant="ghost" disabled={dismiss.isPending} onClick={() => dismiss.mutate()} title="Masquer cet élément">Ignorer</Button>
+        <Button size="sm" variant="ghost" disabled={busy} onClick={() => dismiss.mutate()} title="Masquer cet élément">Ignorer</Button>
       </div>
-      {done && <p className="success-text small-text">{done}</p>}
       {error && <p className="error small-text">{error.message}</p>}
       </div>
     </article>
