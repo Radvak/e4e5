@@ -260,6 +260,17 @@ kbd { display: inline-block; min-width: 18px; padding: 0 4px; margin: 0 1px; bor
   .editor-board { margin: 0; position: sticky; top: calc(var(--appbar-h) + 16px); }
 }
 .board { width: 100%; aspect-ratio: 1; }
+/* A rejected move (components/Board.tsx): red square under the piece, the board shaken. */
+.cg-wrap square.rejected { background: rgba(229, 83, 75, 0.6); }
+/* The frame clips the shake: no horizontal scroll on phones (full-width board). */
+.board-frame { overflow: clip; }
+.board-frame.rejected > .board { animation: board-shake 0.35s ease-in-out; }
+@keyframes board-shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-6px); }
+  40%, 80% { transform: translateX(6px); }
+}
+@media (prefers-reduced-motion: reduce) { .board-frame.rejected > .board { animation: none; } }
 .nav { display: flex; justify-content: center; gap: 6px; margin-top: 8px; padding: 0 var(--page-pad); }
 .nav button { flex: 1; max-width: 72px; }
 .legend { display: flex; justify-content: center; gap: 14px; flex-wrap: wrap; font-size: 0.8rem; margin: 8px 0 0; padding: 0 var(--page-pad); }

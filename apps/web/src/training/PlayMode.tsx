@@ -58,7 +58,6 @@ export function PlayMode({
   };
   const playable = useMemo(() => sources.filter((s) => after(s, root) !== 'end'), [sources, root]);
   const [line, setLine] = useState<LineState | null>(null);
-  const [resetKey, setResetKey] = useState(0);
   const [score, setScore] = useState({ lines: 0, moves: 0, asked: 0, clean: 0 });
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const token = useRef(0);
@@ -142,8 +141,7 @@ export function PlayMode({
     const answer = answers.find((m) => m.uci === uci);
     if (!answer) {
       setLine({ ...line, mistakes: line.mistakes + 1, revealed: line.revealed || line.mistakes + 1 >= 2 });
-      setResetKey((k) => k + 1);
-      return;
+      return false;
     }
     const card = line.source.cards.get(line.fen);
     const outcome = outcomeOf(!card, line.mistakes, line.revealed);
@@ -186,7 +184,6 @@ export function PlayMode({
           lastMove={line?.history.at(-1)?.uci}
           shapes={shapes}
           onMove={line?.phase === 'ask' ? play : undefined}
-          resetKey={resetKey}
         />
       </div>
       <div className="editor-side">

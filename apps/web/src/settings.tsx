@@ -47,6 +47,9 @@ interface Settings {
   /** Move sounds on the boards (read by components/sound.ts from the same localStorage key). */
   sound: boolean;
   setSound: (on: boolean) => void;
+  /** Vibration on a wrong move, on phones (read by components/haptics.ts from the same localStorage key). */
+  haptics: boolean;
+  setHaptics: (on: boolean) => void;
 }
 
 export type LearnOrder = 'frequency' | 'repertoire';
@@ -55,6 +58,8 @@ export const NO_LIMIT = 1000;
 
 /** localStorage key of the move sounds setting (JSON boolean). */
 export const SOUND_KEY = 'sound';
+/** localStorage key of the vibration setting (JSON boolean). */
+export const HAPTICS_KEY = 'haptics';
 
 const Ctx = createContext<Settings | null>(null);
 
@@ -93,9 +98,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const [gamesSpeeds, setGamesSpeeds] = usePersisted<string[]>('gamesSpeeds', ['blitz', 'rapid', 'classical', 'daily']);
   const [learnOrder, setLearnOrder] = usePersisted<LearnOrder>('learnOrder', 'frequency');
   const [sound, setSound] = usePersisted(SOUND_KEY, true);
+  const [haptics, setHaptics] = usePersisted(HAPTICS_KEY, true);
   return (
     <Ctx.Provider
-      value={{ speed, setSpeed, range, setRange, newPerDay, setNewPerDay, gapCutoff, setGapCutoff, gamesDays, setGamesDays, gamesSpeeds, setGamesSpeeds, learnOrder, setLearnOrder, sound, setSound }}
+      value={{ speed, setSpeed, range, setRange, newPerDay, setNewPerDay, gapCutoff, setGapCutoff, gamesDays, setGamesDays, gamesSpeeds, setGamesSpeeds, learnOrder, setLearnOrder, sound, setSound, haptics, setHaptics }}
     >
       {children}
     </Ctx.Provider>

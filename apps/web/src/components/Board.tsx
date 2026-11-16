@@ -5,8 +5,9 @@ import type { DrawBrushes, DrawShape } from 'chessground/draw';
 import type { Key } from 'chessground/types';
 import { parseSquare } from 'chessops';
 import { chessgroundDests } from 'chessops/compat';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { BRUSHES } from './arrows';
+import { buzzError } from './haptics';
 import { moveSoundFor, playMoveSound } from './sound';
 import 'chessground/assets/chessground.base.css';
 import 'chessground/assets/chessground.brown.css';
@@ -17,15 +18,19 @@ interface Props {
   orientation: 'white' | 'black';
   lastMove?: string;
   shapes?: DrawShape[];
-  /** Called with the UCI of a move played on the board (promotion: queen). */
-  onMove?: (uci: string) => void;
-  /** Change it to put the pieces back on `fen` (e.g. after a rejected move). */
-  resetKey?: number;
+  /**
+   * Called with the UCI of a move played on the board (promotion: queen). Returning false
+   * rejects it: the move stays a moment on a red square (board shaken, phone vibrating), then
+   * the pieces go back to `fen`.
+   */
+  onMove?: (uci: string) => boolean | void;
 }
 
 const NO_SHAPES: DrawShape[] = [];
+/** How long a rejected move stays on the board. */
+const REJECTED_MS = 600;
 
-export function Board({ fen, orientation, lastMove, shapes = NO_SHAPES, onMove, resetKey = 0 }: Props) {
+export function Board({ fen, orientation, lastMove, shapes = NO_SHAPES, onMove }: Props) {
   const el = useRef<HTMLDivElement>(null);
   const cg = useRef<Api | null>(null);
   const onMoveRef = useRef(onMove);
@@ -33,6 +38,9 @@ export function Board({ fen, orientation, lastMove, shapes = NO_SHAPES, onMove, 
   const prevFen = useRef<string | null>(null);
   /** Move just played on the board: its sound is already played, not again when `fen` follows. */
   const dropped = useRef<string | null>(null);
+  /** Destination square of the rejected move on show, then a counter to put the pieces back. */
+  const [rejected, setRejected] = useState<Key | null>(null);
+  const [restore, setRestore] = useState(0);
 
   useEffect(() => {
     cg.current = Chessground(el.current!, {
@@ -72,13 +80,35 @@ export function Board({ fen, orientation, lastMove, shapes = NO_SHAPES, onMove, 
             const sound = moveSoundFor(fen, orig + dest);
             if (sound) playMoveSound(sound.capture);
             dropped.current = orig + dest;
-            onMoveRef.current?.(orig + dest + promo);
+            if (onMoveRef.current?.(orig + dest + promo) === false) {
+              buzzError(); // within the pointer event (iOS)
+              setRejected(dest);
+            }
           },
         },
       },
-      drawable: { autoShapes: shapes },
+      highlight: { custom: new Map() },
     });
-  }, [fen, orientation, lastMove, shapes, !!onMove, resetKey]);
+    setRejected(null);
+  }, [fen, orientation, lastMove, !!onMove, restore]);
 
-  return <div ref={el} className="board" />;
+  // Separate from the position: new arrows (e.g. the answer shown after a wrong move) do not
+  // put the pieces back.
+  useEffect(() => {
+    cg.current?.setAutoShapes(shapes);
+  }, [shapes]);
+
+  useEffect(() => {
+    if (!rejected) return;
+    cg.current?.set({ highlight: { custom: new Map([[rejected, 'rejected']]) } });
+    const t = setTimeout(() => setRestore((n) => n + 1), REJECTED_MS);
+    return () => clearTimeout(t);
+  }, [rejected]);
+
+  // A wrapper for the shake: chessground owns the classes of its own element.
+  return (
+    <div className={rejected ? 'board-frame rejected' : 'board-frame'}>
+      <div ref={el} className="board" />
+    </div>
+  );
 }

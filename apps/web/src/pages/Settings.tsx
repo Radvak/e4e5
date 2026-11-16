@@ -206,6 +206,15 @@ export function Settings({ me }: { me: Me }) {
             <input type="checkbox" checked={settings.sound} onChange={(e) => settings.setSound(e.target.checked)} /> Activés
           </label>
         </div>
+        <div className="setting">
+          <div className="what">
+            <strong>Vibration sur erreur</strong>
+            <div className="hint">Sur téléphone, le coup qui n’est pas dans votre répertoire fait vibrer.</div>
+          </div>
+          <label className="check">
+            <input type="checkbox" checked={settings.haptics} onChange={(e) => settings.setHaptics(e.target.checked)} /> Activée
+          </label>
+        </div>
       </section>
 
       <section className="card" id="entrainement">

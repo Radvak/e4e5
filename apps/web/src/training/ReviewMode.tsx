@@ -324,7 +324,6 @@ function Drill({
   if (state.round !== round) setState(current);
   const { replied, shown, mistakes, revealed, played, view } = current;
   const update = (patch: Partial<typeof current>) => setState((s) => ({ ...s, ...patch }));
-  const [resetKey, setResetKey] = useState(0);
   const answers = source.rep.movesAt(target.fen);
 
   useEffect(() => {
@@ -366,8 +365,7 @@ function Drill({
     const answer = answers.find((m) => m.uci === uci);
     if (!answer) {
       update({ mistakes: mistakes + 1, revealed: revealed || mistakes + 1 >= 2 });
-      setResetKey((k) => k + 1);
-      return;
+      return false;
     }
     update({ played: answer });
     // New or helped: asked again soon. Right first time: good.
@@ -393,7 +391,6 @@ function Drill({
           lastMove={lastMove}
           shapes={shapes}
           onMove={asking ? play : undefined}
-          resetKey={resetKey}
         />
         {plies > 0 && (
           <div className="nav">
