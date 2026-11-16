@@ -4,7 +4,6 @@ import { useLocation } from 'react-router-dom';
 import { api, type Me } from '../api';
 import { GameSyncRows, useGameSync } from '../components/GameSync';
 import { RatingRange } from '../components/RatingRange';
-import { useInstall } from '../pwa';
 import { explorerParams, NO_LIMIT, SPEED_CHOICES, SPEED_NAMES, useSettings, type LearnOrder, type SpeedChoice } from '../settings';
 import { Button, PageHeader } from '../ui';
 
@@ -23,7 +22,6 @@ export function Settings({ me }: { me: Me }) {
   const settings = useSettings();
   const ex = explorerParams(me, settings.speed, settings.range);
   const sync = useGameSync();
-  const install = useInstall();
   const { hash } = useLocation();
   const [chesscom, setChesscom] = useState(me.chesscom?.username ?? '');
   const [password, setPassword] = useState('');
@@ -97,26 +95,6 @@ export function Settings({ me }: { me: Me }) {
           <p className="muted small-text">Un identifiant et un mot de passe permettent aussi de se connecter sans Lichess (par exemple sur un réseau où Lichess est bloqué).</p>
         )}
       </section>
-
-      {!install.installed && (
-        <section className="card" id="application">
-          <h3>Application</h3>
-          <p className="muted small-text">
-            Installez Mon cahier sur votre téléphone ou votre ordinateur : une icône sur l’écran d’accueil, en plein écran, sans barre de navigateur.
-          </p>
-          {install.canPrompt ? (
-            <Button variant="primary" onClick={() => void install.prompt()}>
-              Installer l’application
-            </Button>
-          ) : install.ios ? (
-            <p className="small-text">
-              Dans Safari : bouton <strong>Partager</strong> (le carré avec une flèche), puis <strong>Sur l’écran d’accueil</strong>.
-            </p>
-          ) : (
-            <p className="small-text">Dans le menu du navigateur : <strong>Installer l’application</strong> (ou « Ajouter à l’écran d’accueil »).</p>
-          )}
-        </section>
-      )}
 
       <section className="card" id="parties">
         <h3>Comptes et parties</h3>

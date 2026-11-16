@@ -5,7 +5,8 @@
  *   would get in the way).
  * - useInstall: whether the app already runs installed, and how to install it here: Chrome /
  *   Edge / Android give an install prompt (beforeinstallprompt), iOS Safari only has
- *   Share → "Sur l’écran d’accueil".
+ *   Share → "Sur l’écran d’accueil". Offered once, on the first visit from a phone
+ *   (components/InstallPrompt.tsx).
  */
 import { useEffect, useState } from 'react';
 
@@ -40,6 +41,8 @@ const standalone = () =>
 
 const ios = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
+const mobile = () => ios() || /android|mobile/i.test(navigator.userAgent);
+
 export function useInstall() {
   const [, setTick] = useState(0);
   useEffect(() => {
@@ -53,6 +56,7 @@ export function useInstall() {
     installed: standalone(),
     canPrompt: deferred !== null,
     ios: ios(),
+    mobile: mobile(),
     prompt: async () => {
       if (!deferred) return;
       await deferred.prompt();

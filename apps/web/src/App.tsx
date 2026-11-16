@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { api, ApiError } from './api';
+import { InstallPrompt } from './components/InstallPrompt';
 import { Explorer } from './pages/Explorer';
 import { Games, useGamesReport } from './pages/Games';
 import { Login } from './pages/Login';
@@ -149,6 +150,8 @@ export function App() {
           <Route path="*" element={<Redirect to="/" />} />
         </Routes>
       </main>
+
+      <InstallPrompt />
 
       <nav className="tabbar">
         {SECTIONS.map((s) => (
