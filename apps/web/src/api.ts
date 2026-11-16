@@ -193,6 +193,8 @@ export interface InboxItem {
   expected: string[];
   lastPlayedAt: string;
   example: string;
+  /** Every game of the item, most recent first; reply: my answer after an opponent's move. */
+  gameList: { url: string; playedAt: string; result: GameResult; speed: string; opponent: string; opponentRating: number | null; reply: string | null }[];
 }
 export interface GamesReport {
   games: number;

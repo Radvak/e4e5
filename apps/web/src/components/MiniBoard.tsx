@@ -14,7 +14,7 @@ export interface MiniArrow {
 }
 
 /** Small view-only board: a position with a few arrows (thumbnails of "Mes parties"). */
-export function MiniBoard({ fen, orientation, arrows = [] }: { fen: string; orientation: 'white' | 'black'; arrows?: MiniArrow[] }) {
+export function MiniBoard({ fen, orientation, arrows = [], className = '' }: { fen: string; orientation: 'white' | 'black'; arrows?: MiniArrow[]; className?: string }) {
   const el = useRef<HTMLDivElement>(null);
   const cg = useRef<Api | null>(null);
   useEffect(() => {
@@ -30,5 +30,5 @@ export function MiniBoard({ fen, orientation, arrows = [] }: { fen: string; orie
     const shapes: DrawShape[] = arrows.map((a) => ({ orig: a.uci.slice(0, 2) as Key, dest: a.uci.slice(2, 4) as Key, brush: a.kind }));
     cg.current?.set({ fen, orientation, drawable: { autoShapes: shapes } });
   }, [fen, orientation, arrows.map((a) => a.uci + a.kind).join()]);
-  return <div ref={el} className="mini-board" />;
+  return <div ref={el} className={`mini-board ${className}`} />;
 }

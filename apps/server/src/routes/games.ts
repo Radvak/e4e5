@@ -38,6 +38,16 @@ interface InboxItem {
   expected: string[];
   lastPlayedAt: string;
   example: string;
+  /** Every game of the item, most recent first (with my answer, after an opponent's move). */
+  gameList: {
+    url: string;
+    playedAt: string;
+    result: 'win' | 'draw' | 'loss';
+    speed: string;
+    opponent: string;
+    opponentRating: number | null;
+    reply: string | null;
+  }[];
 }
 
 export async function gameRoutes(app: FastifyInstance) {
@@ -174,7 +184,6 @@ const lineText = (sans: string[]) => sans.map((san, i) => (i % 2 === 0 ? `${i / 
 
 const KINDS = { 'opponent-novelty': 'novelty', 'my-deviation': 'deviation', 'end-of-prep': 'end' } as const;
 
-/** Groups the games by the place they left the repertoire. */
 /**
  * Adds a game to its inbox item. A dismissed item stays hidden, except an error (my deviation):
  * it was dealt with (sent to review, or ignored) when dismissed, so a game played after that
@@ -201,6 +210,7 @@ function addToInbox(inbox: Map<string, InboxItem>, r: GameReport, hidden: Map<st
       expected: r.expected,
       lastPlayedAt: '',
       example: r.game.url,
+      gameList: [],
     };
     inbox.set(key, item);
   }
@@ -208,6 +218,16 @@ function addToInbox(inbox: Map<string, InboxItem>, r: GameReport, hidden: Map<st
   item.results[r.game.result]++;
   const at = r.game.playedAt.toISOString();
   if (at > item.lastPlayedAt) [item.lastPlayedAt, item.example] = [at, r.game.url];
+  // The games come oldest first.
+  item.gameList.unshift({
+    url: r.game.url,
+    playedAt: at,
+    result: r.game.result,
+    speed: r.game.speed,
+    opponent: r.game.opponent,
+    opponentRating: r.game.opponentRating,
+    reply: r.reply?.san ?? null,
+  });
   if (r.reply) {
     let reply = item.replies.find((x) => x.uci === r.reply!.uci);
     if (!reply) item.replies.push((reply = { san: r.reply.san, uci: r.reply.uci, games: 0, results: emptyResults() }));

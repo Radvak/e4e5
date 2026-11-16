@@ -1,6 +1,6 @@
 import { playSanOn, positionFromFen, type Color } from '@prepa-cahier/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api, ApiError, type GamesReport, type InboxItem, type RepertoireSummary, type Results } from '../api';
 import { lineText, moveText } from '../chessText';
@@ -260,58 +260,119 @@ function InboxRow({ item, rep, onDone }: { item: InboxItem; rep: RepertoireSumma
         ]
       : [{ uci: item.move.uci, kind: 'popular' }];
 
+  const color = rep?.color ?? 'white';
+  const dialog = useRef<HTMLDialogElement>(null);
+  // The detail is only rendered while open (the board is measured when it is created).
+  const [detail, setDetail] = useState(false);
+  const open = () => {
+    setDetail(true);
+    dialog.current?.showModal();
+  };
+
+  const head = (
+    <div className="inbox-head">
+      <span className="muted">{lineText(line) || 'Position initiale'} </span>
+      <span className="hole-move">{moveText(line, item.move.san)}</span>
+    </div>
+  );
+  const actions = (
+    <div className="row inbox-actions">
+      {item.kind === 'deviation' && (
+        <>
+          <Button size="sm" variant="primary" disabled={busy} onClick={() => now.mutate()} title="Réviser cette position maintenant">
+            Réviser
+          </Button>
+          <Button size="sm" disabled={busy} onClick={() => later.mutate()} title="Ajouter cette position à vos révisions du jour">
+            Plus tard
+          </Button>
+        </>
+      )}
+      <Button
+        size="sm"
+        variant={item.kind === 'deviation' ? 'ghost' : 'primary'}
+        to={editor}
+        title="Préparer dans l’éditeur : ouvrir le répertoire sur cette ligne (rien n’est enregistré sans votre accord)"
+      >
+        Préparer
+      </Button>
+      <Button size="sm" variant="ghost" disabled={busy} onClick={() => dismiss.mutate()} title="Masquer cet élément">Ignorer</Button>
+    </div>
+  );
+  const errorText = error && <p className="error small-text">{error.message}</p>;
+
   return (
-    <article className="card game-card">
-      <MiniBoard fen={item.fen} orientation={rep?.color ?? 'white'} arrows={arrows} />
+    // The whole card opens the detail, except its buttons and links.
+    <article className="card game-card clickable" onClick={(e) => !(e.target as HTMLElement).closest('button, a') && open()}>
+      <button type="button" className="thumb-button" onClick={open} aria-label="Voir le détail et les parties">
+        <MiniBoard fen={item.fen} orientation={color} arrows={arrows} />
+      </button>
       <div className="game-card-body">
-      <div className="inbox-head">
-        <span className="muted">{lineText(line) || 'Position initiale'} </span>
-        <span className="hole-move">{moveText(line, item.move.san)}</span>
+        {head}
+        <div className="row small-text game-card-meta">
+          <span className="rep-tag"><span className={`dot ${color}`} /> {rep?.name ?? '?'}</span>
+          <span className="muted">{plural(item.games, 'partie', 'parties')} · {pct(score(item.results))}</span>
+        </div>
+        {actions}
+        {errorText}
       </div>
-      <div className="row small-text" style={{ margin: '4px 0' }}>
-        <span className="rep-tag"><span className={`dot ${rep?.color ?? 'white'}`} /> {rep?.name ?? '?'}</span>
-        <span className="muted">
-          {plural(item.games, 'partie', 'parties')} · score {pct(score(item.results))} · dernière le {date(item.lastPlayedAt)} ·{' '}
-          <a href={item.example} target="_blank" rel="noreferrer">voir une partie ↗</a>
-        </span>
-      </div>
-      <div className="inbox-body">
-        {item.kind === 'deviation' && (
-          <span>
-            Vous avez joué <strong>{moveText(line, item.move.san, true)}</strong> au lieu de{' '}
-            <strong>{item.expected.map((s) => moveText(line, s, true)).join(' ou ')}</strong>.{' '}
-          </span>
+
+      <dialog
+        ref={dialog}
+        className="game-detail"
+        onClose={() => setDetail(false)}
+        // Not to the card (which would open it again); a click on the backdrop closes it.
+        onClick={(e) => {
+          e.stopPropagation();
+          if (e.target === dialog.current) dialog.current.close();
+        }}
+      >
+        {detail && (
+          <div className="game-detail-content stack">
+            <div className="game-detail-top">
+              <span className="rep-tag"><span className={`dot ${color}`} /> {rep?.name ?? '?'}</span>
+              <Button size="sm" variant="ghost" onClick={() => dialog.current?.close()} title="Fermer">✕</Button>
+            </div>
+            <MiniBoard fen={item.fen} orientation={color} arrows={arrows} className="mini-board-large" />
+            {head}
+            <p className="inbox-body">
+              {item.kind === 'deviation' && (
+                <>
+                  Vous avez joué <strong>{moveText(line, item.move.san, true)}</strong> au lieu de{' '}
+                  <strong>{item.expected.map((s) => moveText(line, s, true)).join(' ou ')}</strong>.{' '}
+                </>
+              )}
+              {item.kind === 'novelty' && <>L’adversaire a joué un coup que vous n’avez pas préparé. </>}
+              {item.kind === 'end' && <>Votre ligne s’arrête ici. </>}
+              {plural(item.games, 'partie', 'parties')}, score {pct(score(item.results))}
+              {item.replies.length > 0 && (
+                <> · vos réponses : {item.replies.map((x) => `${moveText(after, x.san, true)} (${x.games}, ${pct(score(x.results))})`).join(', ')}</>
+              )}
+              .
+            </p>
+            {actions}
+            {errorText}
+            <div className="table-wrap">
+              <table className="lines">
+                <tbody>
+                  {item.gameList.map((g) => (
+                    <tr key={g.url}>
+                      <td className="muted">{date(g.playedAt)}</td>
+                      <td>
+                        {g.opponent} <span className="muted">{g.opponentRating ?? ''}</span>
+                      </td>
+                      <td className={`result ${g.result}`}>{RESULT[g.result]}</td>
+                      {item.kind !== 'deviation' && <td className="small-text">{g.reply ? moveText(after, g.reply, true) : '—'}</td>}
+                      <td>
+                        <a className="small-text" href={g.url} target="_blank" rel="noreferrer">partie ↗</a>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
         )}
-        {item.kind === 'end' && <span>Votre ligne s’arrête ici. </span>}
-        {item.replies.length > 0 && (
-          <span className="muted">
-            Vos réponses : {item.replies.slice(0, 3).map((x) => `${moveText(after, x.san, true)} (${x.games}, ${pct(score(x.results))})`).join(', ')}.
-          </span>
-        )}
-      </div>
-      <div className="row inbox-actions">
-        {item.kind === 'deviation' && (
-          <>
-            <Button size="sm" variant="primary" disabled={busy} onClick={() => now.mutate()} title="Réviser cette position maintenant">
-              Réviser
-            </Button>
-            <Button size="sm" disabled={busy} onClick={() => later.mutate()} title="Ajouter cette position à vos révisions du jour">
-              Plus tard
-            </Button>
-          </>
-        )}
-        <Button
-          size="sm"
-          variant={item.kind === 'deviation' ? 'ghost' : 'primary'}
-          to={editor}
-          title="Ouvrir le répertoire sur cette ligne (rien n’est enregistré sans votre accord)"
-        >
-          Préparer dans l’éditeur
-        </Button>
-        <Button size="sm" variant="ghost" disabled={busy} onClick={() => dismiss.mutate()} title="Masquer cet élément">Ignorer</Button>
-      </div>
-      {error && <p className="error small-text">{error.message}</p>}
-      </div>
+      </dialog>
     </article>
   );
 }
