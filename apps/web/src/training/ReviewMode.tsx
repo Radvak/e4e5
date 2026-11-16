@@ -1,6 +1,6 @@
 import { groupLines, lineStarts, START_FEN, type Repertoire, type RepMove, type TrainingPosition } from '@prepa-cahier/core';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { Grade, ReviewCard } from '../api';
+import type { Grade } from '../api';
 import { Board } from '../components/Board';
 import { dayStart } from '../settings';
 import { answerArrows, inTime, JUMP_MS, lineText, OpponentComment, REPLAY_MS, REPLAYED_PLIES, REPLY_MS } from './common';
@@ -13,6 +13,9 @@ interface Item {
 }
 
 interface Question extends Item {
+  /** The move asked: one of my moves to review (or to learn), at random when several are. */
+  expected: RepMove;
+  /** The expected move is not learnt yet: it is shown. */
   isNew: boolean;
   /** When the line continues: my last move, then the opponent's reply leading to `target`. */
   lead?: { mine: RepMove; reply: RepMove };
@@ -76,7 +79,7 @@ export function ReviewMode({
   newPerDay: number;
   /** All unseen positions are available (e.g. training a chosen subtree). */
   noNewLimit?: boolean;
-  onReview: (source: Source, fen: string, grade: Grade) => void;
+  onReview: (source: Source, fen: string, uci: string, grade: Grade) => void;
   onCounts: (c: { dueLines: number; freshLines: number; reviewed: number; asked: number; firstTry: number }) => void;
   /** Shown when nothing is left to review. */
   idle: React.ReactNode;
@@ -124,23 +127,26 @@ export function ReviewMode({
     const reach = (item: Item) => reachOf?.(item.source, item.target.fen) ?? -1;
     // Everything in lines (a review always goes through a whole line). New lines: one daily
     // limit for all repertoires, minus the lines learnt today here and elsewhere.
-    let learntToday = learntElsewhere;
+    // A line learnt today in several repertoires (shared moves) counts once.
+    const learntStarts = new Set<string>();
     const linesBySource: Item[][][] = [];
     for (const source of sources) {
-      const today = new Set(source.cardList.filter((c) => Date.parse(c.createdAt) >= today0).map((c) => c.fen));
-      learntToday += lineStarts(source.positions.filter((p) => today.has(p.fen)), (f) => today.has(f)).length;
+      const state = new Map(source.positions.map((p) => [p.fen, source.stateOf(p.fen, now)]));
+      const today = new Set(source.positions.filter((p) => (state.get(p.fen)!.learntAt ?? 0) >= today0).map((p) => p.fen));
+      for (const p of lineStarts(source.positions.filter((p) => today.has(p.fen)), (f) => today.has(f))) learntStarts.add(p.fen);
       const unseenHere: Item[] = [];
       for (const target of source.positions) {
-        const card: ReviewCard | undefined = source.cards.get(target.fen);
-        if (!card) unseenHere.push({ source, target });
-        else if (Date.parse(card.due) <= now) due.push({ source, target, at: Date.parse(card.due) });
-        else upcoming.push({ source, target, at: Date.parse(card.due) });
+        const { status, at } = state.get(target.fen)!;
+        if (status === 'new') unseenHere.push({ source, target });
+        else if (status === 'due') due.push({ source, target, at });
+        else upcoming.push({ source, target, at });
       }
       // Most likely first (stable sort: the repertoire's order for equal or unknown ones).
       if (reachOf) unseenHere.sort((a, b) => reach(b) - reach(a));
       const lines = groupLines(unseenHere.map((i) => ({ ...i, fen: i.target.fen, path: i.target.path })));
       linesBySource.push(lines.map((line) => line.map(({ source, target }) => ({ source, target }))));
     }
+    const learntToday = learntElsewhere + learntStarts.size;
     const remaining = noNewLimit ? Infinity : Math.max(0, newPerDay + extraNew - learntToday);
     let chosen: Item[][];
     if (reachOf) {
@@ -178,11 +184,17 @@ export function ReviewMode({
     setCurrent(q);
     setRound((r) => r + 1);
   };
-  const question = (item: Item, lead?: Question['lead']): Question => ({
-    ...item,
-    isNew: !item.source.cards.has(item.target.fen),
-    lead,
-  });
+  /** The latest version of a source (its cards change with each answer). */
+  const latest = (source: Source) => sources.find((s) => s.id === source.id) ?? source;
+  const question = (item: Item, lead?: Question['lead']): Question => {
+    const source = latest(item.source);
+    const { fen } = item.target;
+    // The moves to review (or to learn); none when finishing a line: any of them.
+    const pending = source.stateOf(fen, Date.now()).pending;
+    const pool = pending.length ? pending : source.rep.movesAt(fen);
+    const expected = pool[Math.floor(Math.random() * pool.length)]!;
+    return { source, target: item.target, expected, isNew: !source.cardOf(fen, expected.uci), lead };
+  };
 
   // First question, and questions becoming due while idle.
   useEffect(() => {
@@ -223,9 +235,9 @@ export function ReviewMode({
     answered.current.add(`${q.source.id}|${q.target.fen}`);
     // Bonus position (asked to finish the line, not due yet): only a mistake is recorded, so a
     // right answer leaves its schedule unchanged.
-    const card = q.source.cards.get(q.target.fen);
+    const card = latest(q.source).cardOf(q.target.fen, q.expected.uci);
     const bonus = card !== undefined && Date.parse(card.due) > Date.now();
-    if (!(bonus && outcome === 'correct')) onReview(q.source, q.target.fen, grade);
+    if (!(bonus && outcome === 'correct')) onReview(q.source, q.target.fen, q.expected.uci, grade);
     setStats((s) => ({
       reviewed: s.reviewed + 1,
       asked: s.asked + (outcome === 'new' ? 0 : 1),
@@ -288,8 +300,9 @@ export function ReviewMode({
 }
 
 /**
- * One question. When the line continues, the board first shows my previous move, then plays
- * the opponent's reply. New positions show the answer; two wrong tries reveal it.
+ * One question: one of my moves (`expected`). When the line continues, the board first shows
+ * my previous move, then plays the opponent's reply. A new move is shown; two wrong tries
+ * reveal it. Another move of my repertoire (an alternative) is not a mistake: try again.
  */
 function Drill({
   round,
@@ -305,7 +318,7 @@ function Drill({
   showName: boolean;
   onAnswered: (played: RepMove, outcome: Outcome) => void;
 }) {
-  const { source, target, isNew, lead } = question;
+  const { source, target, expected, isNew, lead } = question;
   const plies = target.path.length;
   const fresh = () => ({
     round,
@@ -313,6 +326,8 @@ function Drill({
     // Jump to another line: replay its last moves; following the line: no replay.
     shown: lead ? plies : Math.max(0, plies - REPLAYED_PLIES),
     mistakes: 0,
+    /** Another move of my repertoire played instead of the expected one. */
+    alternative: null as RepMove | null,
     revealed: isNew,
     played: null as RepMove | null,
     /** Position looked at while navigating back in the line (plies from the start), null: the question. */
@@ -322,7 +337,7 @@ function Drill({
   // New question: reset the state during render (keeps the board mounted, no flash).
   const current = state.round === round ? state : fresh();
   if (state.round !== round) setState(current);
-  const { replied, shown, mistakes, revealed, played, view } = current;
+  const { replied, shown, mistakes, alternative, revealed, played, view } = current;
   const update = (patch: Partial<typeof current>) => setState((s) => ({ ...s, ...patch }));
   const answers = source.rep.movesAt(target.fen);
 
@@ -362,14 +377,15 @@ function Drill({
 
   const play = (uci: string) => {
     if (!asking) return;
-    const answer = answers.find((m) => m.uci === uci);
-    if (!answer) {
-      update({ mistakes: mistakes + 1, revealed: revealed || mistakes + 1 >= 2 });
+    if (uci !== expected.uci) {
+      const other = answers.find((m) => m.uci === uci);
+      if (other) update({ alternative: other });
+      else update({ mistakes: mistakes + 1, alternative: null, revealed: revealed || mistakes + 1 >= 2 });
       return false;
     }
-    update({ played: answer });
+    update({ played: expected });
     // New or helped: asked again soon. Right first time: good.
-    onAnswered(answer, outcomeOf(isNew, mistakes, revealed));
+    onAnswered(expected, outcomeOf(isNew, mistakes, revealed));
   };
 
   let boardFen: string;
@@ -380,7 +396,7 @@ function Drill({
   else if (shown < plies) [boardFen, lastMove] = [target.path[shown - 1]?.toFen ?? START_FEN, target.path[shown - 1]?.uci];
   else [boardFen, lastMove] = [target.fen, (lead?.reply ?? target.path.at(-1))?.uci];
 
-  const shapes = useMemo(() => (revealed && asking ? answerArrows(answers) : []), [revealed, asking, answers]);
+  const shapes = useMemo(() => (revealed && asking ? answerArrows([expected]) : []), [revealed, asking, expected]);
 
   return (
     <div className="editor">
@@ -427,11 +443,15 @@ function Drill({
             <p className="muted">…</p>
           ) : isNew ? (
             <p>
-              <strong>Nouvelle position.</strong> Jouez le coup indiqué{answers.length > 1 ? ' (n’importe lequel)' : ''} :{' '}
-              {answers.map((m) => m.san).join(' ou ')}.
+              <strong>Nouveau coup.</strong> Jouez le coup indiqué : {expected.san}.
             </p>
           ) : (
             <p><strong>À vous de jouer.</strong></p>
+          )}
+          {alternative && !played && (
+            <p className="warning">
+              {alternative.san} est aussi dans votre répertoire, mais une autre suite est demandée ici : réessayez.
+            </p>
           )}
           {mistakes > 0 && !played && (
             <p className="error">✗ Pas dans votre répertoire.{revealed ? ' Jouez le coup indiqué.' : ' Réessayez.'}</p>

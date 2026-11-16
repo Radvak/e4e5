@@ -6,10 +6,11 @@ import { gameMovesFromPgn } from '@prepa-cahier/core';
 import { and, eq, gte } from 'drizzle-orm';
 import { chesscomArchives, chesscomMonth, type ChesscomGame } from './chesscom.js';
 import { db } from './db/client.js';
-import { games, gameSyncs, reviewCards, type User } from './db/schema.js';
+import { games, gameSyncs, type User } from './db/schema.js';
 import { env } from './env.js';
 import { analyseGames, loadRepertoires } from './gameAnalysis.js';
 import { lichessUserGames, type LichessGameExport } from './lichess.js';
+import { makeDue } from './moveCards.js';
 
 export type Source = 'lichess' | 'chesscom';
 type GameRow = typeof games.$inferInsert;
@@ -150,7 +151,7 @@ async function syncLichess(user: User, job: SyncJob) {
   await store(user.id, 'lichess', account, rows, job, last);
 }
 
-/** Deviations from the last two weeks make their position due for review now. */
+/** Deviations from the last two weeks make my repertoire moves of their position due for review now. */
 const RECENT_MS = 14 * 86_400_000;
 
 async function scheduleDeviations(userId: string, job: SyncJob) {
@@ -158,16 +159,10 @@ async function scheduleDeviations(userId: string, job: SyncJob) {
   const since = new Date(Date.now() - RECENT_MS);
   const recent = await db.select().from(games).where(and(eq(games.userId, userId), gte(games.playedAt, since)));
   const reps = await loadRepertoires(userId);
-  const now = new Date();
   let reviews = 0;
   for (const a of analyseGames(recent, reps)) {
     if (a.kind !== 'my-deviation' || !a.repertoireId) continue;
-    const updated = await db
-      .update(reviewCards)
-      .set({ due: now })
-      .where(and(eq(reviewCards.repertoireId, a.repertoireId), eq(reviewCards.fen, a.fen)))
-      .returning({ fen: reviewCards.fen });
-    reviews += updated.length;
+    reviews += await makeDue(userId, a.repertoireId, a.fen);
   }
   job.reviews = reviews;
 }

@@ -76,14 +76,17 @@ export const repMoves = sqliteTable(
 );
 
 /**
- * Spaced-repetition state (FSRS) of a position to train: a position of the repertoire where it
- * is the user's turn. Positions without a row are "new".
+ * Spaced-repetition state (FSRS) of a move to remember: one of my moves in a position, for the
+ * user, whatever the repertoire (a move learnt in one repertoire is known in all those playing
+ * it). Moves without a row are "new".
  */
-export const reviewCards = sqliteTable(
-  'review_cards',
+export const moveCards = sqliteTable(
+  'move_cards',
   {
-    repertoireId: text('repertoire_id').notNull().references(() => repertoires.id, { onDelete: 'cascade' }),
+    userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    /** Position (FEN without move counters, see core fenKey) where it is my turn. */
     fen: text('fen').notNull(),
+    uci: text('uci').notNull(),
     /** ts-fsrs Card, as JSON. */
     card: text('card', { mode: 'json' }).$type<Record<string, unknown>>().notNull(),
     due: integer('due', { mode: 'timestamp_ms' }).notNull(),
@@ -92,7 +95,7 @@ export const reviewCards = sqliteTable(
     createdAt: createdAt(),
     lastReview: integer('last_review', { mode: 'timestamp_ms' }),
   },
-  (t) => [primaryKey({ columns: [t.repertoireId, t.fen] }), index('review_cards_due').on(t.repertoireId, t.due)],
+  (t) => [primaryKey({ columns: [t.userId, t.fen, t.uci] })],
 );
 
 /** One row per recorded answer in training (history for the statistics). */
@@ -100,8 +103,11 @@ export const reviewLog = sqliteTable(
   'review_log',
   {
     id: integer('id').primaryKey({ autoIncrement: true }),
+    /** Repertoire being trained. */
     repertoireId: text('repertoire_id').notNull().references(() => repertoires.id, { onDelete: 'cascade' }),
     fen: text('fen').notNull(),
+    /** Move asked (null for the answers recorded per position, before move cards). */
+    uci: text('uci'),
     grade: text('grade', { enum: ['again', 'hard', 'good', 'easy'] }).notNull(),
     /** First review of the position (it was new). */
     isNew: integer('is_new', { mode: 'boolean' }).notNull(),

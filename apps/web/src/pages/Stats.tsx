@@ -26,9 +26,9 @@ function knowledge(source: Source, fens: string[]) {
   let recall = 0;
   let mature = 0;
   for (const fen of fens) {
-    const c = source.cards.get(fen);
+    const c = source.positionCard(fen);
     if (!c) continue;
-    learnt++;
+    if (c.complete) learnt++;
     recall += c.recall;
     if (c.interval >= MATURE_DAYS) mature++;
   }
@@ -57,8 +57,8 @@ export function Stats() {
       mature += k.mature;
       recall += k.known * k.total;
       due += s.positions.filter((p) => {
-        const c = s.cards.get(p.fen);
-        return c && Date.parse(c.due) <= now;
+        const c = s.positionCard(p.fen);
+        return c && c.due <= now;
       }).length;
     }
     return { total, learnt, mature, known: total ? recall / total : 0, recallLearnt: learnt ? recall / learnt : 0, due };
@@ -100,7 +100,7 @@ export function Stats() {
     const counts = Array.from({ length: 14 }, () => 0);
     for (const s of shown) {
       for (const p of s.positions) {
-        const c = s.cards.get(p.fen);
+        const c = s.positionCard(p.fen);
         if (!c) continue;
         const i = Math.max(0, Math.floor((dayStart(new Date(c.due)) - today) / DAY));
         if (i < 14) counts[i]!++;
@@ -133,7 +133,7 @@ export function Stats() {
   const weakest = useMemo(
     () =>
       shown
-        .flatMap((s) => s.positions.map((p) => ({ s, p, c: s.cards.get(p.fen) })))
+        .flatMap((s) => s.positions.map((p) => ({ s, p, c: s.positionCard(p.fen) })))
         // Weak: estimated recall under 90%, or forgotten at least once.
         .filter((x) => x.c && (x.c.recall < 0.9 || x.c.lapses > 0))
         .sort((a, b) => a.c!.recall - b.c!.recall || b.c!.lapses - a.c!.lapses)

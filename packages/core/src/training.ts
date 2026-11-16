@@ -134,3 +134,33 @@ export function pickNewLines<T extends { fen: string; path: RepMove[] }>(ordered
   const picked = groupLines(ordered).slice(0, lines);
   return { chosen: picked.flat(), lines: picked.length };
 }
+
+/** Review state of one of my moves (a move card), as far as the scheduling needs it. */
+export interface MoveCardTimes {
+  /** Next review (ms). */
+  due: number;
+  /** First learnt (ms). */
+  createdAt: number;
+}
+
+/**
+ * What a position to train needs, from the cards of my moves there (`moves`: my repertoire
+ * moves in the position). Due when one of them is due (the earliest: `at`), else new when one
+ * has no card yet, else learnt (`at`: next review). `pending`: the moves to ask (the due ones,
+ * or the new ones). `learntAt`: when a move of the position was last learnt (null: none yet).
+ */
+export function positionReview(
+  moves: RepMove[],
+  cardOf: (uci: string) => MoveCardTimes | undefined,
+  now: number,
+): { status: 'due' | 'new' | 'learnt'; at: number; pending: RepMove[]; learntAt: number | null } {
+  const cards = moves.map((m) => ({ m, c: cardOf(m.uci) }));
+  const known = cards.filter((x): x is { m: RepMove; c: MoveCardTimes } => !!x.c);
+  const at = Math.min(...known.map((x) => x.c.due));
+  const learntAt = known.length ? Math.max(...known.map((x) => x.c.createdAt)) : null;
+  const due = known.filter((x) => x.c.due <= now).map((x) => x.m);
+  if (due.length) return { status: 'due', at, pending: due, learntAt };
+  const fresh = cards.filter((x) => !x.c).map((x) => x.m);
+  if (fresh.length) return { status: 'new', at: Infinity, pending: fresh, learntAt };
+  return { status: 'learnt', at, pending: [], learntAt };
+}

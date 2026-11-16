@@ -55,8 +55,10 @@ export interface RepertoireSummary { id: string; name: string; color: Color; cre
 export interface StoredMove extends RepMove { id: number; source: string }
 export interface RepertoireDetail extends RepertoireSummary { moves: StoredMove[] }
 export type Grade = 'again' | 'hard' | 'good' | 'easy';
+/** Review state of one of my moves (shared by every repertoire playing it). */
 export interface ReviewCard {
   fen: string;
+  uci: string;
   /** Estimated probability (0-1) of finding the move now. */
   recall: number;
   due: string;
@@ -242,8 +244,8 @@ export const api = {
     request<StoredMove>('PATCH', `/api/repertoires/${id}/moves/${moveId}`, patch),
   deleteMove: (id: string, moveId: number) => request<{ ok: true; pruned: number }>('DELETE', `/api/repertoires/${id}/moves/${moveId}`),
   importPgn: (id: string, pgn: string) => request<ImportResult>('POST', `/api/repertoires/${id}/import-pgn`, { pgn }),
-  cards: (id: string) => request<ReviewCard[]>('GET', `/api/repertoires/${id}/cards`),
-  review: (id: string, fen: string, grade: Grade) => request<ReviewCard>('POST', `/api/repertoires/${id}/review`, { fen, grade }),
+  cards: () => request<ReviewCard[]>('GET', '/api/cards'),
+  review: (id: string, fen: string, uci: string, grade: Grade) => request<ReviewCard>('POST', `/api/repertoires/${id}/review`, { fen, uci, grade }),
   trainingSummary: (dayStart: number, newPerDay: number) =>
     request<TrainingSummary[]>('GET', `/api/training/summary?${new URLSearchParams({ dayStart: String(dayStart), newPerDay: String(newPerDay) })}`),
   statsHistory: (days: number) => request<ReviewLogEntry[]>('GET', `/api/stats/history?days=${days}`),
@@ -264,7 +266,7 @@ export const api = {
     request<GamesReport>('GET', `/api/games/report?${new URLSearchParams({ days: String(days), speeds: speeds.join(',') })}`),
   dismissInbox: (key: string) => request<{ ok: true }>('POST', '/api/games/inbox/dismiss', { key }),
   restoreInbox: () => request<{ ok: true }>('DELETE', '/api/games/inbox/dismiss'),
-  reviewNow: (id: string, fen: string) => request<ReviewCard>('POST', `/api/repertoires/${id}/cards/due`, { fen }),
+  reviewNow: (id: string, fen: string) => request<{ ok: true }>('POST', `/api/repertoires/${id}/cards/due`, { fen }),
   explorer: (fen: string, speeds: string[], ratings: number[]) =>
     request<Stats>(
       'GET',

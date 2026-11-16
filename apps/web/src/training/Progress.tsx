@@ -20,14 +20,14 @@ export function Progress({ sources }: { sources: Source[] }) {
         </thead>
         <tbody>
           {sources.map((s) => {
-            const cards = s.positions.map((p) => s.cards.get(p.fen)).filter((c) => !!c);
+            const cards = s.positions.map((p) => s.positionCard(p.fen)).filter((c) => !!c);
             return (
               <tr key={s.id}>
                 <td>{s.name}</td>
                 <td>{s.positions.length}</td>
-                <td>{cards.length}</td>
+                <td>{cards.filter((c) => c.complete).length}</td>
                 <td>{cards.filter((c) => c.interval >= MATURE_DAYS).length}</td>
-                <td>{cards.filter((c) => Date.parse(c.due) <= now).length}</td>
+                <td>{cards.filter((c) => c.due <= now).length}</td>
               </tr>
             );
           })}
@@ -36,7 +36,7 @@ export function Progress({ sources }: { sources: Source[] }) {
 
       {sources.map((s) => {
         const leeches = s.positions
-          .map((p) => ({ p, card: s.cards.get(p.fen) }))
+          .map((p) => ({ p, card: s.positionCard(p.fen) }))
           .filter(({ card }) => card && card.lapses >= LEECH_LAPSES)
           .sort((a, b) => b.card!.lapses - a.card!.lapses);
         if (!leeches.length) return null;

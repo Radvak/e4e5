@@ -69,7 +69,7 @@ export function Training({ me }: { me: Me }) {
   };
   const [counts, setCounts] = useState({ dueLines: 0, freshLines: 0, reviewed: 0, asked: 0, firstTry: 0 });
   const onCounts = useCallback((c: typeof counts) => setCounts(c), []);
-  const onReview = (source: Source, fen: string, grade: Grade) => review.mutate({ source, fen, grade });
+  const onReview = (source: Source, fen: string, uci: string, grade: Grade) => review.mutate({ source, fen, uci, grade });
 
   if (loading || (!id && all.isLoading)) return <p className="muted">Chargement…</p>;
   if (id && !sources.length) return <p className="error">Impossible de charger le répertoire.</p>;

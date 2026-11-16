@@ -201,6 +201,7 @@ function InboxRow({ item, rep, onDone }: { item: InboxItem; rep: RepertoireSumma
     qc.setQueriesData<GamesReport>({ queryKey: ['games-report'] }, (r) => r && withoutItem(r, item));
     void qc.invalidateQueries({ queryKey: ['games-report'] });
     void qc.invalidateQueries({ queryKey: ['training-summary'] });
+    void qc.invalidateQueries({ queryKey: ['cards'] });
   };
   /**
    * An error sent to review: the position is due now (if learnt: else it comes with the new

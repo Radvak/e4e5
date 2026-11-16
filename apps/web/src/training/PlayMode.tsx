@@ -41,22 +41,26 @@ export function PlayMode({
   root: string;
   speeds: string[];
   ratings: number[];
-  onReview: (source: Source, fen: string, grade: Grade) => void;
+  onReview: (source: Source, fen: string, uci: string, grade: Grade) => void;
   /** Switch to "Réviser" (offered when nothing is learnt yet). */
   onLearn?: () => void;
 }) {
   const qc = useQueryClient();
   /**
-   * "Se tester" only covers what is learnt: a position is known once it has a review card. The
-   * opponent only plays replies leading to a known position; the line ends when none does.
+   * "Se tester" only covers what is learnt: a position is known once one of my moves there is
+   * learnt. The opponent only plays replies leading to a known position; the line ends when none does.
    */
-  const knownReplies = (source: Source, fen: string) => source.rep.movesAt(fen).filter((m) => source.cards.has(m.toFen));
+  const known = (source: Source, fen: string) => !!source.positionCard(fen);
+  const knownReplies = (source: Source, fen: string) => source.rep.movesAt(fen).filter((m) => known(source, m.toFen));
   /** Where a line goes after a move: opponent to play, my turn, or end of what is known. */
   const after = (source: Source, fen: string): Phase => {
-    if (source.rep.isMyTurn(fen)) return source.cards.has(fen) && source.rep.movesAt(fen).length > 0 ? 'ask' : 'end';
+    if (source.rep.isMyTurn(fen)) return known(source, fen) ? 'ask' : 'end';
     return knownReplies(source, fen).length > 0 ? 'opponent' : 'end';
   };
-  const playable = useMemo(() => sources.filter((s) => after(s, root) !== 'end'), [sources, root]);
+  const playable = useMemo(
+    () => sources.filter((s) => after(s, root) !== 'end').map((s) => ({ s, learnt: s.positions.filter((p) => known(s, p.fen)).length })),
+    [sources, root],
+  );
   const [line, setLine] = useState<LineState | null>(null);
   const [score, setScore] = useState({ lines: 0, moves: 0, asked: 0, clean: 0 });
   const [feedback, setFeedback] = useState<Feedback | null>(null);
@@ -83,9 +87,9 @@ export function PlayMode({
     token.current++;
     if (!playable.length) return setLine(null);
     // Repertoires are picked in proportion to what is learnt in them.
-    const total = playable.reduce((n, s) => n + s.cardList.length, 0);
+    const total = playable.reduce((n, p) => n + p.learnt, 0);
     let r = Math.random() * total;
-    const source = playable.find((s) => (r -= s.cardList.length) < 0) ?? playable[0]!;
+    const source = (playable.find((p) => (r -= p.learnt) < 0) ?? playable[0]!).s;
     setLine({ source, fen: root, history: [], phase: after(source, root), mistakes: 0, revealed: false });
   }, [playable, root]);
 
@@ -143,12 +147,14 @@ export function PlayMode({
       setLine({ ...line, mistakes: line.mistakes + 1, revealed: line.revealed || line.mistakes + 1 >= 2 });
       return false;
     }
-    const card = line.source.cards.get(line.fen);
-    const outcome = outcomeOf(!card, line.mistakes, line.revealed);
+    // Any of my moves is accepted; its card is graded (a move not learnt yet, found without
+    // help, is left to the review, where it is shown first).
+    const card = line.source.cardOf(line.fen, answer.uci);
+    const outcome = outcomeOf(false, line.mistakes, line.revealed);
     let grade: Grade | null = null;
-    if (outcome !== 'correct') grade = 'again'; // new, helped or wrong
+    if (outcome !== 'correct') grade = 'again'; // helped or wrong
     else if (card && Date.parse(card.due) <= Date.now()) grade = 'good';
-    if (grade) onReview(line.source, line.fen, grade);
+    if (grade) onReview(line.source, line.fen, answer.uci, grade);
     setScore((s) => ({
       ...s,
       moves: s.moves + 1,
@@ -174,13 +180,12 @@ export function PlayMode({
     );
   }
 
-  const isNew = line?.phase === 'ask' && !line.source.cards.has(line.fen);
   return (
     <div className="editor">
       <div className="editor-board">
         <Board
           fen={line?.fen ?? root ?? START_FEN}
-          orientation={line?.source.color ?? playable[0]!.color}
+          orientation={line?.source.color ?? playable[0]!.s.color}
           lastMove={line?.history.at(-1)?.uci}
           shapes={shapes}
           onMove={line?.phase === 'ask' ? play : undefined}
@@ -192,14 +197,7 @@ export function PlayMode({
           <p className="muted">{line ? lineText(line.history) || 'Début de la ligne' : ''}</p>
           {line?.phase === 'ask' && <OpponentComment move={line.history.at(-1)} />}
           {line?.phase === 'opponent' && <p className="muted">L’adversaire joue…</p>}
-          {line?.phase === 'ask' &&
-            (isNew ? (
-              <p>
-                <strong>Nouvelle position.</strong> Jouez le coup indiqué : {answers.map((m) => m.san).join(' ou ')}.
-              </p>
-            ) : (
-              <p><strong>À vous de jouer.</strong></p>
-            ))}
+          {line?.phase === 'ask' && <p><strong>À vous de jouer.</strong></p>}
           {line?.phase === 'ask' && line.mistakes > 0 && (
             <p className="error">✗ Pas dans votre répertoire.{line.revealed ? ' Jouez le coup indiqué.' : ' Réessayez.'}</p>
           )}
