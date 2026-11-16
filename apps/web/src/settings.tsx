@@ -44,11 +44,17 @@ interface Settings {
   /** Order of the new positions to learn: most played at my level first, or the repertoire's order. */
   learnOrder: LearnOrder;
   setLearnOrder: (o: LearnOrder) => void;
+  /** Move sounds on the boards (read by components/sound.ts from the same localStorage key). */
+  sound: boolean;
+  setSound: (on: boolean) => void;
 }
 
 export type LearnOrder = 'frequency' | 'repertoire';
 /** "Sans limite" for the new lines per day. */
 export const NO_LIMIT = 1000;
+
+/** localStorage key of the move sounds setting (JSON boolean). */
+export const SOUND_KEY = 'sound';
 
 const Ctx = createContext<Settings | null>(null);
 
@@ -86,9 +92,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const [gamesDays, setGamesDays] = usePersisted('gamesDays', 90);
   const [gamesSpeeds, setGamesSpeeds] = usePersisted<string[]>('gamesSpeeds', ['blitz', 'rapid', 'classical', 'daily']);
   const [learnOrder, setLearnOrder] = usePersisted<LearnOrder>('learnOrder', 'frequency');
+  const [sound, setSound] = usePersisted(SOUND_KEY, true);
   return (
     <Ctx.Provider
-      value={{ speed, setSpeed, range, setRange, newPerDay, setNewPerDay, gapCutoff, setGapCutoff, gamesDays, setGamesDays, gamesSpeeds, setGamesSpeeds, learnOrder, setLearnOrder }}
+      value={{ speed, setSpeed, range, setRange, newPerDay, setNewPerDay, gapCutoff, setGapCutoff, gamesDays, setGamesDays, gamesSpeeds, setGamesSpeeds, learnOrder, setLearnOrder, sound, setSound }}
     >
       {children}
     </Ctx.Provider>

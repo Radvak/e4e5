@@ -217,6 +217,19 @@ export function Settings({ me }: { me: Me }) {
         </div>
       </section>
 
+      <section className="card" id="echiquier">
+        <h3>Échiquier</h3>
+        <div className="setting">
+          <div className="what">
+            <strong>Sons des coups</strong>
+            <div className="hint">Un son à chaque coup joué et à chaque prise (sons de Lichess).</div>
+          </div>
+          <label className="check">
+            <input type="checkbox" checked={settings.sound} onChange={(e) => settings.setSound(e.target.checked)} /> Activés
+          </label>
+        </div>
+      </section>
+
       <section className="card" id="entrainement">
         <h3>Entraînement et préparation</h3>
         <div className="setting">

@@ -7,6 +7,7 @@ import { parseSquare } from 'chessops';
 import { chessgroundDests } from 'chessops/compat';
 import { useEffect, useRef } from 'react';
 import { BRUSHES } from './arrows';
+import { moveSoundFor, playMoveSound } from './sound';
 import 'chessground/assets/chessground.base.css';
 import 'chessground/assets/chessground.brown.css';
 import 'chessground/assets/chessground.cburnett.css';
@@ -29,6 +30,9 @@ export function Board({ fen, orientation, lastMove, shapes = NO_SHAPES, onMove, 
   const cg = useRef<Api | null>(null);
   const onMoveRef = useRef(onMove);
   onMoveRef.current = onMove;
+  const prevFen = useRef<string | null>(null);
+  /** Move just played on the board: its sound is already played, not again when `fen` follows. */
+  const dropped = useRef<string | null>(null);
 
   useEffect(() => {
     cg.current = Chessground(el.current!, {
@@ -41,6 +45,14 @@ export function Board({ fen, orientation, lastMove, shapes = NO_SHAPES, onMove, 
   }, []);
 
   useEffect(() => {
+    // A sound when the position follows from the previous one by `lastMove` (a move played
+    // here, the opponent's reply, a step forward in a line); none when loading or going back.
+    if (prevFen.current && prevFen.current !== fen && lastMove) {
+      const sound = dropped.current === lastMove.slice(0, 4) ? null : moveSoundFor(prevFen.current, lastMove);
+      if (sound) playMoveSound(sound.capture);
+    }
+    dropped.current = null;
+    prevFen.current = fen;
     const pos = positionFromFen(fen);
     cg.current?.set({
       fen,
@@ -57,6 +69,9 @@ export function Board({ fen, orientation, lastMove, shapes = NO_SHAPES, onMove, 
           after: (orig, dest) => {
             const piece = pos.board.get(parseSquare(orig)!);
             const promo = piece?.role === 'pawn' && (dest[1] === '8' || dest[1] === '1') ? 'q' : '';
+            const sound = moveSoundFor(fen, orig + dest);
+            if (sound) playMoveSound(sound.capture);
+            dropped.current = orig + dest;
             onMoveRef.current?.(orig + dest + promo);
           },
         },
