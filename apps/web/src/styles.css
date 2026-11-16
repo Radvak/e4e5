@@ -437,16 +437,24 @@ kbd { display: inline-block; min-width: 18px; padding: 0 4px; margin: 0 1px; bor
 
 /* Mes parties: one card per thing to work on, with a thumbnail of the position. */
 .games-page { max-width: 860px; margin: 0 auto; width: 100%; }
-.game-card { display: grid; grid-template-columns: 152px 1fr; gap: 12px; align-items: start; }
+.game-card { display: grid; grid-template-columns: 176px 1fr; gap: 12px; align-items: start; }
 .game-card.clickable { cursor: pointer; }
 .game-card.clickable:hover { border-color: var(--border-strong); }
-.mini-board { width: 152px; height: 152px; border-radius: 6px; overflow: hidden; }
+.mini-board { width: 176px; height: 176px; border-radius: 6px; overflow: hidden; }
 .thumb-button { padding: 0; border: none; background: none; min-height: 0; cursor: pointer; border-radius: 6px; display: block; }
 .game-card-body { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
 .game-card .inbox-head { line-height: 1.45; }
+/* On mobile the card shows the move only (the whole line is in the detail). */
+@media (max-width: 639px) { .game-card-body .inbox-line { display: none; } }
 .game-card-meta { gap: 6px; }
 .game-card .inbox-actions .btn { margin: 0; }
 @media (min-width: 640px) { .game-card { grid-template-columns: 200px 1fr; gap: 16px; } .game-card .mini-board { width: 200px; height: 200px; } }
+/* Swipe actions (touch): the card slides over a coloured band with the action. */
+.swipe-row { position: relative; touch-action: pan-y; border-radius: var(--radius); }
+.swipe-bg { position: absolute; inset: 0; display: flex; align-items: center; padding: 0 22px; border-radius: var(--radius); font-weight: 700; color: #fff; }
+.swipe-bg.right { justify-content: flex-start; background: var(--surface-3); color: var(--text); }
+.swipe-bg.left { justify-content: flex-end; background: var(--accent); }
+.swipe-content { position: relative; }
 /* Detail of a card: bigger board, the whole explanation and every game. */
 .game-detail { width: min(560px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); padding: 0; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--text); cursor: auto; }
 .game-detail::backdrop { background: rgba(0, 0, 0, 0.6); }

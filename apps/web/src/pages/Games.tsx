@@ -7,6 +7,7 @@ import { lineText, moveText } from '../chessText';
 import { GameSyncInline, useGameSync } from '../components/GameSync';
 import { SPEED_NAMES, useSettings } from '../settings';
 import { MiniBoard, type MiniArrow } from '../components/MiniBoard';
+import { SwipeRow } from '../components/SwipeRow';
 import { Button, EmptyState, PageHeader, Tabs, plural } from '../ui';
 
 const PERIOD: Record<number, string> = { 30: '30 derniers jours', 90: '3 derniers mois', 365: '12 derniers mois', 0: 'toutes les parties' };
@@ -271,7 +272,7 @@ function InboxRow({ item, rep, onDone }: { item: InboxItem; rep: RepertoireSumma
 
   const head = (
     <div className="inbox-head">
-      <span className="muted">{lineText(line) || 'Position initiale'} </span>
+      <span className="muted inbox-line">{lineText(line) || 'Position initiale'} </span>
       <span className="hole-move">{moveText(line, item.move.san)}</span>
     </div>
   );
@@ -301,79 +302,85 @@ function InboxRow({ item, rep, onDone }: { item: InboxItem; rep: RepertoireSumma
   const errorText = error && <p className="error small-text">{error.message}</p>;
 
   return (
-    // The whole card opens the detail, except its buttons and links.
-    <article className="card game-card clickable" onClick={(e) => !(e.target as HTMLElement).closest('button, a') && open()}>
-      <button type="button" className="thumb-button" onClick={open} aria-label="Voir le détail et les parties">
-        <MiniBoard fen={item.fen} orientation={color} arrows={arrows} />
-      </button>
-      <div className="game-card-body">
-        {head}
-        <div className="row small-text game-card-meta">
-          <span className="rep-tag"><span className={`dot ${color}`} /> {rep?.name ?? '?'}</span>
-          <span className="muted">{plural(item.games, 'partie', 'parties')} · {pct(score(item.results))}</span>
-        </div>
-        {actions}
-        {errorText}
-      </div>
-
-      <dialog
-        ref={dialog}
-        className="game-detail"
-        onClose={() => setDetail(false)}
-        // Not to the card (which would open it again); a click on the backdrop closes it.
-        onClick={(e) => {
-          e.stopPropagation();
-          if (e.target === dialog.current) dialog.current.close();
-        }}
-      >
-        {detail && (
-          <div className="game-detail-content stack">
-            <div className="game-detail-top">
-              <span className="rep-tag"><span className={`dot ${color}`} /> {rep?.name ?? '?'}</span>
-              <Button size="sm" variant="ghost" onClick={() => dialog.current?.close()} title="Fermer">✕</Button>
-            </div>
-            <MiniBoard fen={item.fen} orientation={color} arrows={arrows} className="mini-board-large" />
-            {head}
-            <p className="inbox-body">
-              {item.kind === 'deviation' && (
-                <>
-                  Vous avez joué <strong>{moveText(line, item.move.san, true)}</strong> au lieu de{' '}
-                  <strong>{item.expected.map((s) => moveText(line, s, true)).join(' ou ')}</strong>.{' '}
-                </>
-              )}
-              {item.kind === 'novelty' && <>L’adversaire a joué un coup que vous n’avez pas préparé. </>}
-              {item.kind === 'end' && <>Votre ligne s’arrête ici. </>}
-              {plural(item.games, 'partie', 'parties')}, score {pct(score(item.results))}
-              {item.replies.length > 0 && (
-                <> · vos réponses : {item.replies.map((x) => `${moveText(after, x.san, true)} (${x.games}, ${pct(score(x.results))})`).join(', ')}</>
-              )}
-              .
-            </p>
-            {actions}
-            {errorText}
-            <div className="table-wrap">
-              <table className="lines">
-                <tbody>
-                  {item.gameList.map((g) => (
-                    <tr key={g.url}>
-                      <td className="muted">{date(g.playedAt)}</td>
-                      <td>
-                        {g.opponent} <span className="muted">{g.opponentRating ?? ''}</span>
-                      </td>
-                      <td className={`result ${g.result}`}>{RESULT[g.result]}</td>
-                      {item.kind !== 'deviation' && <td className="small-text">{g.reply ? moveText(after, g.reply, true) : '—'}</td>}
-                      <td>
-                        <a className="small-text" href={g.url} target="_blank" rel="noreferrer">partie ↗</a>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+    // On touch screens: swipe right to ignore, left to review later (errors).
+    <SwipeRow
+      right={{ label: 'Ignorer', action: () => dismiss.mutateAsync() }}
+      left={item.kind === 'deviation' ? { label: 'Plus tard', action: () => later.mutateAsync() } : undefined}
+    >
+      {/* The whole card opens the detail, except its buttons and links. */}
+      <article className="card game-card clickable" onClick={(e) => !(e.target as HTMLElement).closest('button, a') && open()}>
+        <button type="button" className="thumb-button" onClick={open} aria-label="Voir le détail et les parties">
+          <MiniBoard fen={item.fen} orientation={color} arrows={arrows} />
+        </button>
+        <div className="game-card-body">
+          {head}
+          <div className="row small-text game-card-meta">
+            <span className="rep-tag"><span className={`dot ${color}`} /> {rep?.name ?? '?'}</span>
+            <span className="muted">{plural(item.games, 'partie', 'parties')} · {pct(score(item.results))}</span>
           </div>
-        )}
-      </dialog>
-    </article>
+          {actions}
+          {errorText}
+        </div>
+
+        <dialog
+          ref={dialog}
+          className="game-detail"
+          onClose={() => setDetail(false)}
+          // Not to the card (which would open it again); a click on the backdrop closes it.
+          onClick={(e) => {
+            e.stopPropagation();
+            if (e.target === dialog.current) dialog.current.close();
+          }}
+        >
+          {detail && (
+            <div className="game-detail-content stack">
+              <div className="game-detail-top">
+                <span className="rep-tag"><span className={`dot ${color}`} /> {rep?.name ?? '?'}</span>
+                <Button size="sm" variant="ghost" onClick={() => dialog.current?.close()} title="Fermer">✕</Button>
+              </div>
+              <MiniBoard fen={item.fen} orientation={color} arrows={arrows} className="mini-board-large" />
+              {head}
+              <p className="inbox-body">
+                {item.kind === 'deviation' && (
+                  <>
+                    Vous avez joué <strong>{moveText(line, item.move.san, true)}</strong> au lieu de{' '}
+                    <strong>{item.expected.map((s) => moveText(line, s, true)).join(' ou ')}</strong>.{' '}
+                  </>
+                )}
+                {item.kind === 'novelty' && <>L’adversaire a joué un coup que vous n’avez pas préparé. </>}
+                {item.kind === 'end' && <>Votre ligne s’arrête ici. </>}
+                {plural(item.games, 'partie', 'parties')}, score {pct(score(item.results))}
+                {item.replies.length > 0 && (
+                  <> · vos réponses : {item.replies.map((x) => `${moveText(after, x.san, true)} (${x.games}, ${pct(score(x.results))})`).join(', ')}</>
+                )}
+                .
+              </p>
+              {actions}
+              {errorText}
+              <div className="table-wrap">
+                <table className="lines">
+                  <tbody>
+                    {item.gameList.map((g) => (
+                      <tr key={g.url}>
+                        <td className="muted">{date(g.playedAt)}</td>
+                        <td>
+                          {g.opponent} <span className="muted">{g.opponentRating ?? ''}</span>
+                        </td>
+                        <td className={`result ${g.result}`}>{RESULT[g.result]}</td>
+                        {item.kind !== 'deviation' && <td className="small-text">{g.reply ? moveText(after, g.reply, true) : '—'}</td>}
+                        <td>
+                          <a className="small-text" href={g.url} target="_blank" rel="noreferrer">partie ↗</a>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </dialog>
+      </article>
+    </SwipeRow>
   );
 }
 
