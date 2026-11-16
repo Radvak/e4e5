@@ -39,8 +39,9 @@ export function Training({ me }: { me: Me }) {
   const { sources, loading, review } = useTrainingSources(ids, from);
 
   const { newPerDay, speed, range, learnOrder } = useSettings();
-  // Order of the new positions: most played at the user's level (reach probabilities of the gap finder).
-  const gaps = useGaps(me, learnOrder === 'frequency');
+  // Reach probabilities at the user's level (gap finder): order of the new positions (when
+  // learning by frequency) and branch followed to finish a line.
+  const gaps = useGaps(me);
   // The daily limit of new lines is shared by all repertoires: lines learnt today elsewhere count.
   const summary = useQuery({ queryKey: ['training-summary', newPerDay], queryFn: () => api.trainingSummary(dayStart(), newPerDay) });
   const learntElsewhere = (summary.data ?? []).filter((s) => !ids.includes(s.repertoireId)).reduce((n, s) => n + s.learntTodayLines, 0);
@@ -48,6 +49,10 @@ export function Training({ me }: { me: Me }) {
     if (learnOrder !== 'frequency' || !gaps.data) return undefined;
     return (source: Source, fen: string) => gaps.data?.[source.color]?.reach[fen];
   }, [learnOrder, gaps.data]);
+  const chanceOf = useMemo(() => {
+    if (!gaps.data) return undefined;
+    return (source: Source, fen: string) => gaps.data?.[source.color]?.reach[fen];
+  }, [gaps.data]);
   const ex = explorerParams(me, speed, range);
   // ?mode=test opens "Se tester" (e.g. from the home page when nothing is due), ?mode=review
   // "Réviser" (e.g. an error of Mes parties); else the last mode used.
@@ -121,6 +126,7 @@ export function Training({ me }: { me: Me }) {
           onCounts={onCounts}
           onTest={() => setMode('play')}
           reachOf={reachOf}
+          chanceOf={chanceOf}
           learntElsewhere={learntElsewhere}
           idle={<Progress sources={sources} />}
         />

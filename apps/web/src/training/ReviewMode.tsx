@@ -1,4 +1,4 @@
-import { groupLines, lineStarts, START_FEN, type RepMove, type TrainingPosition } from '@prepa-cahier/core';
+import { groupLines, lineStarts, START_FEN, type Repertoire, type RepMove, type TrainingPosition } from '@prepa-cahier/core';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Grade, ReviewCard } from '../api';
 import { Board } from '../components/Board';
@@ -20,6 +20,41 @@ interface Question extends Item {
 
 const same = (a: Item, b: Item) => a.source.id === b.source.id && a.target.fen === b.target.fen;
 
+/** Plies from `from` to the nearest position of `targets` in the repertoire (Infinity: none). */
+function distanceTo(rep: Repertoire, from: string, targets: Set<string>): number {
+  const seen = new Set([from]);
+  let frontier = [from];
+  for (let d = 0; frontier.length; d++) {
+    if (frontier.some((f) => targets.has(f))) return d;
+    const next: string[] = [];
+    for (const f of frontier) {
+      for (const m of rep.movesAt(f)) {
+        if (seen.has(m.toFen)) continue;
+        seen.add(m.toFen);
+        next.push(m.toFen);
+      }
+    }
+    frontier = next;
+  }
+  return Infinity;
+}
+
+/**
+ * One of `items` at random, weighted by `chance`. Unknown chances get a small weight (2% of the
+ * known total); with none known: main line 2, others 1.
+ */
+function weightedPick<T>(items: T[], chance: (t: T) => number | undefined, isMain: (t: T) => boolean): T {
+  const known = items.map((t) => chance(t) ?? 0);
+  const sum = known.reduce((a, b) => a + b, 0);
+  const weights = sum > 0 ? known.map((k) => (k > 0 ? k : 0.02 * sum)) : items.map((t) => (isMain(t) ? 2 : 1));
+  let r = Math.random() * weights.reduce((a, b) => a + b, 0);
+  for (let i = 0; i < items.length; i++) {
+    r -= weights[i]!;
+    if (r < 0) return items[i]!;
+  }
+  return items.at(-1)!;
+}
+
 /**
  * Spaced-repetition review: positions due first (oldest first), then new ones, following the
  * line when the opponent's reply leads to another position waiting to be asked. On demand,
@@ -33,6 +68,7 @@ export function ReviewMode({
   idle,
   onTest,
   reachOf,
+  chanceOf,
   learntElsewhere = 0,
   noNewLimit = false,
 }: {
@@ -52,6 +88,11 @@ export function ReviewMode({
    * probability decreases along a line); unknown ones come last, in the repertoire's order.
    */
   reachOf?: (source: Source, fen: string) => number | undefined;
+  /**
+   * Probability of reaching a position at the user's level (whatever the learning order): picks
+   * the branch followed when several continue a line equally well.
+   */
+  chanceOf?: (source: Source, fen: string) => number | undefined;
   /** Lines learnt today in the repertoires not in this session (the daily limit is shared). */
   learntElsewhere?: number;
 }) {
@@ -148,19 +189,43 @@ export function ReviewMode({
     if (!current && queue.items[0] && !jumpTimer.current) ask(question(queue.items[0]));
   }, [current, queue.items]);
 
-  /** Next question after answering: follow the line if possible. */
-  const nextAfter = (answered: Item, played: RepMove): Question | null => {
-    const items = queue.items.filter((p) => !same(p, answered));
-    const replies = new Map(answered.source.rep.movesAt(played.toFen).map((m) => [m.toFen, m]));
-    const follow = items.find((p) => p.source.id === answered.source.id && replies.has(p.target.fen));
-    if (follow) return question(follow, { mine: played, reply: replies.get(follow.target.fen)! });
+  /**
+   * Next question after answering: a started line is always followed to its end, even when
+   * its next positions are not due (or beyond the daily limit of new ones). When the
+   * opponent has several replies, the branch reaching a position to review soonest.
+   */
+  const nextAfter = (done: Item, played: RepMove): Question | null => {
+    const items = queue.items.filter((p) => !same(p, done));
+    const { source } = done;
+    const pending = new Set(items.filter((p) => p.source.id === source.id).map((p) => p.target.fen));
+    const byFen = new Map(source.positions.map((t) => [t.fen, t]));
+    // Opponent replies leading to a position to train, not already answered in this session
+    // (unless it is waiting again in the queue).
+    const options = source.rep.movesAt(played.toFen).flatMap((reply) => {
+      const target = byFen.get(reply.toFen);
+      if (!target || target.fen === done.target.fen) return [];
+      if (!pending.has(target.fen) && answered.current.has(`${source.id}|${target.fen}`)) return [];
+      return [{ reply, target, dist: distanceTo(source.rep, target.fen, pending) }];
+    });
+    if (options.length) {
+      // The reply reaching a position to review soonest; ties: at random, weighted by the
+      // probability of reaching each position in a game.
+      const best = Math.min(...options.map((o) => o.dist));
+      const tied = options.filter((o) => o.dist === best);
+      const pick = weightedPick(tied, (o) => chanceOf?.(source, o.target.fen), (o) => !!o.reply.isMain);
+      return question({ source, target: pick.target }, { mine: played, reply: pick.reply });
+    }
     return items[0] ? question(items[0]) : null;
   };
 
   const onAnswered = (q: Question, played: RepMove, outcome: Outcome) => {
     const grade: Grade = outcome === 'correct' ? 'good' : 'again';
     answered.current.add(`${q.source.id}|${q.target.fen}`);
-    onReview(q.source, q.target.fen, grade);
+    // Bonus position (asked to finish the line, not due yet): only a mistake is recorded, so a
+    // right answer leaves its schedule unchanged.
+    const card = q.source.cards.get(q.target.fen);
+    const bonus = card !== undefined && Date.parse(card.due) > Date.now();
+    if (!(bonus && outcome === 'correct')) onReview(q.source, q.target.fen, grade);
     setStats((s) => ({
       reviewed: s.reviewed + 1,
       asked: s.asked + (outcome === 'new' ? 0 : 1),
