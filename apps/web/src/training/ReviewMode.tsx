@@ -120,6 +120,8 @@ export function ReviewMode({
   const [current, setCurrent] = useState<Question | null>(null);
   const [round, setRound] = useState(0);
   const jumpTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  /** The line just ended with the last answer (a badge until the next one). */
+  const [lineDone, setLineDone] = useState(false);
 
   // Learning steps are minutes long: re-check what is due regularly.
   useEffect(() => {
@@ -191,6 +193,7 @@ export function ReviewMode({
   }, [queue.dueLines, queue.freshLines, stats, onCounts]);
 
   const ask = (q: Question | null) => {
+    setLineDone(false);
     setCurrent(q);
     setRound((r) => r + 1);
   };
@@ -269,6 +272,7 @@ export function ReviewMode({
     record(q, outcome);
     const { next, end } = nextAfter(q, played);
     if (next?.lead) return ask(next);
+    if (end) setLineDone(true);
     jumpTimer.current = setTimeout(() => {
       jumpTimer.current = undefined;
       setNow(Date.now());
@@ -327,6 +331,7 @@ export function ReviewMode({
   return (
     <Drill
       round={round}
+      lineDone={lineDone}
       question={current}
       onAnswered={(played, outcome) => onAnswered(current, played, outcome)}
       onAbandon={(rest, ms) => onAbandon(current, rest, ms)}
@@ -366,6 +371,7 @@ function restOfLine(source: Source, move: RepMove): RepMove[] {
  */
 function Drill({
   round,
+  lineDone,
   question,
   onAnswered,
   onAbandon,
@@ -376,6 +382,8 @@ function Drill({
   onAnswered: (played: RepMove, outcome: Outcome) => void;
   /** Given up: the rest of the line is played, for `ms`. */
   onAbandon: (rest: RepMove[], ms: number) => void;
+  /** The line ends with the move just played (shown until the next line). */
+  lineDone: boolean;
 }) {
   const { answerSeconds } = useSettings();
   const navigate = useNavigate();
@@ -495,6 +503,15 @@ function Drill({
           shapes={shapes}
           onMove={asking ? play : undefined}
         />
+        {lineDone && played && (
+          <div className="line-done" role="status">
+            <svg viewBox="0 0 52 52" aria-hidden="true">
+              <circle cx="26" cy="26" r="23" />
+              <path d="M15 27l7 7 15-16" />
+            </svg>
+            <span>Ligne revue</span>
+          </div>
+        )}
         {alternative && asking && (
           <div key={retries} className="alt-bubble" role="status">
             ♻️ <strong>{alternative.san}</strong> est aussi dans ton répertoire — cherche l’autre !
