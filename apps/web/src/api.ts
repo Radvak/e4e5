@@ -51,7 +51,18 @@ export interface Me {
   /** Live explorer statistics available (own Lichess token or the app's); stored ones are always served. */
   explorer: boolean;
 }
-export interface RepertoireSummary { id: string; name: string; color: Color; createdAt: string; /** false: paused. */ active: boolean }
+export interface RepertoireSummary {
+  id: string;
+  name: string;
+  color: Color;
+  createdAt: string;
+  /** false: paused. */
+  active: boolean;
+  /** Where the lines part: after the moves of `trunk` (only in the list of repertoires). */
+  trunkFen?: string;
+  /** The moves from the start while the repertoire has only one (SAN). */
+  trunk?: string[];
+}
 export interface StoredMove extends RepMove { id: number; source: string }
 export interface RepertoireDetail extends RepertoireSummary { moves: StoredMove[] }
 export type Grade = 'again' | 'hard' | 'good' | 'easy';

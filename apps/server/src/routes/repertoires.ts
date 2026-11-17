@@ -75,7 +75,36 @@ export async function repertoireRoutes(app: FastifyInstance) {
   app.addHook('preHandler', requireUser);
 
   app.get('/api/repertoires', async (req) => {
-    return db.select().from(repertoires).where(eq(repertoires.userId, req.user!.id)).orderBy(asc(repertoires.createdAt));
+    const reps = await db.select().from(repertoires).where(eq(repertoires.userId, req.user!.id)).orderBy(asc(repertoires.createdAt));
+    // The trunk of each repertoire (for its thumbnail): the moves from the start while there is only one.
+    const moves = await db
+      .select({ repertoireId: repMoves.repertoireId, fromFen: repMoves.fromFen, toFen: repMoves.toFen, san: repMoves.san })
+      .from(repMoves)
+      .innerJoin(repertoires, eq(repMoves.repertoireId, repertoires.id))
+      .where(eq(repertoires.userId, req.user!.id));
+    const graphs = new Map<string, Map<string, { toFen: string; san: string }[]>>();
+    for (const m of moves) {
+      let g = graphs.get(m.repertoireId);
+      if (!g) graphs.set(m.repertoireId, (g = new Map()));
+      const out = g.get(m.fromFen);
+      if (out) out.push(m);
+      else g.set(m.fromFen, [m]);
+    }
+    return reps.map((r) => {
+      const g = graphs.get(r.id);
+      const trunk: string[] = [];
+      let fen = START_FEN;
+      const seen = new Set([fen]);
+      for (;;) {
+        const out = g?.get(fen);
+        const only = out?.length === 1 ? out[0] : undefined;
+        if (!only || seen.has(only.toFen)) break;
+        trunk.push(only.san);
+        fen = only.toFen;
+        seen.add(fen);
+      }
+      return { ...r, trunkFen: fen, trunk };
+    });
   });
 
   app.post('/api/repertoires', async (req, reply) => {
