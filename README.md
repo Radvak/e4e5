@@ -28,6 +28,9 @@ pnpm test
 pnpm typecheck
 ```
 
+The main commands are also in the `justfile` (`just` lists them): `just check`, `just deploy`
+(local image build, push, Fly deploy), `just logs`, `just backup` (database copy to `backups/`), …
+
 There is no Lichess app to register: OAuth uses PKCE, and the client id is just a name.
 Set `LICHESS_APP_TOKEN` (see `.env.example`) so users without a linked Lichess account get statistics.
 
