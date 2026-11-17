@@ -2,7 +2,7 @@
  * Training: spaced-repetition reviews (FSRS) of my moves, in the positions where it is my turn.
  * A move card belongs to the user, not to a repertoire: a move learnt once is known everywhere.
  */
-import { groupLines, lineStarts, positionReview, Repertoire, trainingPositions } from '@prepa-cahier/core';
+import { groupLines, keptPositions, lineStarts, positionReview, Repertoire, trainingPositions } from '@prepa-cahier/core';
 import { and, eq, gte, inArray } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { createEmptyCard, fsrs, Rating, type CardInput } from 'ts-fsrs';
@@ -11,6 +11,7 @@ import { requireUser } from '../auth.js';
 import { db } from '../db/client.js';
 import { graphColumns, moveCards, repertoires, repMoves, reviewLog } from '../db/schema.js';
 import { makeDue } from '../moveCards.js';
+import { gapsQuery, gapsReport } from './gaps.js';
 
 const scheduler = fsrs({ enable_fuzz: true });
 const GRADES = { again: Rating.Again, hard: Rating.Hard, good: Rating.Good, easy: Rating.Easy } as const;
@@ -25,6 +26,14 @@ const summaryQuery = z.object({
   dayStart: z.coerce.number().int().nonnegative(),
   /** New lines to learn per day, all repertoires together (1000: no limit). */
   newPerDay: z.coerce.number().int().min(0).max(1000).default(5),
+  /**
+   * Shortened lines: share (0.01-1) of each repertoire's positions kept, the most likely to come
+   * up (see core keptPositions), with the statistics settings below. 1: every position.
+   */
+  keep: z.coerce.number().min(0.01).max(1).default(1),
+  speeds: z.string().optional(),
+  ratings: z.string().optional(),
+  cutoff: z.string().optional(),
 });
 
 type CardRow = typeof moveCards.$inferSelect;
@@ -122,9 +131,19 @@ export async function trainingRoutes(app: FastifyInstance) {
    * today (a move not learnt yet), lines to go through, and total.
    */
   app.get('/api/training/summary', async (req) => {
-    const { dayStart, newPerDay } = summaryQuery.parse(req.query);
+    const { dayStart, newPerDay, keep, speeds, ratings, cutoff } = summaryQuery.parse(req.query);
     const reps = await db.select().from(repertoires).where(eq(repertoires.userId, req.user!.id));
     if (!reps.length) return [];
+    // Reach probabilities for shortened lines (the gap finder's, as the training page uses).
+    const stats = keep < 1 && speeds && ratings ? gapsQuery.safeParse({ speeds, ratings, cutoff }) : null;
+    // Statistics unavailable (error): whole lines, like the training page.
+    const gaps =
+      stats?.success && stats.data.speeds.length && stats.data.ratings.length
+        ? await gapsReport(req.user!, stats.data, req.log).catch((e: unknown) => {
+            req.log.warn({ err: e }, 'Shortened lines: statistics unavailable');
+            return null;
+          })
+        : null;
     const ids = reps.map((r) => r.id);
     const [moves, cards] = await Promise.all([
       db.select(graphColumns).from(repMoves).where(inArray(repMoves.repertoireId, ids)),
@@ -137,7 +156,10 @@ export async function trainingRoutes(app: FastifyInstance) {
     const countedToday = new Set<string>();
     const rows = reps.map((r) => {
       const graph = new Repertoire(r.color, moves.filter((m) => m.repertoireId === r.id));
-      const list = trainingPositions(graph);
+      const reach = gaps?.[r.color]?.reach;
+      const all = trainingPositions(graph);
+      const kept = reach ? keptPositions(all, (f) => reach[f], keep) : null;
+      const list = kept ? all.filter((p) => kept.has(p.fen)) : all;
       const state = new Map(list.map((p) => [p.fen, positionReview(graph.movesAt(p.fen), (uci) => cardMap.get(`${p.fen} ${uci}`), now)]));
       const fresh = list.filter((p) => state.get(p.fen)!.status === 'new');
       const today = new Set(list.filter((p) => (state.get(p.fen)!.learntAt ?? 0) >= dayStart).map((p) => p.fen));

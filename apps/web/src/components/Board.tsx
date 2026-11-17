@@ -21,9 +21,10 @@ interface Props {
   /**
    * Called with the UCI of a move played on the board (promotion: queen). Returning false
    * rejects it: the move stays a moment on a red square (board shaken, phone vibrating), then
-   * the pieces go back to `fen`.
+   * the pieces go back to `fen`. Returning 'retry' puts it back the same way, on a dashed green
+   * square instead of the error signs (not a mistake, another move is asked).
    */
-  onMove?: (uci: string) => boolean | void;
+  onMove?: (uci: string) => boolean | 'retry' | void;
 }
 
 const NO_SHAPES: DrawShape[] = [];
@@ -39,7 +40,7 @@ export function Board({ fen, orientation, lastMove, shapes = NO_SHAPES, onMove }
   /** Move just played on the board: its sound is already played, not again when `fen` follows. */
   const dropped = useRef<string | null>(null);
   /** Destination square of the rejected move on show, then a counter to put the pieces back. */
-  const [rejected, setRejected] = useState<Key | null>(null);
+  const [rejected, setRejected] = useState<{ square: Key; error: boolean } | null>(null);
   const [restore, setRestore] = useState(0);
 
   useEffect(() => {
@@ -80,10 +81,11 @@ export function Board({ fen, orientation, lastMove, shapes = NO_SHAPES, onMove }
             const sound = moveSoundFor(fen, orig + dest);
             if (sound) playMoveSound(sound.capture);
             dropped.current = orig + dest;
-            if (onMoveRef.current?.(orig + dest + promo) === false) {
+            const answer = onMoveRef.current?.(orig + dest + promo);
+            if (answer === false) {
               buzzError(); // within the pointer event (iOS)
-              setRejected(dest);
-            }
+              setRejected({ square: dest, error: true });
+            } else if (answer === 'retry') setRejected({ square: dest, error: false });
           },
         },
       },
@@ -100,14 +102,14 @@ export function Board({ fen, orientation, lastMove, shapes = NO_SHAPES, onMove }
 
   useEffect(() => {
     if (!rejected) return;
-    cg.current?.set({ highlight: { custom: new Map([[rejected, 'rejected']]) } });
+    cg.current?.set({ highlight: { custom: new Map([[rejected.square, rejected.error ? 'rejected' : 'retry']]) } });
     const t = setTimeout(() => setRestore((n) => n + 1), REJECTED_MS);
     return () => clearTimeout(t);
   }, [rejected]);
 
   // A wrapper for the shake: chessground owns the classes of its own element.
   return (
-    <div className={rejected ? 'board-frame rejected' : 'board-frame'}>
+    <div className={rejected?.error ? 'board-frame rejected' : 'board-frame'}>
       <div ref={el} className="board" />
     </div>
   );

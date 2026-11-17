@@ -44,12 +44,18 @@ interface Settings {
   /** Order of the new positions to learn: most played at my level first, or the repertoire's order. */
   learnOrder: LearnOrder;
   setLearnOrder: (o: LearnOrder) => void;
+  /** Shortened lines: % of each repertoire's positions trained, the most likely first (100: all). */
+  keepShare: number;
+  setKeepShare: (n: number) => void;
   /** Move sounds on the boards (read by components/sound.ts from the same localStorage key). */
   sound: boolean;
   setSound: (on: boolean) => void;
   /** Vibration on a wrong move, on phones (read by components/haptics.ts from the same localStorage key). */
   haptics: boolean;
   setHaptics: (on: boolean) => void;
+  /** Review: seconds to answer a position already learnt (0: no timer). */
+  answerSeconds: number;
+  setAnswerSeconds: (n: number) => void;
 }
 
 export type LearnOrder = 'frequency' | 'repertoire';
@@ -98,10 +104,12 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const [gamesSpeeds, setGamesSpeeds] = usePersisted<string[]>('gamesSpeeds', ['blitz', 'rapid', 'classical', 'daily']);
   const [learnOrder, setLearnOrder] = usePersisted<LearnOrder>('learnOrder', 'frequency');
   const [sound, setSound] = usePersisted(SOUND_KEY, true);
+  const [keepShare, setKeepShare] = usePersisted('keepShare', 100);
   const [haptics, setHaptics] = usePersisted(HAPTICS_KEY, true);
+  const [answerSeconds, setAnswerSeconds] = usePersisted('answerSeconds', 15);
   return (
     <Ctx.Provider
-      value={{ speed, setSpeed, range, setRange, newPerDay, setNewPerDay, gapCutoff, setGapCutoff, gamesDays, setGamesDays, gamesSpeeds, setGamesSpeeds, learnOrder, setLearnOrder, sound, setSound, haptics, setHaptics }}
+      value={{ speed, setSpeed, range, setRange, newPerDay, setNewPerDay, gapCutoff, setGapCutoff, gamesDays, setGamesDays, gamesSpeeds, setGamesSpeeds, learnOrder, setLearnOrder, sound, setSound, haptics, setHaptics, keepShare, setKeepShare, answerSeconds, setAnswerSeconds }}
     >
       {children}
     </Ctx.Provider>

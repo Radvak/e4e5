@@ -1,10 +1,13 @@
 import { groupLines, lineStarts, START_FEN, type Repertoire, type RepMove, type TrainingPosition } from '@prepa-cahier/core';
+import type { Key } from 'chessground/types';
+import type { DrawShape } from 'chessground/draw';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { Grade } from '../api';
 import { Board } from '../components/Board';
-import { dayStart } from '../settings';
-import { answerArrows, inTime, JUMP_MS, lineText, OpponentComment, REPLAY_MS, REPLAYED_PLIES, REPLY_MS } from './common';
-import { FeedbackPanel, outcomeOf, type Feedback, type Outcome } from './Feedback';
+import { dayStart, useSettings } from '../settings';
+import { answerArrows, inTime, JUMP_MS, REPLAY_MS, REPLAYED_PLIES, REPLY_MS } from './common';
+import { outcomeOf, type Outcome } from './Feedback';
 import type { Source } from './useTrainingSources';
 
 interface Item {
@@ -20,6 +23,11 @@ interface Question extends Item {
   /** When the line continues: my last move, then the opponent's reply leading to `target`. */
   lead?: { mine: RepMove; reply: RepMove };
 }
+
+/** Why a line stops after my move: its end, the shortened lines, or a sequel already reviewed. */
+type LineEnd = 'end' | 'cut' | 'done';
+/** Pause on the end of a line before the next one. */
+const LINE_END_MS = 1500;
 
 const same = (a: Item, b: Item) => a.source.id === b.source.id && a.target.fen === b.target.fen;
 
@@ -103,12 +111,14 @@ export function ReviewMode({
   const [ahead, setAhead] = useState(false);
   /** Positions answered in this session (not asked again when reviewing ahead). */
   const answered = useRef(new Set<string>());
+  /** Positions of the lines given up in this session (asked after the others). */
+  const skipped = useRef(new Set<string>());
+  const firstOf = (items: Item[]) => items.find((p) => !skipped.current.has(`${p.source.id}|${p.target.fen}`)) ?? items[0];
   /** reviewed: all answers; asked: positions already learnt; firstTry: asked and right first time. */
   const [stats, setStats] = useState({ reviewed: 0, asked: 0, firstTry: 0 });
   const [now, setNow] = useState(() => Date.now());
   const [current, setCurrent] = useState<Question | null>(null);
   const [round, setRound] = useState(0);
-  const [feedback, setFeedback] = useState<Feedback | null>(null);
   const jumpTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // Learning steps are minutes long: re-check what is due regularly.
@@ -198,7 +208,8 @@ export function ReviewMode({
 
   // First question, and questions becoming due while idle.
   useEffect(() => {
-    if (!current && queue.items[0] && !jumpTimer.current) ask(question(queue.items[0]));
+    const first = firstOf(queue.items);
+    if (!current && first && !jumpTimer.current) ask(question(first));
   }, [current, queue.items]);
 
   /**
@@ -206,7 +217,7 @@ export function ReviewMode({
    * its next positions are not due (or beyond the daily limit of new ones). When the
    * opponent has several replies, the branch reaching a position to review soonest.
    */
-  const nextAfter = (done: Item, played: RepMove): Question | null => {
+  const nextAfter = (done: Item, played: RepMove): { next: Question | null; end?: LineEnd } => {
     const items = queue.items.filter((p) => !same(p, done));
     const { source } = done;
     const pending = new Set(items.filter((p) => p.source.id === source.id).map((p) => p.target.fen));
@@ -225,12 +236,21 @@ export function ReviewMode({
       const best = Math.min(...options.map((o) => o.dist));
       const tied = options.filter((o) => o.dist === best);
       const pick = weightedPick(tied, (o) => chanceOf?.(source, o.target.fen), (o) => !!o.reply.isMain);
-      return question({ source, target: pick.target }, { mine: played, reply: pick.reply });
+      return { next: question({ source, target: pick.target }, { mine: played, reply: pick.reply }) };
     }
-    return items[0] ? question(items[0]) : null;
+    // The line stops here: cut (a position of mine follows in the repertoire but is not trained),
+    // or every sequel was already reviewed in this session, or its real end.
+    const replies = source.rep.movesAt(played.toFen);
+    const end: LineEnd = replies.some((r) => source.rep.movesAt(r.toFen).length > 0 && !byFen.has(r.toFen))
+      ? 'cut'
+      : replies.some((r) => byFen.has(r.toFen))
+        ? 'done'
+        : 'end';
+    const first = firstOf(items);
+    return { next: first ? question(first) : null, end };
   };
 
-  const onAnswered = (q: Question, played: RepMove, outcome: Outcome) => {
+  const record = (q: Question, outcome: Outcome) => {
     const grade: Grade = outcome === 'correct' ? 'good' : 'again';
     answered.current.add(`${q.source.id}|${q.target.fen}`);
     // Bonus position (asked to finish the line, not due yet): only a mistake is recorded, so a
@@ -243,14 +263,30 @@ export function ReviewMode({
       asked: s.asked + (outcome === 'new' ? 0 : 1),
       firstTry: s.firstTry + (outcome === 'correct' ? 1 : 0),
     }));
-    setFeedback({ played, others: q.source.rep.movesAt(q.target.fen).filter((m) => m.uci !== played.uci), outcome });
-    const next = nextAfter(q, played);
+  };
+
+  const onAnswered = (q: Question, played: RepMove, outcome: Outcome) => {
+    record(q, outcome);
+    const { next, end } = nextAfter(q, played);
     if (next?.lead) return ask(next);
     jumpTimer.current = setTimeout(() => {
       jumpTimer.current = undefined;
       setNow(Date.now());
       ask(next);
-    }, JUMP_MS);
+    }, end ? LINE_END_MS : JUMP_MS);
+  };
+
+  /** Given up: a mistake; the rest of the line is played, then another line (not this one again). */
+  const onAbandon = (q: Question, rest: RepMove[], ms: number) => {
+    record(q, 'mistake');
+    for (const m of rest) skipped.current.add(`${q.source.id}|${m.toFen}`);
+    const items = queue.items.filter((p) => !same(p, q));
+    jumpTimer.current = setTimeout(() => {
+      jumpTimer.current = undefined;
+      setNow(Date.now());
+      const first = firstOf(items);
+      ask(first ? question(first) : null);
+    }, ms + LINE_END_MS);
   };
 
   if (!current) {
@@ -292,32 +328,57 @@ export function ReviewMode({
     <Drill
       round={round}
       question={current}
-      feedback={feedback}
-      showName={sources.length > 1}
       onAnswered={(played, outcome) => onAnswered(current, played, outcome)}
+      onAbandon={(rest, ms) => onAbandon(current, rest, ms)}
     />
   );
 }
 
+/** Pace of the line played to its end after giving up. */
+const ABANDON_MS = 350;
+
+/**
+ * The line from `move` to its end, as trained: an opponent reply only when it leads to a
+ * trained position (shortened lines stop after my move, like the review), main moves first.
+ */
+function restOfLine(source: Source, move: RepMove): RepMove[] {
+  const trained = new Set(source.positions.map((p) => p.fen));
+  const main = (moves: RepMove[]) => moves.find((m) => m.isMain) ?? moves[0];
+  const out = [move];
+  const seen = new Set([move.toFen]);
+  for (let fen = move.toFen; out.length < 80; ) {
+    const reply = main(source.rep.movesAt(fen).filter((r) => trained.has(r.toFen) && !seen.has(r.toFen)));
+    const mine = reply && main(source.rep.movesAt(reply.toFen));
+    if (!reply || !mine || seen.has(mine.toFen)) break;
+    out.push(reply, mine);
+    seen.add(reply.toFen).add(mine.toFen);
+    fen = mine.toFen;
+  }
+  return out;
+}
+
 /**
  * One question: one of my moves (`expected`). When the line continues, the board first shows
- * my previous move, then plays the opponent's reply. A new move is shown; two wrong tries
- * reveal it. Another move of my repertoire (an alternative) is not a mistake: try again.
+ * my previous move, then plays the opponent's reply. A new move is shown; two wrong tries or
+ * the time running out reveal it. Another move of my repertoire (an alternative) is not a
+ * mistake: try again. Hint: the piece to move, then the move played. Give up: the line is
+ * played to its end.
  */
 function Drill({
   round,
   question,
-  feedback,
-  showName,
   onAnswered,
+  onAbandon,
 }: {
   /** Changes with each question. Not used as a React key: the board must stay mounted. */
   round: number;
   question: Question;
-  feedback: Feedback | null;
-  showName: boolean;
   onAnswered: (played: RepMove, outcome: Outcome) => void;
+  /** Given up: the rest of the line is played, for `ms`. */
+  onAbandon: (rest: RepMove[], ms: number) => void;
 }) {
+  const { answerSeconds } = useSettings();
+  const navigate = useNavigate();
   const { source, target, expected, isNew, lead } = question;
   const plies = target.path.length;
   const fresh = () => ({
@@ -327,17 +388,23 @@ function Drill({
     shown: lead ? plies : Math.max(0, plies - REPLAYED_PLIES),
     mistakes: 0,
     /** Another move of my repertoire played instead of the expected one. */
-    alternative: null as RepMove | null,
     revealed: isNew,
+    /** Alternatives played: each one restarts the clock. */
+    retries: 0,
+    /** The last alternative played (shown in a bubble). */
+    alternative: null as RepMove | null,
+    /** 1: the piece to move is shown. */
+    hinted: false,
     played: null as RepMove | null,
-    /** Position looked at while navigating back in the line (plies from the start), null: the question. */
-    view: null as number | null,
+    /** Given up: the rest of the line, and how much of it is on the board. */
+    rest: null as RepMove[] | null,
+    restShown: 0,
   });
   const [state, setState] = useState(fresh);
   // New question: reset the state during render (keeps the board mounted, no flash).
   const current = state.round === round ? state : fresh();
   if (state.round !== round) setState(current);
-  const { replied, shown, mistakes, alternative, revealed, played, view } = current;
+  const { replied, shown, mistakes, revealed, retries, alternative, hinted, played, rest, restShown } = current;
   const update = (patch: Partial<typeof current>) => setState((s) => ({ ...s, ...patch }));
   const answers = source.rep.movesAt(target.fen);
 
@@ -353,116 +420,101 @@ function Drill({
     return () => clearTimeout(t);
   }, [shown, plies, round]);
 
-  const ready = replied && shown >= plies && !played;
-  /** Answering only from the question position (not while looking back in the line). */
-  const asking = ready && view === null;
-  /** Navigation in the line, once it has been replayed: 0 = start, plies = the question. */
-  const goTo = (n: number) => update({ view: n >= plies ? null : Math.max(0, n) });
-  const at = view ?? plies;
+  useEffect(() => {
+    if (!rest || restShown >= rest.length) return;
+    const t = setTimeout(() => update({ restShown: restShown + 1 }), restShown === 0 ? 0 : ABANDON_MS);
+    return () => clearTimeout(t);
+  }, [rest, restShown]);
+
+  const asking = replied && shown >= plies && !played && !rest;
+  /** The clock runs on a learnt move until it is answered, revealed or hinted. */
+  const timing = asking && answerSeconds > 0 && !revealed && !hinted;
 
   useEffect(() => {
-    if (!ready) return;
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement).closest('textarea, input, select')) return;
-      if (e.key === 'ArrowLeft') goTo(at - 1);
-      else if (e.key === 'ArrowRight') goTo(at + 1);
-      else if (e.key === 'Home') goTo(0);
-      else if (e.key === 'End') goTo(plies);
-      else return;
-      e.preventDefault();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  });
+    if (!timing) return;
+    const t = setTimeout(() => update({ revealed: true, mistakes: mistakes + 1 }), answerSeconds * 1000);
+    return () => clearTimeout(t);
+  }, [timing, round, retries]);
+
+  const outcome = (helped: boolean) => outcomeOf(isNew, mistakes, revealed || helped);
 
   const play = (uci: string) => {
     if (!asking) return;
     if (uci !== expected.uci) {
       const other = answers.find((m) => m.uci === uci);
-      if (other) update({ alternative: other });
-      else update({ mistakes: mistakes + 1, alternative: null, revealed: revealed || mistakes + 1 >= 2 });
+      if (other) {
+        update({ retries: retries + 1, alternative: other });
+        return 'retry';
+      }
+      update({ mistakes: mistakes + 1, revealed: revealed || mistakes + 1 >= 2 });
       return false;
     }
     update({ played: expected });
     // New or helped: asked again soon. Right first time: good.
-    onAnswered(expected, outcomeOf(isNew, mistakes, revealed));
+    onAnswered(expected, outcome(hinted));
   };
 
-  let boardFen: string;
-  let lastMove: string | undefined;
-  if (played) [boardFen, lastMove] = [played.toFen, played.uci];
-  else if (ready && view !== null) [boardFen, lastMove] = [target.path[view - 1]?.toFen ?? START_FEN, target.path[view - 1]?.uci];
-  else if (!replied && lead) [boardFen, lastMove] = [lead.mine.toFen, lead.mine.uci];
-  else if (shown < plies) [boardFen, lastMove] = [target.path[shown - 1]?.toFen ?? START_FEN, target.path[shown - 1]?.uci];
-  else [boardFen, lastMove] = [target.fen, (lead?.reply ?? target.path.at(-1))?.uci];
+  /** First the piece to move, then the move itself. */
+  const hint = () => {
+    if (!hinted && !revealed) return update({ hinted: true });
+    update({ played: expected });
+    onAnswered(expected, outcome(true));
+  };
 
-  const shapes = useMemo(() => (revealed && asking ? answerArrows([expected]) : []), [revealed, asking, expected]);
+  const abandon = () => {
+    const line = restOfLine(source, expected);
+    update({ rest: line, restShown: 0 });
+    onAbandon(line, line.length * ABANDON_MS);
+  };
+
+  /** The moves on the board, from the start. */
+  let moves: RepMove[];
+  if (rest) moves = [...target.path, ...rest.slice(0, restShown)];
+  else if (played) moves = [...target.path, played];
+  else if (!replied && lead) moves = target.path.slice(0, -1);
+  else moves = target.path.slice(0, shown);
+  const last = moves.at(-1);
+
+  const shapes = useMemo<DrawShape[]>(() => {
+    if (!asking) return [];
+    if (revealed) return answerArrows([expected]);
+    if (hinted) return [{ orig: expected.uci.slice(0, 2) as Key, brush: 'repertoire' }];
+    return [];
+  }, [revealed, hinted, asking, expected]);
+
+  const toExplorer = () =>
+    navigate(`/explorer?${new URLSearchParams({ line: moves.map((m) => m.uci).join(','), ...(source.color === 'black' ? { color: 'black' } : {}) })}`);
 
   return (
     <div className="editor">
       <div className="editor-board">
         <Board
-          fen={boardFen || START_FEN}
+          fen={last?.toFen ?? START_FEN}
           orientation={source.color}
-          lastMove={lastMove}
+          lastMove={last?.uci}
           shapes={shapes}
           onMove={asking ? play : undefined}
         />
-        {plies > 0 && (
-          <div className="nav">
-            <button onClick={() => goTo(0)} disabled={!ready || at === 0} title="Début de la ligne (Origine)">⏮</button>
-            <button onClick={() => goTo(at - 1)} disabled={!ready || at === 0} title="Coup précédent (←)">◀</button>
-            <button onClick={() => goTo(at + 1)} disabled={!ready || view === null} title="Coup suivant (→)">▶</button>
-            <button onClick={() => goTo(plies)} disabled={!ready || view === null} title="Revenir à la question (Fin)">⏭</button>
+        {alternative && asking && (
+          <div key={retries} className="alt-bubble" role="status">
+            ♻️ <strong>{alternative.san}</strong> est aussi dans ton répertoire — cherche l’autre !
           </div>
         )}
-      </div>
-      <div className="editor-side">
-        <section className="panel">
-          {showName && <p className="muted small-text">{source.name}</p>}
-          {ready && plies > 0 ? (
-            <div className="moves-path">
-              {target.path.map((m, i) => (
-                <button key={i} className={`link ${i === at - 1 ? 'current' : ''}`} onClick={() => goTo(i + 1)}>
-                  {i % 2 === 0 ? `${i / 2 + 1}. ` : ''}{m.san}
-                </button>
-              ))}
-            </div>
-          ) : (
-            <p className="muted">{lineText(target.path.slice(0, shown)) || 'Position initiale'}</p>
-          )}
-          {view !== null && (
-            <p className="muted small-text">
-              Vous regardez la ligne : <button className="link" onClick={() => goTo(plies)}>revenir à la question</button> pour répondre.
-            </p>
-          )}
-          {replied && shown >= plies && <OpponentComment move={lead?.reply ?? target.path.at(-1)} />}
-          {played ? (
-            <p className="success">✓ {played.san}</p>
-          ) : !asking ? (
-            <p className="muted">…</p>
-          ) : isNew ? (
-            <p>
-              <strong>Nouveau coup.</strong> Jouez le coup indiqué : {expected.san}.
-            </p>
-          ) : (
-            <p><strong>À vous de jouer.</strong></p>
-          )}
-          {alternative && !played && (
-            <p className="warning">
-              {alternative.san} est aussi dans votre répertoire, mais une autre suite est demandée ici : réessayez.
-            </p>
-          )}
-          {mistakes > 0 && !played && (
-            <p className="error">✗ Pas dans votre répertoire.{revealed ? ' Jouez le coup indiqué.' : ' Réessayez.'}</p>
-          )}
-          {asking && !revealed && (
-            <button className="small" onClick={() => update({ revealed: true })}>Voir la réponse</button>
-          )}
-        </section>
-        {feedback && <FeedbackPanel {...feedback} />}
+        <div className="answer-timer">
+          {timing && <div key={`${round}-${retries}`} style={{ animationDuration: `${answerSeconds}s` }} />}
+        </div>
+        <div className="drill-actions">
+          <button onClick={hint} disabled={!asking} title={hinted || revealed ? 'Jouer le coup' : 'Montrer la pièce à jouer'}>
+            💡 Indice
+          </button>
+          <button onClick={abandon} disabled={!asking} title="Voir la ligne jusqu’à la fin">
+            🏳 Abandon
+          </button>
+          <button onClick={toExplorer} title="Ouvrir cette position dans l’Explorer">
+            🧭 Explorer
+          </button>
+        </div>
       </div>
     </div>
   );
 }
-

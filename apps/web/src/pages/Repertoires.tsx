@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api, type Me, type RepertoireSummary, type TrainingSummary } from '../api';
-import { dayStart, useSettings } from '../settings';
+import { useTrainingSummary } from '../useTrainingSummary';
 import { Button, EmptyState, PageHeader, Switch, Tabs, plural } from '../ui';
 import { useGaps } from '../useGaps';
 
@@ -15,9 +15,8 @@ const COLORS: { color: Color; label: string }[] = [
 export function Repertoires({ me }: { me: Me }) {
   const qc = useQueryClient();
   const navigate = useNavigate();
-  const { newPerDay } = useSettings();
   const reps = useQuery({ queryKey: ['repertoires'], queryFn: api.repertoires });
-  const summary = useQuery({ queryKey: ['training-summary', newPerDay], queryFn: () => api.trainingSummary(dayStart(), newPerDay) });
+  const summary = useTrainingSummary(me);
   const counts = new Map((summary.data ?? []).map((s) => [s.repertoireId, s]));
   const gaps = useGaps(me, (reps.data?.length ?? 0) > 0);
   // Missing moves of each repertoire: frequent opponent moves it does not answer (gap finder).

@@ -262,6 +262,8 @@ kbd { display: inline-block; min-width: 18px; padding: 0 4px; margin: 0 1px; bor
 .board { width: 100%; aspect-ratio: 1; }
 /* A rejected move (components/Board.tsx): red square under the piece, the board shaken. */
 .cg-wrap square.rejected { background: rgba(229, 83, 75, 0.6); }
+/* Another move of the repertoire (not the one asked): dashed green square, no shake. */
+.cg-wrap square.retry { outline: 3px dashed #3fb950; outline-offset: -4px; background: rgba(63, 185, 80, 0.18); }
 /* The frame clips the shake: no horizontal scroll on phones (full-width board). */
 .board-frame { overflow: clip; }
 .board-frame.rejected > .board { animation: board-shake 0.35s ease-in-out; }
@@ -273,6 +275,27 @@ kbd { display: inline-block; min-width: 18px; padding: 0 4px; margin: 0 1px; bor
 @media (prefers-reduced-motion: reduce) { .board-frame.rejected > .board { animation: none; } }
 .nav { display: flex; justify-content: center; gap: 6px; margin-top: 8px; padding: 0 var(--page-pad); }
 .nav button { flex: 1; max-width: 72px; }
+/* Review (training/ReviewMode.tsx): time left to answer, then hint / give up / explorer. */
+.editor-board { position: relative; }
+.alt-bubble {
+  position: absolute; top: 10px; left: 50%; z-index: 5; max-width: calc(100% - 32px);
+  padding: 8px 14px; border-radius: 999px; font-size: 0.9rem; text-align: center; pointer-events: none;
+  color: #fff; background: rgba(40, 96, 168, 0.94); box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  animation: alt-bubble 2.4s ease forwards;
+}
+@keyframes alt-bubble {
+  0% { opacity: 0; transform: translate(-50%, -8px) scale(0.92); }
+  10% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  80% { opacity: 1; transform: translate(-50%, 0); }
+  100% { opacity: 0; transform: translate(-50%, -4px); }
+}
+@media (prefers-reduced-motion: reduce) { .alt-bubble { animation: alt-bubble-fade 2.4s linear forwards; transform: translateX(-50%); } }
+@keyframes alt-bubble-fade { 0%, 80% { opacity: 1; } 100% { opacity: 0; } }
+.answer-timer { height: 4px; margin: 8px var(--page-pad) 0; border-radius: 2px; background: var(--surface-2); overflow: hidden; }
+.answer-timer > div { height: 100%; background: var(--accent); transform-origin: left; animation: answer-timer linear forwards; }
+@keyframes answer-timer { from { transform: scaleX(1); } 80% { background: var(--accent); } to { transform: scaleX(0); background: #e5534b; } }
+.drill-actions { display: flex; justify-content: center; gap: 6px; margin-top: 8px; padding: 0 var(--page-pad); }
+.drill-actions button { flex: 1; max-width: 140px; }
 .legend { display: flex; justify-content: center; gap: 14px; flex-wrap: wrap; font-size: 0.8rem; margin: 8px 0 0; padding: 0 var(--page-pad); }
 .legend-item { display: inline-flex; align-items: center; gap: 6px; }
 .swatch { display: inline-block; width: 20px; height: 6px; border-radius: 3px; }
@@ -503,3 +526,7 @@ kbd { display: inline-block; min-width: 18px; padding: 0 4px; margin: 0 1px; bor
 .install-prompt p { margin: 0; }
 .install-prompt .row { justify-content: flex-end; }
 @media (min-width: 640px) { .install-prompt { left: auto; right: 20px; bottom: 20px; width: 360px; } }
+/* Paramètres: slider with its value (e.g. length of the lines). */
+.range-setting { display: flex; align-items: center; gap: 10px; min-width: 220px; flex: 1; max-width: 360px; }
+.range-setting input { flex: 1; accent-color: var(--accent); }
+.range-setting span { min-width: 4.5em; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }

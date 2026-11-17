@@ -258,8 +258,18 @@ export const api = {
   importPgn: (id: string, pgn: string) => request<ImportResult>('POST', `/api/repertoires/${id}/import-pgn`, { pgn }),
   cards: () => request<ReviewCard[]>('GET', '/api/cards'),
   review: (id: string, fen: string, uci: string, grade: Grade) => request<ReviewCard>('POST', `/api/repertoires/${id}/review`, { fen, uci, grade }),
-  trainingSummary: (dayStart: number, newPerDay: number) =>
-    request<TrainingSummary[]>('GET', `/api/training/summary?${new URLSearchParams({ dayStart: String(dayStart), newPerDay: String(newPerDay) })}`),
+  /** `short`: shortened lines (share kept, 0-1) with the statistics settings giving the probabilities. */
+  trainingSummary: (dayStart: number, newPerDay: number, short?: { keep: number; speeds: string[]; ratings: number[]; cutoff: number }) =>
+    request<TrainingSummary[]>(
+      'GET',
+      `/api/training/summary?${new URLSearchParams({
+        dayStart: String(dayStart),
+        newPerDay: String(newPerDay),
+        ...(short && short.keep < 1
+          ? { keep: String(short.keep), speeds: short.speeds.join(','), ratings: short.ratings.join(','), cutoff: String(short.cutoff) }
+          : {}),
+      })}`,
+    ),
   statsHistory: (days: number) => request<ReviewLogEntry[]>('GET', `/api/stats/history?days=${days}`),
   gaps: (speeds: string[], ratings: number[], cutoff: number) =>
     request<GapsResponse>('GET', `/api/gaps?${new URLSearchParams({ speeds: speeds.join(','), ratings: ratings.join(','), cutoff: String(cutoff) })}`),

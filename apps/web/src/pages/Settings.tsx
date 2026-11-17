@@ -244,6 +244,18 @@ export function Settings({ me }: { me: Me }) {
             <option value="repertoire">Ordre du répertoire</option>
           </select>
         </div>
+        <KeepShareSetting />
+        <div className="setting">
+          <div className="what">
+            <strong>Temps pour répondre</strong>
+            <div className="hint">En révision, pour un coup déjà appris. Temps écoulé : compté comme une erreur, la réponse est montrée.</div>
+          </div>
+          <select value={settings.answerSeconds} onChange={(e) => settings.setAnswerSeconds(Number(e.target.value))}>
+            {[5, 10, 15, 20, 30, 0].map((n) => (
+              <option key={n} value={n}>{n === 0 ? 'Sans limite' : `${n} s`}</option>
+            ))}
+          </select>
+        </div>
         <div className="setting">
           <div className="what">
             <strong>Coups manquants</strong>
@@ -256,6 +268,36 @@ export function Settings({ me }: { me: Me }) {
           </select>
         </div>
       </section>
+    </div>
+  );
+}
+
+/**
+ * Shortened lines: % of each repertoire's positions trained, the most likely at my level first.
+ * Saved after a pause while dragging (each value recomputes the training counts).
+ */
+function KeepShareSetting() {
+  const { keepShare, setKeepShare } = useSettings();
+  const [value, setValue] = useState(keepShare);
+  useEffect(() => {
+    if (value === keepShare) return;
+    const t = setTimeout(() => setKeepShare(value), 400);
+    return () => clearTimeout(t);
+  }, [value]);
+  return (
+    <div className="setting">
+      <div className="what">
+        <strong>Longueur des lignes</strong>
+        <div className="hint">
+          {value === 100
+            ? 'Toutes les positions de vos répertoires sont entraînées.'
+            : `Seules les ${value} % de positions les plus probables à votre niveau (statistiques Lichess) sont entraînées, dans chaque répertoire.`}
+        </div>
+      </div>
+      <label className="range-setting">
+        <input type="range" min={1} max={100} value={value} onChange={(e) => setValue(Number(e.target.value))} aria-label="Part des positions entraînées" />
+        <span>{value === 100 ? '100 % (lignes entières)' : `${value} %`}</span>
+      </label>
     </div>
   );
 }

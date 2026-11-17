@@ -13,7 +13,7 @@ import { useEngine } from '../engine/useEngine';
 import { MoveTable } from '../components/MoveTable';
 import { StatsSource } from '../components/StatsSource';
 import { explorerParams, speedsLabel, useSettings } from '../settings';
-import { Button, PageHeader, Tabs } from '../ui';
+import { PageHeader, Tabs } from '../ui';
 
 type Source = 'lichess' | 'mine';
 
@@ -94,7 +94,6 @@ export function Explorer({ me }: { me: Me }) {
     setOrientation(o);
     sync(line, ply, o);
   };
-  const reset = () => setLine([], 0);
 
   const fen = line[ply - 1]?.toFen ?? START_FEN;
   const shown = line.slice(0, ply);
@@ -211,12 +210,6 @@ export function Explorer({ me }: { me: Me }) {
     <PageHeader
       title="Explorer"
       subtitle="Échiquier libre, vos répertoires, statistiques et moteur"
-      actions={
-        <>
-          <Button variant="ghost" onClick={flip} title="Retourner l’échiquier (f)">⇅</Button>
-          <Button variant="ghost" onClick={reset} title="Revenir à la position initiale">↺</Button>
-        </>
-      }
     />
     <div className="editor">
       <div className="editor-board">
@@ -226,6 +219,7 @@ export function Explorer({ me }: { me: Me }) {
           <button onClick={() => goTo(ply - 1)} title="Reculer (←)">◀</button>
           <button onClick={() => goTo(ply + 1)} title="Avancer (→)">▶</button>
           <button onClick={() => goTo(line.length)} title="Fin de la ligne (Fin)">⏭</button>
+          <button onClick={flip} title="Retourner l’échiquier (f)">⇅</button>
           <EngineToggle enabled={engineOn} onToggle={toggleEngine} />
         </div>
         <EngineLines

@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { api, ApiError } from './api';
 import { InstallPrompt } from './components/InstallPrompt';
+import { useTrainingSummary } from './useTrainingSummary';
 import { Explorer } from './pages/Explorer';
 import { Games, useGamesReport } from './pages/Games';
 import { Login } from './pages/Login';
@@ -10,7 +11,6 @@ import { RepertoireEditor } from './pages/RepertoireEditor';
 import { Repertoires } from './pages/Repertoires';
 import { Settings } from './pages/Settings';
 import { Training } from './pages/Training';
-import { dayStart, useSettings } from './settings';
 import { Button, Icon, Menu, plural, type IconName } from './ui';
 
 /** The four sections: build, learn, explore, and what the games show. */
@@ -69,15 +69,9 @@ export function App() {
   const qc = useQueryClient();
   const { pathname } = useLocation();
   const me = useQuery({ queryKey: ['me'], queryFn: api.me, retry: false });
-  const { newPerDay } = useSettings();
   // Badge of the Entraîner tab: lines to review today, plus the new lines still allowed today
   // (one daily limit for all repertoires).
-  const summary = useQuery({
-    queryKey: ['training-summary', newPerDay],
-    queryFn: () => api.trainingSummary(dayStart(), newPerDay),
-    enabled: !!me.data,
-    staleTime: 30_000,
-  });
+  const summary = useTrainingSummary(me.data, { staleTime: 30_000 });
   const active = (summary.data ?? []).filter((s) => s.active);
   const toTrain =
     active.reduce((n, s) => n + s.dueLines, 0) +

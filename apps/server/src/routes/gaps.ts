@@ -11,16 +11,16 @@
  */
 import { findGaps, gapCandidate, Repertoire, rankRepertoires, turnOf, type Color } from '@prepa-cahier/core';
 import { eq, inArray, sql } from 'drizzle-orm';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyBaseLogger, FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireUser } from '../auth.js';
 import { db } from '../db/client.js';
-import { graphColumns, positionStats, repertoires, repMoves } from '../db/schema.js';
+import { graphColumns, positionStats, repertoires, repMoves, type User } from '../db/schema.js';
 import { env } from '../env.js';
 import { prefetchStats, storedStats } from '../stats.js';
 import { statsParams } from './explorer.js';
 
-const gapsQuery = statsParams.extend({
+export const gapsQuery = statsParams.extend({
   /** Holes listed, and statistics fetched, from this probability. */
   cutoff: z.coerce.number().min(0.002).max(0.2).default(0.01),
 });
@@ -39,92 +39,97 @@ export async function gapRoutes(app: FastifyInstance) {
   app.get('/api/gaps', { preHandler: requireUser }, async (req, reply) => {
     const q = gapsQuery.parse(req.query);
     if (!q.speeds.length || !q.ratings.length) return reply.code(400).send({ error: 'speeds and ratings required' });
-    const userId = req.user!.id;
-    const reps = await db.select().from(repertoires).where(eq(repertoires.userId, userId));
-    const token = req.user!.lichessToken ?? env.lichessAppToken;
-    const EXPLORE = exploreFor(q.cutoff);
-
-    // Cheap signature of what the answer depends on: the moves (added / deleted), the
-    // repertoires (colour), and the stored statistics (they grow with background fetches).
-    const ids = reps.map((r) => r.id);
-    const [sig] = ids.length
-      ? await db
-          .select({ n: sql<number>`count(*)`, sum: sql<number>`coalesce(sum(${repMoves.id}), 0)` })
-          .from(repMoves)
-          .where(inArray(repMoves.repertoireId, ids))
-      : [{ n: 0, sum: 0 }];
-    const [stats] = await db.select({ n: sql<number>`count(*)` }).from(positionStats);
-    const key = `${userId}|${q.speeds.join(',')}|${q.ratings.join(',')}|${q.cutoff}`;
-    const signature = [reps.map((r) => `${r.id}:${r.color}`).join(','), sig!.n, sig!.sum, stats!.n].join('|');
-    const hit = cache.get(key);
-    if (hit && hit.signature === signature && Date.now() - hit.at < CACHE_MS) return hit.body;
-
-    const moves = ids.length ? await db.select(graphColumns).from(repMoves).where(inArray(repMoves.repertoireId, ids)) : [];
-
-    const analyse = async (color: Color) => {
-      const own = reps.filter((r) => r.color === color);
-      if (!own.length) return null;
-      const ids = new Set(own.map((r) => r.id));
-      const colorMoves = moves.filter((m) => ids.has(m.repertoireId));
-      const merged = new Repertoire(color, colorMoves);
-      // Only opponent positions of the repertoire need statistics.
-      const opponentFens = [...new Set(colorMoves.map((m) => m.fromFen))].filter((f) => turnOf(f) !== color);
-      const stored = await storedStats(opponentFens, q.speeds, q.ratings);
-      const statsAt = (fen: string) => stored.get(fen)?.data;
-      const report = findGaps(merged, statsAt, { cutoff: EXPLORE });
-
-      // Fetched in the background: positions without exact statistics, reached often enough.
-      const often = (fen: string) => (report.reached.get(fen) ?? 0) >= q.cutoff;
-      const approximate = report.usedStats.filter((f) => !stored.get(f)!.exact);
-      const toFetch = [...report.missingStats.map((m) => m.fen), ...approximate].filter(often);
-      const pending = token ? prefetchStats(toFetch, q.speeds, q.ratings, token, req.log) : 0;
-
-      const candidates = own.map((r) => gapCandidate(r.id, new Repertoire(color, colorMoves.filter((m) => m.repertoireId === r.id))));
-      return {
-        /** Expected number of moves played in the preparation (a lower bound when `unknown` > 0). */
-        depth: report.depth / 2,
-        lost: report.lost,
-        ends: report.ends,
-        /** Share of games reaching positions without statistics. */
-        unknown: report.unknown,
-        truncated: report.truncated,
-        /** Positions analysed with statistics of another range (exact ones not stored yet). */
-        approximate: approximate.length,
-        /** Positions without any statistics. */
-        missing: report.missingStats.length,
-        /** Positions being fetched in the background: ask again later. */
-        pending,
-        /**
-         * Probability of reaching each position where it is my turn (the positions to learn),
-         * explored down to EXPLORE: orders the new positions by how often they come up.
-         */
-        reach: Object.fromEntries(
-          [...report.reached].filter(([fen]) => turnOf(fen) === color).map(([fen, p]) => [fen, Math.round(p * 1e6) / 1e6]),
-        ),
-        gaps: report.gaps
-          .filter((g) => g.prob >= q.cutoff)
-          .slice(0, MAX_GAPS)
-          .map((g) => {
-            const ranking = rankRepertoires(g, candidates);
-            return {
-              kind: g.kind,
-              fen: g.fen,
-              move: g.move ?? null,
-              prob: g.prob,
-              line: g.path.map((m) => m.san),
-              ucis: g.path.map((m) => m.uci),
-              /** null: a deviation inside every repertoire's trunk (belongs to none of them). */
-              repertoireId: ranking[0]?.owns ? ranking[0].key : null,
-              /** Every repertoire of the colour, best suited first (to prepare the hole in). */
-              ranking: ranking.map((r) => r.key),
-            };
-          }),
-      };
-    };
-
-    const body = { live: !!token, white: await analyse('white'), black: await analyse('black') };
-    // Not cached while statistics are being fetched: the next call must see them.
-    if (!body.white?.pending && !body.black?.pending) cache.set(key, { signature, at: Date.now(), body });
-    return body;
+    return gapsReport(req.user!, q, req.log);
   });
+}
+
+/** The gap finder report of a user (both colours), for statistics settings `q`. */
+export async function gapsReport(user: User, q: z.infer<typeof gapsQuery>, log: FastifyBaseLogger) {
+  const userId = user.id;
+  const reps = await db.select().from(repertoires).where(eq(repertoires.userId, userId));
+  const token = user.lichessToken ?? env.lichessAppToken;
+  const EXPLORE = exploreFor(q.cutoff);
+
+  // Cheap signature of what the answer depends on: the moves (added / deleted), the
+  // repertoires (colour), and the stored statistics (they grow with background fetches).
+  const ids = reps.map((r) => r.id);
+  const [sig] = ids.length
+    ? await db
+        .select({ n: sql<number>`count(*)`, sum: sql<number>`coalesce(sum(${repMoves.id}), 0)` })
+        .from(repMoves)
+        .where(inArray(repMoves.repertoireId, ids))
+    : [{ n: 0, sum: 0 }];
+  const [stats] = await db.select({ n: sql<number>`count(*)` }).from(positionStats);
+  const key = `${userId}|${q.speeds.join(',')}|${q.ratings.join(',')}|${q.cutoff}`;
+  const signature = [reps.map((r) => `${r.id}:${r.color}`).join(','), sig!.n, sig!.sum, stats!.n].join('|');
+  const hit = cache.get(key);
+  if (hit && hit.signature === signature && Date.now() - hit.at < CACHE_MS) return hit.body as typeof body;
+
+  const moves = ids.length ? await db.select(graphColumns).from(repMoves).where(inArray(repMoves.repertoireId, ids)) : [];
+
+  const analyse = async (color: Color) => {
+    const own = reps.filter((r) => r.color === color);
+    if (!own.length) return null;
+    const ids = new Set(own.map((r) => r.id));
+    const colorMoves = moves.filter((m) => ids.has(m.repertoireId));
+    const merged = new Repertoire(color, colorMoves);
+    // Only opponent positions of the repertoire need statistics.
+    const opponentFens = [...new Set(colorMoves.map((m) => m.fromFen))].filter((f) => turnOf(f) !== color);
+    const stored = await storedStats(opponentFens, q.speeds, q.ratings);
+    const statsAt = (fen: string) => stored.get(fen)?.data;
+    const report = findGaps(merged, statsAt, { cutoff: EXPLORE });
+
+    // Fetched in the background: positions without exact statistics, reached often enough.
+    const often = (fen: string) => (report.reached.get(fen) ?? 0) >= q.cutoff;
+    const approximate = report.usedStats.filter((f) => !stored.get(f)!.exact);
+    const toFetch = [...report.missingStats.map((m) => m.fen), ...approximate].filter(often);
+    const pending = token ? prefetchStats(toFetch, q.speeds, q.ratings, token, log) : 0;
+
+    const candidates = own.map((r) => gapCandidate(r.id, new Repertoire(color, colorMoves.filter((m) => m.repertoireId === r.id))));
+    return {
+      /** Expected number of moves played in the preparation (a lower bound when `unknown` > 0). */
+      depth: report.depth / 2,
+      lost: report.lost,
+      ends: report.ends,
+      /** Share of games reaching positions without statistics. */
+      unknown: report.unknown,
+      truncated: report.truncated,
+      /** Positions analysed with statistics of another range (exact ones not stored yet). */
+      approximate: approximate.length,
+      /** Positions without any statistics. */
+      missing: report.missingStats.length,
+      /** Positions being fetched in the background: ask again later. */
+      pending,
+      /**
+       * Probability of reaching each position where it is my turn (the positions to learn),
+       * explored down to EXPLORE: orders the new positions by how often they come up.
+       */
+      reach: Object.fromEntries(
+        [...report.reached].filter(([fen]) => turnOf(fen) === color).map(([fen, p]) => [fen, Math.round(p * 1e6) / 1e6]),
+      ),
+      gaps: report.gaps
+        .filter((g) => g.prob >= q.cutoff)
+        .slice(0, MAX_GAPS)
+        .map((g) => {
+          const ranking = rankRepertoires(g, candidates);
+          return {
+            kind: g.kind,
+            fen: g.fen,
+            move: g.move ?? null,
+            prob: g.prob,
+            line: g.path.map((m) => m.san),
+            ucis: g.path.map((m) => m.uci),
+            /** null: a deviation inside every repertoire's trunk (belongs to none of them). */
+            repertoireId: ranking[0]?.owns ? ranking[0].key : null,
+            /** Every repertoire of the colour, best suited first (to prepare the hole in). */
+            ranking: ranking.map((r) => r.key),
+          };
+        }),
+    };
+  };
+
+  const body = { live: !!token, white: await analyse('white'), black: await analyse('black') };
+  // Not cached while statistics are being fetched: the next call must see them.
+  if (!body.white?.pending && !body.black?.pending) cache.set(key, { signature, at: Date.now(), body });
+  return body;
 }

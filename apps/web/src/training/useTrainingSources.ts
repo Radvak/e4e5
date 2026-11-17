@@ -1,7 +1,9 @@
 import {
+  keptPositions,
   positionReview,
   Repertoire,
   START_FEN,
+  trainingPositions,
   trainingPositionsFrom,
   type Color,
   type TrainingPosition,
@@ -42,8 +44,17 @@ export interface Source {
 
 const cardKey = (fen: string, uci: string) => `${fen} ${uci}`;
 
-/** Loads the repertoires `ids` and the user's move cards; `review` records an answer. */
-export function useTrainingSources(ids: string[], from: string | null) {
+/** Shortened lines: the `keep` share (0-1) of each repertoire's positions, the most likely (`reach`). */
+export interface Shorten {
+  keep: number;
+  reach: (color: Color, fen: string) => number | undefined;
+}
+
+/**
+ * Loads the repertoires `ids` and the user's move cards; `review` records an answer. With
+ * `shorten`, only the positions kept by core keptPositions are trained.
+ */
+export function useTrainingSources(ids: string[], from: string | null, shorten?: Shorten | null) {
   const qc = useQueryClient();
   const repQueries = useQueries({
     queries: ids.map((id) => ({ queryKey: ['repertoire', id], queryFn: () => api.repertoire(id) })),
@@ -60,6 +71,8 @@ export function useTrainingSources(ids: string[], from: string | null) {
         const data = repQueries[i]?.data;
         if (!data) return [];
         const rep = new Repertoire(data.color, data.moves);
+        const kept = shorten && shorten.keep < 1 ? keptPositions(trainingPositions(rep), (f) => shorten.reach(data.color, f), shorten.keep) : null;
+        const positions = trainingPositionsFrom(rep, from ?? START_FEN);
         const cardOf = (fen: string, uci: string) => cards.get(cardKey(fen, uci));
         const times = (fen: string) => (uci: string) => {
           const c = cardOf(fen, uci);
@@ -70,7 +83,7 @@ export function useTrainingSources(ids: string[], from: string | null) {
           name: data.name,
           color: data.color,
           rep,
-          positions: trainingPositionsFrom(rep, from ?? START_FEN),
+          positions: kept ? positions.filter((p) => kept.has(p.fen)) : positions,
           cardOf,
           stateOf: (fen, now) => positionReview(rep.movesAt(fen), times(fen), now),
           positionCard: (fen) => {
@@ -88,7 +101,7 @@ export function useTrainingSources(ids: string[], from: string | null) {
         } satisfies Source];
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [ids.join(), version, from, cards],
+    [ids.join(), version, from, cards, shorten],
   );
 
   const putCard = (card: ReviewCard) =>

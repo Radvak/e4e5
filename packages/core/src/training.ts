@@ -164,3 +164,30 @@ export function positionReview(
   if (fresh.length) return { status: 'new', at: Infinity, pending: fresh, learntAt };
   return { status: 'learnt', at, pending: [], learntAt };
 }
+
+/**
+ * The positions kept for training when lines are shortened to the `keep` share (0-1) of the
+ * positions most likely to come up: positions sorted by `reach` (probability of reaching them
+ * at the user's level; unknown: least likely), ties the shallowest first; the first
+ * ceil(keep × n) are kept. A line stops at its first position left out: a position is kept only
+ * when the previous position of mine on its line is kept too. keep >= 1: every position.
+ */
+export function keptPositions(
+  positions: TrainingPosition[],
+  reach: (fen: string) => number | undefined,
+  keep: number,
+): Set<string> {
+  if (keep >= 1) return new Set(positions.map((p) => p.fen));
+  const n = Math.ceil(Math.max(0, keep) * positions.length);
+  const ranked = positions
+    .map((p, i) => ({ p, i, r: reach(p.fen) ?? -1 }))
+    .sort((a, b) => b.r - a.r || a.p.path.length - b.p.path.length || a.i - b.i);
+  const top = new Set(ranked.slice(0, n).map((x) => x.p.fen));
+  const isPosition = new Set(positions.map((p) => p.fen));
+  const kept = new Set<string>();
+  for (const p of [...positions].sort((a, b) => a.path.length - b.path.length)) {
+    const prev = p.path.length >= 2 ? p.path.at(-2)!.fromFen : null;
+    if (top.has(p.fen) && (!prev || !isPosition.has(prev) || kept.has(prev))) kept.add(p.fen);
+  }
+  return kept;
+}

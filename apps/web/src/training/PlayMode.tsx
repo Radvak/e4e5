@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, type Grade } from '../api';
 import { Board } from '../components/Board';
 import { answerArrows, lineText, OpponentComment, REPLY_MS } from './common';
-import { FeedbackPanel, outcomeOf, type Feedback } from './Feedback';
+import { outcomeOf } from './Feedback';
 import type { Source } from './useTrainingSources';
 
 /** Waiting time for statistics before choosing a reply without them. */
@@ -63,7 +63,6 @@ export function PlayMode({
   );
   const [line, setLine] = useState<LineState | null>(null);
   const [score, setScore] = useState({ lines: 0, moves: 0, asked: 0, clean: 0 });
-  const [feedback, setFeedback] = useState<Feedback | null>(null);
   const token = useRef(0);
 
   const statsQuery = useCallback(
@@ -161,7 +160,6 @@ export function PlayMode({
       asked: s.asked + (outcome === 'new' ? 0 : 1),
       clean: s.clean + (outcome === 'correct' ? 1 : 0),
     }));
-    setFeedback({ played: answer, others: answers.filter((m) => m.uci !== answer.uci), outcome });
     setLine({ ...line, fen: answer.toFen, history: [...line.history, answer], phase: after(line.source, answer.toFen) });
   };
 
@@ -211,7 +209,6 @@ export function PlayMode({
             pondérés par les parties Lichess
           </p>
         </section>
-        {feedback && <FeedbackPanel {...feedback} />}
       </div>
     </div>
   );
