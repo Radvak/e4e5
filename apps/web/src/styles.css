@@ -390,6 +390,9 @@ kbd { display: inline-block; min-width: 18px; padding: 0 4px; margin: 0 1px; bor
 .suggestion .line { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .suggestion .freq { color: var(--text-2); font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 0.88rem; }
 .suggestion .badge { margin-left: 6px; }
+.suggestion .best-move { color: var(--text); font-weight: 600; }
+.suggestion .freq strong { color: var(--text); font-weight: 600; }
+.suggestion.pruned .best-move, .suggestion.pruned .freq strong { color: var(--text-2); font-weight: 500; }
 .pgn-import { margin-bottom: 16px; } .pgn-import textarea { margin: 8px 0; }
 
 /* Colours shared with the board arrows (components/arrows.ts): they act as the legend. */

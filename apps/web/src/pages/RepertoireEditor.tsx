@@ -11,6 +11,7 @@ import { useEngine } from '../engine/useEngine';
 import { Board } from '../components/Board';
 import { ExplorerPanel } from '../components/ExplorerPanel';
 import { explorerParams, useSettings } from '../settings';
+import { BestMoves } from '../components/BestMoves';
 import { Suggestions } from '../components/Suggestions';
 import { Button, Menu, PageHeader, plural } from '../ui';
 import { useGaps } from '../useGaps';
@@ -410,6 +411,11 @@ export function RepertoireEditor({ me }: { me: Me }) {
             </p>
           )}
         </section>
+
+        {/* End of the line on my turn: what to play next. */}
+        {rep.isMyTurn(fen) && here.length === 0 && (
+          <BestMoves fen={fen} history={shown.map((m) => m.san)} speeds={ex.speeds} ratings={ex.ratings} onPlay={play} />
+        )}
 
         <Suggestions
           gaps={holes}

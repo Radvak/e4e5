@@ -1,4 +1,4 @@
-import type { Color, ExplorerResponse, RepMove } from '@prepa-cahier/core';
+import type { Color, ExplorerResponse, RepMove, SuggestedMove } from '@prepa-cahier/core';
 
 export interface StatsMeta {
   speeds: string[];
@@ -124,6 +124,18 @@ export interface GapsResponse {
   live: boolean;
   white: GapReport | null;
   black: GapReport | null;
+}
+
+/** Suggested moves for the side to move (expected score over the likely lines). */
+export interface BestMovesResponse {
+  /** minReach: probability threshold of the lines its score looks at (null: its own win rate). */
+  moves: (Omit<SuggestedMove, 'minReach'> & { minReach: number | null })[];
+  /** Lines reached in this share of the games or more are looked at (null: none yet). */
+  reach: number | null;
+  /** Threshold aimed at. */
+  target: number;
+  /** Positions of the next step being fetched in the background: ask again. */
+  pending: number;
 }
 
 export interface ExplorerGameRef {
@@ -267,6 +279,8 @@ export const api = {
   dismissInbox: (key: string) => request<{ ok: true }>('POST', '/api/games/inbox/dismiss', { key }),
   restoreInbox: () => request<{ ok: true }>('DELETE', '/api/games/inbox/dismiss'),
   reviewNow: (id: string, fen: string) => request<{ ok: true }>('POST', `/api/repertoires/${id}/cards/due`, { fen }),
+  bestMoves: (fen: string, speeds: string[], ratings: number[]) =>
+    request<BestMovesResponse>('GET', `/api/explorer/best?${new URLSearchParams({ fen, speeds: speeds.join(','), ratings: ratings.join(',') })}`),
   explorer: (fen: string, speeds: string[], ratings: number[]) =>
     request<Stats>(
       'GET',

@@ -6,3 +6,4 @@ export * from './explorer.js';
 export * from './training.js';
 export * from './engine.js';
 export * from './gaps.js';
+export * from './bestMoves.js';
