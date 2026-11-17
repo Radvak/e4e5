@@ -1,4 +1,4 @@
-import { totalGames, type ExplorerResponse } from '@prepa-cahier/core';
+import { totalGames, type ExplorerResponse } from '@tabiya/core';
 import { isPopular } from './arrows';
 
 function pct(n: number, total: number) {

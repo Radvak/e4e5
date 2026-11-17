@@ -9,7 +9,7 @@
  * stored data for the requested range are fetched in the background (`pending`): the client
  * asks again until nothing is pending, and each pass may reach deeper positions.
  */
-import { findGaps, gapCandidate, Repertoire, rankRepertoires, turnOf, type Color } from '@prepa-cahier/core';
+import { findGaps, gapCandidate, Repertoire, rankRepertoires, turnOf, type Color } from '@tabiya/core';
 import { eq, inArray, sql } from 'drizzle-orm';
 import type { FastifyBaseLogger, FastifyInstance } from 'fastify';
 import { z } from 'zod';

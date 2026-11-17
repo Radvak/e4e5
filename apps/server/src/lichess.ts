@@ -1,7 +1,7 @@
 /** Minimal Lichess API client (server side, with the user's OAuth token). */
 import { env } from './env.js';
 
-const UA = 'mon-cahier';
+const UA = 'tabiya';
 
 export interface LichessAccount {
   id: string;

@@ -1,4 +1,4 @@
-import { playSanOn, positionFromFen, type Color } from '@prepa-cahier/core';
+import { playSanOn, positionFromFen, type Color } from '@tabiya/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';

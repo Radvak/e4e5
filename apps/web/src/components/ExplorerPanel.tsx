@@ -1,4 +1,4 @@
-import type { Repertoire } from '@prepa-cahier/core';
+import type { Repertoire } from '@tabiya/core';
 import { ApiError, type Me, type Stats, type StatsMeta } from '../api';
 import { rangeLabel, speedsLabel } from '../settings';
 import { MoveTable } from './MoveTable';

@@ -24,7 +24,7 @@ importers:
       '@libsql/client':
         specifier: ^0.15.0
         version: 0.15.15
-      '@prepa-cahier/core':
+      '@tabiya/core':
         specifier: workspace:*
         version: link:../../packages/core
       drizzle-orm:
@@ -61,7 +61,7 @@ importers:
 
   apps/web:
     dependencies:
-      '@prepa-cahier/core':
+      '@tabiya/core':
         specifier: workspace:*
         version: link:../../packages/core
       '@tanstack/react-query':
@@ -120,7 +120,7 @@ importers:
 
   tools/sync:
     dependencies:
-      '@prepa-cahier/core':
+      '@tabiya/core':
         specifier: workspace:*
         version: link:../../packages/core
       tsx:

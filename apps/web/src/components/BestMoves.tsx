@@ -1,4 +1,4 @@
-import { playUci, type PlayedMove } from '@prepa-cahier/core';
+import { playUci, type PlayedMove } from '@tabiya/core';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { api, type BestMovesResponse } from '../api';

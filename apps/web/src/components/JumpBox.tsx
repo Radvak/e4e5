@@ -7,7 +7,7 @@ import {
   START_FEN,
   type PlayedMove,
   type Repertoire,
-} from '@prepa-cahier/core';
+} from '@tabiya/core';
 import { forwardRef, useState } from 'react';
 
 interface Hit {

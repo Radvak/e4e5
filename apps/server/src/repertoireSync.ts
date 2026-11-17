@@ -13,7 +13,7 @@
  * removed (added by hand or from games included), comments, annotations and main moves are the
  * source's. The progress of the positions still there is kept all the same.
  */
-import { pgnToMoves, Repertoire, type Color, type RepMove } from '@prepa-cahier/core';
+import { pgnToMoves, Repertoire, type Color, type RepMove } from '@tabiya/core';
 
 export interface ExistingMove extends RepMove {
   id: number;

@@ -1,4 +1,4 @@
-import { groupLines, lineStarts, START_FEN, type Repertoire, type RepMove, type TrainingPosition } from '@prepa-cahier/core';
+import { groupLines, lineStarts, START_FEN, type Repertoire, type RepMove, type TrainingPosition } from '@tabiya/core';
 import type { Key } from 'chessground/types';
 import type { DrawShape } from 'chessground/draw';
 import { useEffect, useMemo, useRef, useState } from 'react';

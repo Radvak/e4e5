@@ -17,7 +17,7 @@ export function InstallPrompt() {
 
   return (
     <div className="install-prompt" role="dialog" aria-label="Installer l’application">
-      <strong>Installer Mon cahier</strong>
+      <strong>Installer Tabiya</strong>
       <p className="small-text">Une icône sur l’écran d’accueil, en plein écran, sans barre de navigateur.</p>
       {!install.canPrompt && (
         <p className="small-text muted">

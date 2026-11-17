@@ -2,7 +2,7 @@
 
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
-app := "mon-cahier"
+app := "tabiya"
 
 default:
     @just --list
@@ -73,4 +73,4 @@ ssh:
 # Copy of the production database to ./backups/
 backup:
     mkdir -p backups
-    fly ssh sftp get -a {{app}} /data/prepa-cahier.db "backups/prepa-cahier-$(date +%Y%m%d-%H%M%S).db"
+    fly ssh sftp get -a {{app}} /data/tabiya.db "backups/tabiya-$(date +%Y%m%d-%H%M%S).db"

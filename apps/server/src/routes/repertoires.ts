@@ -9,7 +9,7 @@ import {
   repertoireToPgn,
   type Color,
   type RepMove,
-} from '@prepa-cahier/core';
+} from '@tabiya/core';
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';

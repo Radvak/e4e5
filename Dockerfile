@@ -28,7 +28,7 @@ RUN pnpm build
 
 FROM node:22-slim
 WORKDIR /app
-ENV NODE_ENV=production PORT=3000 DATABASE_URL=file:/data/prepa-cahier.db
+ENV NODE_ENV=production PORT=3000 DATABASE_URL=file:/data/tabiya.db
 COPY --from=deps /app/node_modules /app/node_modules
 COPY --from=build /app/package.json /app/pnpm-workspace.yaml /app/
 COPY --from=build /app/packages/core /app/packages/core

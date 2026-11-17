@@ -1,4 +1,4 @@
-import { RATING_BUCKETS } from '@prepa-cahier/core';
+import { RATING_BUCKETS } from '@tabiya/core';
 import { rangeLabel, useSettings } from '../settings';
 
 /**

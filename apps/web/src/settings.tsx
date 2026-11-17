@@ -1,4 +1,4 @@
-import { bucketsFor, RATING_BUCKETS, type Speed } from '@prepa-cahier/core';
+import { bucketsFor, RATING_BUCKETS, type Speed } from '@tabiya/core';
 import { createContext, useContext, useState, type ReactNode } from 'react';
 import type { Me } from './api';
 

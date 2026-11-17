@@ -1,4 +1,4 @@
-import type { RepMove } from '@prepa-cahier/core';
+import type { RepMove } from '@tabiya/core';
 import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';

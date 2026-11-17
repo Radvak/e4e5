@@ -2,7 +2,7 @@
  * Training: spaced-repetition reviews (FSRS) of my moves, in the positions where it is my turn.
  * A move card belongs to the user, not to a repertoire: a move learnt once is known everywhere.
  */
-import { groupLines, keptPositions, lineStarts, positionReview, Repertoire, trainingPositions } from '@prepa-cahier/core';
+import { groupLines, keptPositions, lineStarts, positionReview, Repertoire, trainingPositions } from '@tabiya/core';
 import { and, eq, gte, inArray } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { createEmptyCard, fsrs, Rating, type CardInput } from 'ts-fsrs';

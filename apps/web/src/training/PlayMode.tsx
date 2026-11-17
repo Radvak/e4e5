@@ -1,4 +1,4 @@
-import { chooseReply, START_FEN, type ExplorerResponse, type RepMove } from '@prepa-cahier/core';
+import { chooseReply, START_FEN, type ExplorerResponse, type RepMove } from '@tabiya/core';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, type Grade } from '../api';

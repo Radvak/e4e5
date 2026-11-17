@@ -1,4 +1,4 @@
-import { positionFromFen } from '@prepa-cahier/core';
+import { positionFromFen } from '@tabiya/core';
 import { parseSquare } from 'chessops';
 import captureUrl from '../sounds/Capture.mp3';
 import { SOUND_KEY } from '../settings';

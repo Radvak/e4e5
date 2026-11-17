@@ -1,4 +1,4 @@
-import { fenKey, positionFromFen, RATING_BUCKETS, type ExplorerResponse } from '@prepa-cahier/core';
+import { fenKey, positionFromFen, RATING_BUCKETS, type ExplorerResponse } from '@tabiya/core';
 import { and, eq } from 'drizzle-orm';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';

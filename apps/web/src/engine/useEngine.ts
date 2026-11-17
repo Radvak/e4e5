@@ -1,4 +1,4 @@
-import type { EngineLine } from '@prepa-cahier/core';
+import type { EngineLine } from '@tabiya/core';
 import { useEffect, useState } from 'react';
 import { getEngine } from './stockfish';
 

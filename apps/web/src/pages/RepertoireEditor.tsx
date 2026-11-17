@@ -1,4 +1,4 @@
-import { playUci, Repertoire, START_FEN, totalGames, pathTo, type PlayedMove } from '@prepa-cahier/core';
+import { playUci, Repertoire, START_FEN, totalGames, pathTo, type PlayedMove } from '@tabiya/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { DrawShape } from 'chessground/draw';
 import type { Key } from 'chessground/types';

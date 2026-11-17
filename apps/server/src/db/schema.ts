@@ -1,4 +1,4 @@
-import type { ExplorerResponse } from '@prepa-cahier/core';
+import type { ExplorerResponse } from '@tabiya/core';
 import { index, integer, primaryKey, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 const createdAt = () =>

@@ -1,4 +1,4 @@
-import { formatScore, type EngineLine, type PlayedMove } from '@prepa-cahier/core';
+import { formatScore, type EngineLine, type PlayedMove } from '@tabiya/core';
 import { Icon } from '../ui';
 
 /** On/off button of the engine, next to the board navigation. */

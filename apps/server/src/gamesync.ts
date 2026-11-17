@@ -2,7 +2,7 @@
  * Game sync: imports the user's games from Lichess and Chess.com into the `games` table, in the
  * background (one job per user and source), newest games only after the first sync.
  */
-import { gameMovesFromPgn } from '@prepa-cahier/core';
+import { gameMovesFromPgn } from '@tabiya/core';
 import { and, eq, gte } from 'drizzle-orm';
 import { chesscomArchives, chesscomMonth, type ChesscomGame } from './chesscom.js';
 import { db } from './db/client.js';

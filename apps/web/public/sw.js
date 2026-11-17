@@ -1,5 +1,5 @@
 /*
- * Service worker of Mon cahier: makes the app installable and opens it without network.
+ * Service worker of Tabiya: makes the app installable and opens it without network.
  *
  * - Pages (navigations): network first, the cached app shell (index.html) when offline.
  * - /assets/ (content-hashed names) and /stockfish/: cache first, fetched once.
@@ -10,7 +10,7 @@
  * request for one simply goes to the network). Bump VERSION to drop every cache.
  */
 const VERSION = 'v1';
-const CACHE = `mon-cahier-${VERSION}`;
+const CACHE = `tabiya-${VERSION}`;
 const SHELL = '/index.html';
 
 self.addEventListener('install', (event) => {
@@ -21,7 +21,7 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((k) => k.startsWith('mon-cahier-') && k !== CACHE).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => k.startsWith('tabiya-') && k !== CACHE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim()),
   );
 });

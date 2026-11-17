@@ -1,4 +1,4 @@
-# Mon cahier
+# Tabiya
 
 Build and learn chess opening repertoires, with Lichess statistics at your level.
 
@@ -72,7 +72,7 @@ file on a volume at `/data`.
 
 ```bash
 fly auth login
-fly apps create mon-cahier
+fly apps create tabiya
 fly volumes create data --region cdg --size 1
 fly secrets set COOKIE_SECRET=$(openssl rand -hex 32)
 # optional: statistics for users without a linked Lichess account
@@ -80,29 +80,29 @@ fly secrets set LICHESS_APP_TOKEN=lip_...
 fly deploy
 ```
 
-It is then at https://mon-cahier.fly.dev. Then `fly deploy` for each new version. Fly keeps daily snapshots of the volume (5 days); a copy
-of the database: `fly ssh sftp get /data/prepa-cahier.db`.
+It is then at https://tabiya.fly.dev. Then `fly deploy` for each new version. Fly keeps daily snapshots of the volume (5 days); a copy
+of the database: `fly ssh sftp get /data/tabiya.db`.
 
 Where Fly's remote builder cannot be reached (corporate TLS proxy), build locally for Fly's
 x86 machines and deploy the image:
 
 ```bash
-TAG=registry.fly.io/mon-cahier:$(git rev-parse --short HEAD)
+TAG=registry.fly.io/tabiya:$(git rev-parse --short HEAD)
 docker build --platform linux/amd64 --secret id=ca,src=$NODE_EXTRA_CA_CERTS --secret id=npmrc,src=<npmrc> -t $TAG .
 fly auth docker && docker push $TAG
 fly deploy --image $TAG
 ```
 
-Own domain (e.g. mon-cahier.fr): `fly certs add mon-cahier.fr`, add the DNS records it prints at
-the registrar, then set `PUBLIC_URL = "https://mon-cahier.fr"` in `fly.toml` (session cookies and
+Own domain (e.g. tabiya.fr): `fly certs add tabiya.fr`, add the DNS records it prints at
+the registrar, then set `PUBLIC_URL = "https://tabiya.fr"` in `fly.toml` (session cookies and
 the Lichess login redirect use it) and `fly deploy`.
 
 ### Any Docker host
 
 ```bash
-docker build -t prepa-cahier .
-docker run -p 3000:3000 -v prepa-cahier-data:/data \
-  -e PUBLIC_URL=https://your.domain -e COOKIE_SECRET=$(openssl rand -hex 32) prepa-cahier
+docker build -t tabiya .
+docker run -p 3000:3000 -v tabiya-data:/data \
+  -e PUBLIC_URL=https://your.domain -e COOKIE_SECRET=$(openssl rand -hex 32) tabiya
 ```
 
 On a corporate network (TLS proxy, npm mirror), pass them as build secrets (not kept in the

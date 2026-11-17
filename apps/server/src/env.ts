@@ -12,10 +12,10 @@ export const env = {
   host: get('HOST', isProd ? '0.0.0.0' : '127.0.0.1'),
   /** URL users open in their browser (Vite dev server in development). */
   publicUrl: get('PUBLIC_URL', 'http://localhost:5173').replace(/\/$/, ''),
-  databaseUrl: get('DATABASE_URL', 'file:./data/prepa-cahier.db'),
+  databaseUrl: get('DATABASE_URL', 'file:./data/tabiya.db'),
   cookieSecret: get('COOKIE_SECRET', isProd ? undefined : 'dev-secret-change-me-dev-secret-change-me'),
   lichessHost: get('LICHESS_HOST', 'https://lichess.org'),
-  lichessClientId: get('LICHESS_CLIENT_ID', 'mon-cahier'),
+  lichessClientId: get('LICHESS_CLIENT_ID', 'tabiya'),
   explorerUrl: get('EXPLORER_URL', 'https://explorer.lichess.ovh'),
   /** Login with just a name, without Lichess (testing, or networks where Lichess is blocked). */
   guestLogin: get('GUEST_LOGIN', isProd ? 'false' : 'true') === 'true',

@@ -7,7 +7,7 @@ import {
   trainingPositionsFrom,
   type Color,
   type TrainingPosition,
-} from '@prepa-cahier/core';
+} from '@tabiya/core';
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { api, type Grade, type ReviewCard } from '../api';

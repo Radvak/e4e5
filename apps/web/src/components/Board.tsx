@@ -1,4 +1,4 @@
-import { positionFromFen } from '@prepa-cahier/core';
+import { positionFromFen } from '@tabiya/core';
 import { Chessground } from 'chessground';
 import type { Api } from 'chessground/api';
 import type { DrawBrushes, DrawShape } from 'chessground/draw';

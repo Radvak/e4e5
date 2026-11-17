@@ -1,4 +1,4 @@
-import type { RepMove } from '@prepa-cahier/core';
+import type { RepMove } from '@tabiya/core';
 import { createElement } from 'react';
 import type { DrawShape } from 'chessground/draw';
 import type { Key } from 'chessground/types';

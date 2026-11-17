@@ -1,4 +1,4 @@
-import { pgnToMoves } from '@prepa-cahier/core';
+import { pgnToMoves } from '@tabiya/core';
 import { describe, expect, it } from 'vitest';
 import { planSync, type ExistingMove } from '../src/repertoireSync.js';
 

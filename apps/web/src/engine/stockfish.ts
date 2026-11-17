@@ -4,7 +4,7 @@
  * One search at a time: when a new position is asked while a search runs, the engine is
  * stopped and the new search starts after its "bestmove" (so no stale lines are mixed in).
  */
-import { parseInfo, uciFen, type EngineLine } from '@prepa-cahier/core';
+import { parseInfo, uciFen, type EngineLine } from '@tabiya/core';
 
 const ENGINE_URL = '/stockfish/stockfish-19-lite-single.js';
 

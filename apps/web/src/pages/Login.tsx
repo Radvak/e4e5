@@ -5,7 +5,7 @@ import { Button, Tabs } from '../ui';
 
 const ERRORS: Record<string, string> = {
   failed: 'La connexion avec Lichess a échoué, réessayez.',
-  'lichess-already-linked': 'Ce compte Lichess est déjà lié à un autre compte Mon cahier.',
+  'lichess-already-linked': 'Ce compte Lichess est déjà lié à un autre compte Tabiya.',
 };
 
 export function Login() {
@@ -27,7 +27,7 @@ export function Login() {
   return (
     <div className="login">
       <img className="brand-mark" src="/icons/icon.svg" alt="" />
-      <h1>Mon cahier</h1>
+      <h1>Tabiya</h1>
       <p>Construisez votre répertoire d’ouvertures, voyez ce que jouent les joueurs de votre niveau, et faites-le grandir avec vos propres parties.</p>
       {loginError && <p className="notice error">{ERRORS[loginError] ?? ERRORS.failed}</p>}
 

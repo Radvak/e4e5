@@ -7,7 +7,7 @@
  * step (most reached first): fetch them, search again. A search wanting more than
  * `MAX_POSITIONS` positions stops at the step before (nothing missing).
  */
-import { bestMoves, type ExplorerResponse, type SuggestedMove } from '@prepa-cahier/core';
+import { bestMoves, type ExplorerResponse, type SuggestedMove } from '@tabiya/core';
 import { storedStats } from './stats.js';
 
 /** Probability thresholds of the steps (a position reached in fewer games is not explored). */

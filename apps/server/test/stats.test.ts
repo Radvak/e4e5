@@ -1,7 +1,7 @@
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { START_FEN } from '@prepa-cahier/core';
+import { START_FEN } from '@tabiya/core';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 process.env.DATABASE_URL = `file:${join(mkdtempSync(join(tmpdir(), 'pc-stats-')), 'test.db')}`;

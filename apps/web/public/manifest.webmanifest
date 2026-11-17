@@ -1,7 +1,7 @@
 {
   "id": "/",
-  "name": "Mon cahier",
-  "short_name": "Mon cahier",
+  "name": "Tabiya",
+  "short_name": "Tabiya",
   "description": "Répertoires d’ouvertures aux échecs : préparation, statistiques Lichess à votre niveau, entraînement.",
   "lang": "fr",
   "start_url": "/",

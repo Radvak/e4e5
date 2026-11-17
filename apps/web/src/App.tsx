@@ -40,7 +40,7 @@ function Unreachable({ retry, retrying }: { retry: () => void; retrying: boolean
   return (
     <div className="page narrow stack">
       <p className="notice error">
-        {navigator.onLine ? 'Le serveur ne répond pas.' : 'Pas de connexion Internet : Mon cahier a besoin du réseau pour charger vos répertoires.'}
+        {navigator.onLine ? 'Le serveur ne répond pas.' : 'Pas de connexion Internet : Tabiya a besoin du réseau pour charger vos répertoires.'}
       </p>
       <div>
         <Button onClick={retry} disabled={retrying}>
@@ -99,7 +99,7 @@ export function App() {
       <header className="appbar">
         <Link to="/repertoires" className="brand">
           <img className="brand-mark" src="/icons/icon.svg" alt="" />
-          Mon cahier
+          Tabiya
         </Link>
         <nav className="appnav">
           {SECTIONS.map((s) => (

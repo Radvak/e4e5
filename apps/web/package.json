@@ -13,7 +13,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@prepa-cahier/core": "workspace:*",
+    "@tabiya/core": "workspace:*",
     "@tanstack/react-query": "^5.60.0",
     "chessground": "^9.1.0",
     "chessops": "^0.14.2",

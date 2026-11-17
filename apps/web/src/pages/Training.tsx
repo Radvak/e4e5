@@ -1,4 +1,4 @@
-import { positionFromFen, START_FEN, type Color } from '@prepa-cahier/core';
+import { positionFromFen, START_FEN, type Color } from '@tabiya/core';
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useMemo, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';

@@ -16,7 +16,7 @@ import {
   START_FEN,
   positionFromFen,
   type ExplorerResponse,
-} from '@prepa-cahier/core';
+} from '@tabiya/core';
 import { and, eq, inArray } from 'drizzle-orm';
 import { db } from './db/client.js';
 import { SEED_DIR } from './paths.js';

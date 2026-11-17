@@ -1,4 +1,4 @@
-import type { Color, ExplorerResponse, RepMove, SuggestedMove } from '@prepa-cahier/core';
+import type { Color, ExplorerResponse, RepMove, SuggestedMove } from '@tabiya/core';
 
 export interface StatsMeta {
   speeds: string[];
