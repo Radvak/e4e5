@@ -10,9 +10,10 @@ import { Board } from '../components/Board';
 import { EngineLines, EngineToggle } from '../components/EnginePanel';
 import { JumpBox } from '../components/JumpBox';
 import { useEngine } from '../engine/useEngine';
+import { LevelLines, LevelToggle, topLevelMove, useBestMoves, useLevelToggle } from '../components/BestMoves';
 import { MoveTable } from '../components/MoveTable';
 import { StatsSource } from '../components/StatsSource';
-import { explorerParams, speedsLabel, useSettings } from '../settings';
+import { explorerParams, rangeLabel, speedsLabel, useSettings } from '../settings';
 import { PageHeader, Tabs } from '../ui';
 
 type Source = 'lichess' | 'mine';
@@ -138,6 +139,10 @@ export function Explorer({ me }: { me: Me }) {
   };
   const engine = useEngine(fen, engineOn);
   const best = engineOn ? engine.lines[0]?.pv[0] : undefined;
+  // Moves at my level for the side to move (Lichess explorer), only when asked.
+  const [levelOn, toggleLevel] = useLevelToggle();
+  const level = useBestMoves(fen, ex.speeds, ex.ratings, levelOn);
+  const levelBest = levelOn ? topLevelMove(level.data) : undefined;
   /** Plays an engine line from the current position (follows the line when it matches). */
   const playMoves = (moves: PlayedMove[]) => {
     const follows = moves.every((m, i) => line[ply + i]?.uci === m.uci);
@@ -163,9 +168,10 @@ export function Explorer({ me }: { me: Me }) {
       const s = share.get(m.uci) ?? 0;
       if (isPopular(i, s) && !prepared.has(m.uci)) out.push(arrow(m.uci, 'popular', width(s)));
     }
+    if (levelBest) out.push(arrow(levelBest.uci, 'level', 9));
     if (best) out.push(arrow(best.uci, 'engine', 6));
     return out;
-  }, [data, prepared, best?.uci]);
+  }, [data, prepared, best?.uci, levelBest?.uci]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -177,6 +183,7 @@ export function Explorer({ me }: { me: Me }) {
       if (e.key === 'End') goTo(line.length);
       if (e.key === 'f') flip();
       if (e.key === 'e') toggleEngine(!engineOn);
+      if (e.key === 'n') toggleLevel(!levelOn);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -221,6 +228,7 @@ export function Explorer({ me }: { me: Me }) {
           <button onClick={() => goTo(line.length)} title="Fin de la ligne (Fin)">⏭</button>
           <button onClick={flip} title="Retourner l’échiquier (f)">⇅</button>
           <EngineToggle enabled={engineOn} onToggle={toggleEngine} />
+          <LevelToggle enabled={levelOn} onToggle={toggleLevel} />
         </div>
         <EngineLines
           enabled={engineOn}
@@ -228,6 +236,16 @@ export function Explorer({ me }: { me: Me }) {
           depth={engine.depth}
           maxDepth={engine.maxDepth}
           firstMoveNumber={ply}
+          onPlay={playMoves}
+        />
+        <LevelLines
+          enabled={levelOn}
+          fen={fen}
+          firstMoveNumber={ply}
+          speeds={ex.speeds}
+          ratings={ex.ratings}
+          range={rangeLabel(ex.ratings)}
+          engineBest={best?.uci}
           onPlay={playMoves}
         />
       </div>
@@ -248,7 +266,7 @@ export function Explorer({ me }: { me: Me }) {
             ))}
           </div>
           <p className="muted small-text keys">
-            <kbd>←</kbd><kbd>→</kbd> naviguer · <kbd>f</kbd> retourner · <kbd>e</kbd> moteur
+            <kbd>←</kbd><kbd>→</kbd> naviguer · <kbd>f</kbd> retourner · <kbd>e</kbd> moteur · <kbd>n</kbd> à votre niveau
           </p>
         </section>
 

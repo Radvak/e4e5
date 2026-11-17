@@ -224,12 +224,13 @@ function RepertoireRow({ rep, counts, missing }: { rep: RepertoireSummary; count
     mutationFn: () => api.setRepertoireActive(rep.id, !rep.active),
     onSuccess: () => Promise.all([qc.invalidateQueries({ queryKey: ['repertoires'] }), qc.invalidateQueries({ queryKey: ['training-summary'] }), qc.invalidateQueries({ queryKey: ['games-report'] })]),
   });
+  const arrows = (rep.branches ?? []).map((uci) => ({ uci, kind: 'repertoire' as const }));
   // The whole row opens the repertoire; the switch stops the click.
   const stop = (e: React.MouseEvent) => e.stopPropagation();
   return (
     <div className={`rep-row ${rep.active ? '' : 'paused'}`} onClick={() => navigate(`/r/${rep.id}`)}>
       <div className="rep-thumb" title={rep.trunk?.length ? lineText(rep.trunk) : 'Position initiale'}>
-        <MiniBoard fen={rep.trunkFen ?? START_FEN} orientation={rep.color} />
+        <MiniBoard fen={rep.trunkFen ?? START_FEN} orientation={rep.color} arrows={arrows} />
       </div>
       <div className="info">
         <Link className="name" to={`/r/${rep.id}`} onClick={stop}>{rep.name}</Link>

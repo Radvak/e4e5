@@ -62,6 +62,8 @@ export interface RepertoireSummary {
   trunkFen?: string;
   /** The moves from the start while the repertoire has only one (SAN). */
   trunk?: string[];
+  /** The moves played from `trunkFen`: where the variations start (UCI). */
+  branches?: string[];
 }
 export interface StoredMove extends RepMove { id: number; source: string }
 export interface RepertoireDetail extends RepertoireSummary { moves: StoredMove[] }
@@ -145,6 +147,8 @@ export interface BestMovesResponse {
   reach: number | null;
   /** Threshold aimed at. */
   target: number;
+  /** Thresholds of the steps, largest first (step n of steps.length: like an engine depth). */
+  steps?: number[];
   /** Positions of the next step being fetched in the background: ask again. */
   pending: number;
 }

@@ -478,7 +478,7 @@ kbd { display: inline-block; min-width: 18px; padding: 0 4px; margin: 0 1px; bor
 .pgn-import { margin-bottom: 16px; } .pgn-import textarea { margin: 8px 0; }
 
 /* Colours shared with the board arrows (components/arrows.ts): they act as the legend. */
-:root { --rep: #3fb950; --hole: #f0883e; --engine: #58a6ff; }
+:root { --rep: #3fb950; --hole: #f0883e; --engine: #58a6ff; --level: #bc8cff; }
 .rep-moves .san { color: var(--rep); }
 .rep-moves .unsaved, .rep-moves .san.unsaved { color: var(--text-2); }
 .rep-moves li.selected { box-shadow: inset 3px 0 0 var(--rep); }
@@ -490,6 +490,43 @@ kbd { display: inline-block; min-width: 18px; padding: 0 4px; margin: 0 1px; bor
 .engine-line.best .pv button.link:first-child { color: var(--engine); font-weight: 700; }
 .engine-toggle { flex: 0 0 auto; width: 48px; color: var(--muted); }
 .engine-toggle.on { color: #fff; background: var(--engine); border-color: var(--engine); }
+.level-toggle { flex: 0 0 auto; width: 48px; color: var(--muted); }
+.level-toggle.on { color: #fff; background: var(--level); border-color: var(--level); }
+.level-toggle.on:hover { background: #a877f0; }
+/* Moves at my level, under the board (below the engine lines). */
+.level-lines { margin: 8px var(--page-pad) 0; padding: 4px 12px 6px; background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--level); border-radius: var(--radius); min-width: 0; }
+.level-lines > ul { list-style: none; margin: 0; padding: 0; }
+.level-lines > ul > li { border-top: 1px solid var(--border); }
+.level-lines > ul > li:first-child { border-top: none; }
+.level-line { display: flex; align-items: center; gap: 10px; min-height: 34px; font-size: 0.92rem; min-width: 0; }
+.level-line .score { min-width: 52px; text-align: center; font-weight: 700; border-radius: 4px; padding: 1px 4px; background: color-mix(in srgb, var(--level) 22%, transparent); color: #dcc4ff; font-variant-numeric: tabular-nums; }
+.level-line .pv { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.level-line .pv button.link { padding: 0 2px; }
+.level-lines > ul > li:first-child:not(.pruned) .pv button.link:first-child { color: var(--level); font-weight: 700; }
+.level-lines li.pruned .score { background: var(--surface-3); color: var(--muted); font-weight: 600; }
+.level-lines li.pruned .pv { color: var(--text-2); }
+.level-line .games { font-size: 0.8rem; font-variant-numeric: tabular-nums; }
+.level-line .sf-tag { font-size: 0.7rem; font-weight: 700; color: #fff; background: var(--engine); border-radius: 4px; padding: 0 4px; line-height: 1.5; }
+.level-line .unfold { min-height: 0; width: 26px; height: 26px; padding: 0; background: none; border: none; color: var(--muted); }
+.level-line .unfold svg { transition: transform 0.15s; }
+.level-line .unfold.open svg { transform: rotate(90deg); }
+.level-line .unfold:hover { color: var(--text); background: var(--surface-2); }
+.level-lines .suggestion-replies { margin: 0 0 6px 62px; }
+.level-lines .suggestion-replies button.link { padding: 0 2px; }
+.level-status { min-height: 34px; display: flex; align-items: center; font-size: 0.9rem; }
+.level-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 4px 8px; font-size: 0.75rem; min-height: 18px; margin-top: 2px; }
+.level-footer .spacer { flex: 1; }
+.level-footer button.link { font-size: 0.75rem; padding: 0 2px; }
+.level-depth { display: inline-flex; align-items: center; gap: 6px; cursor: help; white-space: nowrap; }
+.level-depth .gauge { display: inline-flex; gap: 2px; }
+.level-depth .gauge span { width: 10px; height: 4px; border-radius: 2px; background: var(--surface-3); }
+.level-depth .gauge span.done { background: var(--level); }
+.level-depth .gauge span.doing { background: color-mix(in srgb, var(--level) 45%, var(--surface-3)); animation: level-pulse 1.2s ease-in-out infinite; }
+.level-depth .pulse { width: 6px; height: 6px; border-radius: 50%; background: var(--level); animation: level-pulse 1.2s ease-in-out infinite; }
+@keyframes level-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+@media (prefers-reduced-motion: reduce) { .level-depth .pulse, .level-depth .gauge span.doing { animation: none; } }
+@media (min-width: 900px) { .level-lines { margin: 8px 0 0; } }
+.suggest-start { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 4px; }
 .engine-lines { margin: 8px var(--page-pad) 0; padding: 4px 12px 8px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
 .engine-lines .engine-line:first-child { border-top: none; }
 .engine-depth { font-size: 0.75rem; text-align: right; margin-top: 2px; }

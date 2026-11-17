@@ -10,8 +10,8 @@ import { EngineLines, EngineToggle } from '../components/EnginePanel';
 import { useEngine } from '../engine/useEngine';
 import { Board } from '../components/Board';
 import { ExplorerPanel } from '../components/ExplorerPanel';
-import { explorerParams, useSettings } from '../settings';
-import { BestMoves } from '../components/BestMoves';
+import { explorerParams, rangeLabel, useSettings } from '../settings';
+import { LevelLines, LevelToggle, topLevelMove, useBestMoves, useLevelToggle } from '../components/BestMoves';
 import { Suggestions } from '../components/Suggestions';
 import { Button, Menu, PageHeader, plural } from '../ui';
 import { useGaps } from '../useGaps';
@@ -181,6 +181,11 @@ export function RepertoireEditor({ me }: { me: Me }) {
     setEngineOn(on);
   };
   const engine = useEngine(fen, engineOn);
+  // Moves at my level (Lichess explorer): only on my turn, and only when asked (many requests).
+  const [levelOn, toggleLevel] = useLevelToggle();
+  const myTurn = rep.isMyTurn(fen);
+  const level = useBestMoves(fen, ex.speeds, ex.ratings, levelOn && myTurn);
+  const levelBest = levelOn && myTurn ? topLevelMove(level.data) : undefined;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -193,6 +198,7 @@ export function RepertoireEditor({ me }: { me: Me }) {
       if (e.key === 'Home') goTo(0);
       if (e.key === 'End') goTo(line.length);
       if (e.key === 'e') toggleEngine(!engineOn);
+      if (e.key === 'n') toggleLevel(!levelOn);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -240,10 +246,12 @@ export function RepertoireEditor({ me }: { me: Me }) {
       // Orange only for the opponent's moves: what others play on my turn is not a hole.
       if (!rep.isMyTurn(fen) && isPopular(i, s) && !rep.has(fen, m.uci) && m.uci !== next?.uci) out.push(arrow(m.uci, 'popular', width(s)));
     }
+    // Level under engine: wider, so both show when they agree.
+    if (levelBest) out.push(arrow(levelBest.uci, 'level', 9));
     const best = engineOn ? engine.lines[0]?.pv[0] : undefined;
     if (best) out.push(arrow(best.uci, 'engine', 6));
     return out;
-  }, [explorer.data, rep, fen, here, engineOn, engine.lines[0]?.pv[0]?.uci, options, selected]);
+  }, [explorer.data, rep, fen, here, engineOn, engine.lines[0]?.pv[0]?.uci, levelBest?.uci, options, selected]);
 
   if (isLoading) return <p className="muted">Chargement…</p>;
   const colorReport = data ? gapReport.data?.[data.color] : undefined;
@@ -291,6 +299,7 @@ export function RepertoireEditor({ me }: { me: Me }) {
           <button onClick={forward} title="Avancer (→)">▶</button>
           <button onClick={() => goTo(line.length)} title="Fin de la ligne (Fin)">⏭</button>
           <EngineToggle enabled={engineOn} onToggle={toggleEngine} />
+          <LevelToggle enabled={levelOn} onToggle={toggleLevel} />
         </div>
         <EngineLines
           enabled={engineOn}
@@ -298,6 +307,17 @@ export function RepertoireEditor({ me }: { me: Me }) {
           depth={engine.depth}
           maxDepth={engine.maxDepth}
           firstMoveNumber={ply}
+          onPlay={playMoves}
+        />
+        <LevelLines
+          enabled={levelOn}
+          fen={fen}
+          firstMoveNumber={ply}
+          speeds={ex.speeds}
+          ratings={ex.ratings}
+          range={rangeLabel(ex.ratings)}
+          blocked={myTurn ? undefined : 'Au tour de l’adversaire : jouez sa réponse pour voir vos coups à votre niveau.'}
+          engineBest={engineOn ? engine.lines[0]?.pv[0]?.uci : undefined}
           onPlay={playMoves}
         />
       </div>
@@ -349,6 +369,14 @@ export function RepertoireEditor({ me }: { me: Me }) {
           {here.length === 0 && !hasDraft && (
             <>
               <p className="muted">Jouez des coups pour continuer la variante.</p>
+              {/* End of the line on my turn: what to play next, from the engine or at my level. */}
+              {myTurn && (!engineOn || !levelOn) && (
+                <div className="suggest-start muted small-text">
+                  Suggérer un coup :
+                  {!engineOn && <Button size="sm" icon="engine" onClick={() => toggleEngine(true)}>Stockfish</Button>}
+                  {!levelOn && <Button size="sm" icon="level" onClick={() => toggleLevel(true)}>À mon niveau</Button>}
+                </div>
+              )}
               {/* End of a saved line: it can become the main line. */}
               {shownStored.length > 0 &&
                 (shownStored.every((m) => m.isMain) ? (
@@ -412,10 +440,6 @@ export function RepertoireEditor({ me }: { me: Me }) {
           )}
         </section>
 
-        {/* End of the line on my turn: what to play next. */}
-        {rep.isMyTurn(fen) && here.length === 0 && (
-          <BestMoves fen={fen} history={shown.map((m) => m.san)} speeds={ex.speeds} ratings={ex.ratings} onPlay={play} />
-        )}
 
         <Suggestions
           gaps={holes}

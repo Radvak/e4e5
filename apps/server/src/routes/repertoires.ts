@@ -78,11 +78,11 @@ export async function repertoireRoutes(app: FastifyInstance) {
     const reps = await db.select().from(repertoires).where(eq(repertoires.userId, req.user!.id)).orderBy(asc(repertoires.createdAt));
     // The trunk of each repertoire (for its thumbnail): the moves from the start while there is only one.
     const moves = await db
-      .select({ repertoireId: repMoves.repertoireId, fromFen: repMoves.fromFen, toFen: repMoves.toFen, san: repMoves.san })
+      .select({ repertoireId: repMoves.repertoireId, fromFen: repMoves.fromFen, toFen: repMoves.toFen, san: repMoves.san, uci: repMoves.uci })
       .from(repMoves)
       .innerJoin(repertoires, eq(repMoves.repertoireId, repertoires.id))
       .where(eq(repertoires.userId, req.user!.id));
-    const graphs = new Map<string, Map<string, { toFen: string; san: string }[]>>();
+    const graphs = new Map<string, Map<string, { toFen: string; san: string; uci: string }[]>>();
     for (const m of moves) {
       let g = graphs.get(m.repertoireId);
       if (!g) graphs.set(m.repertoireId, (g = new Map()));
@@ -103,7 +103,9 @@ export async function repertoireRoutes(app: FastifyInstance) {
         fen = only.toFen;
         seen.add(fen);
       }
-      return { ...r, trunkFen: fen, trunk };
+      // The first moves of the variations, drawn as arrows.
+      const branches = (g?.get(fen) ?? []).map((m) => m.uci);
+      return { ...r, trunkFen: fen, trunk, branches };
     });
   });
 

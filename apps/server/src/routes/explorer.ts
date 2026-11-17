@@ -54,11 +54,11 @@ export async function explorerRoutes(app: FastifyInstance) {
     if (!q.speeds.length || !q.ratings.length) return reply.code(400).send({ error: 'speeds and ratings required' });
     const token = req.user!.lichessToken ?? env.lichessAppToken;
     const first = await getStats(root, q.speeds, q.ratings, token, req.log);
-    if (!first.data) return { moves: [], reach: null, target: REACH_STEPS.at(-1)!, pending: 0 };
+    if (!first.data) return { moves: [], reach: null, target: REACH_STEPS.at(-1)!, steps: REACH_STEPS, pending: 0 };
     const { missing, approximate, ...found } = await suggestMoves(root, { data: first.data, exact: first.meta.exact }, q.speeds, q.ratings);
     const toFetch = missing.length ? missing : found.reach === found.target ? approximate : [];
     const pending = token && toFetch.length ? prefetchStats(toFetch, q.speeds, q.ratings, token, req.log) : 0;
-    return { ...found, pending };
+    return { ...found, steps: REACH_STEPS, pending };
   });
 
   /** Top and recent games of the position (Lichess players at that level). Not stored. */
