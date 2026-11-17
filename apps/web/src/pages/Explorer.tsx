@@ -152,6 +152,9 @@ export function Explorer({ me }: { me: Me }) {
 
   const data = source === 'lichess' ? lichess.data?.data : mine.data?.data;
   const prepared = useMemo(() => groupByMove(repMoves.data ?? []), [repMoves.data]);
+  // My move already prepared in a repertoire of the side to move: no popular (orange) moves to suggest.
+  const turn: Color = fen.split(' ')[1] === 'b' ? 'black' : 'white';
+  const markPopular = !(repMoves.data ?? []).some((r) => r.color === turn);
 
   const shapes = useMemo<DrawShape[]>(() => {
     const total = data ? totalGames(data) : 0;
@@ -166,12 +169,12 @@ export function Explorer({ me }: { me: Me }) {
     const out = [...prepared.keys()].map((uci) => arrow(uci, 'repertoire', width(share.get(uci) ?? 0, 9)));
     for (const [i, m] of (data?.moves ?? []).entries()) {
       const s = share.get(m.uci) ?? 0;
-      if (isPopular(i, s) && !prepared.has(m.uci)) out.push(arrow(m.uci, 'popular', width(s)));
+      if (markPopular && isPopular(i, s) && !prepared.has(m.uci)) out.push(arrow(m.uci, 'popular', width(s)));
     }
     if (levelBest) out.push(arrow(levelBest.uci, 'level', 9));
     if (best) out.push(arrow(best.uci, 'engine', 6));
     return out;
-  }, [data, prepared, best?.uci, levelBest?.uci]);
+  }, [data, prepared, markPopular, best?.uci, levelBest?.uci]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -335,7 +338,7 @@ export function Explorer({ me }: { me: Me }) {
               {mine.error && <ErrorText error={mine.error} />}
             </>
           )}
-          {data && <MoveTable data={data} inRep={(uci) => prepared.has(uci)} onPick={play} />}
+          {data && <MoveTable data={data} inRep={(uci) => prepared.has(uci)} onPick={play} markPopular={markPopular} />}
         </section>
 
         <details className="panel" open={showGames} onToggle={(e) => setShowGames((e.target as HTMLDetailsElement).open)}>

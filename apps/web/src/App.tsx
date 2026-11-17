@@ -4,6 +4,8 @@ import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { api, ApiError } from './api';
 import { InstallPrompt } from './components/InstallPrompt';
 import { useTrainingSummary } from './useTrainingSummary';
+import { useGaps } from './useGaps';
+import type { Me } from './api';
 import { Explorer } from './pages/Explorer';
 import { Games, useGamesReport } from './pages/Games';
 import { Login } from './pages/Login';
@@ -61,6 +63,23 @@ function Badge({ n, label }: { n: number; label: string }) {
 }
 
 /** Mes parties: the errors of my games (moves played instead of the prepared ones), not ignored. */
+/**
+ * Lichess statistics being fetched in the background (gap finder, depth of the lines): how many
+ * positions are left. Shown on every page, which also keeps the fetching going (the gap report
+ * is asked again while some are pending, each pass reaching deeper positions).
+ */
+function StatsProgress({ me }: { me: Me }) {
+  const gaps = useGaps(me);
+  const pending = (gaps.data?.white?.pending ?? 0) + (gaps.data?.black?.pending ?? 0);
+  if (!pending) return null;
+  return (
+    <span className="stats-progress" title={`Statistiques Lichess en cours de récupération : ${plural(pending, 'position', 'positions')}`} aria-live="polite">
+      <span className="spinner" aria-hidden="true" />
+      {pending}
+    </span>
+  );
+}
+
 function GamesBadge() {
   const n = useGamesReport().data?.inbox.errorCount ?? 0;
   return <Badge n={n} label={`${plural(n, 'erreur', 'erreurs')} dans vos parties`} />;
@@ -110,6 +129,7 @@ export function App() {
           ))}
         </nav>
         <div className="spacer" />
+        <StatsProgress me={me.data} />
         <Menu
           trigger={me.data.username.slice(0, 1).toUpperCase()}
           title="Compte"

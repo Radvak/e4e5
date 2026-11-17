@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   analyzeGame,
-  bestRepertoires,
   GameLine,
   gameMovesFromPgn,
   lineStarts,
@@ -74,13 +73,12 @@ describe('repertoire', () => {
 describe('game analysis', () => {
   const rep = new Repertoire('white', pgnToMoves(ITALIAN).moves);
 
-  it('detects an opponent novelty and my reply', () => {
+  it('detects an opponent novelty', () => {
     const a = analyzeGame(rep, 'e4 c5 Nf3 d6'.split(' '));
     expect(a.kind).toBe('opponent-novelty');
     if (a.kind !== 'opponent-novelty') return;
     expect(a.ply).toBe(1);
     expect(a.played.san).toBe('c5');
-    expect(a.myReply?.san).toBe('Nf3');
   });
 
   it('detects my own deviation', () => {
@@ -205,16 +203,6 @@ describe('played games', () => {
     expect(line.at(1)?.uci).toBe('e7e5');
     expect(line.at(3)).toBeNull(); // illegal move: the game ends there
     expect(line.slice(10).map((m) => m.san)).toEqual(['e4', 'e5', 'Nf3']);
-  });
-
-  it('finds every repertoire following a game the longest', () => {
-    const scotch = new Repertoire('white', pgnToMoves('1. e4 e5 2. Nf3 Nc6 3. d4 *').moves);
-    const petrov = new Repertoire('white', pgnToMoves('1. e4 e5 2. Nf3 Nf6 3. Nxe5 *').moves);
-    const best = bestRepertoires([{ id: 'scotch', rep: scotch }, { id: 'petrov', rep: petrov }], ['e4', 'e5', 'Nf3', 'Bc5', 'c3']);
-    expect(best.map((b) => [b.candidate.id, b.analysis.kind, b.analysis.ply])).toEqual([
-      ['scotch', 'opponent-novelty', 3],
-      ['petrov', 'opponent-novelty', 3],
-    ]);
   });
 });
 

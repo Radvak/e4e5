@@ -1,14 +1,14 @@
 import { playSanOn, positionFromFen, type Color } from '@tabiya/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { api, ApiError, type GamesReport, type InboxItem, type RepertoireSummary, type Results } from '../api';
 import { lineText, moveText } from '../chessText';
 import { GameSyncInline, useGameSync } from '../components/GameSync';
 import { SPEED_NAMES, useSettings } from '../settings';
 import { MiniBoard, type MiniArrow } from '../components/MiniBoard';
 import { SwipeRow } from '../components/SwipeRow';
-import { Button, EmptyState, PageHeader, Tabs, plural } from '../ui';
+import { Button, EmptyState, PageHeader, plural } from '../ui';
 
 const PERIOD: Record<number, string> = { 30: '30 derniers jours', 90: '3 derniers mois', 365: '12 derniers mois', 0: 'toutes les parties' };
 const pct = (x: number) => `${Math.round(100 * x)} %`;
@@ -19,10 +19,6 @@ const score = (r: Results) => {
 const date = (iso: string) => new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
 
 const PAGE = 20;
-const KIND_HINT = {
-  errors: 'Vous avez joué autre chose que votre coup préparé.',
-  novelties: 'L’adversaire a joué un coup auquel votre répertoire ne répond pas (en cours de ligne ou après sa fin).',
-} as const;
 
 /**
  * The games compared with the repertoires (period and speeds of the settings). Shared by the page
@@ -39,10 +35,9 @@ export function useGamesReport() {
   });
 }
 
-/** Mes parties: what the games show (cards with a thumbnail), results per repertoire, recent games. */
+/** Mes parties: my errors (cards with a thumbnail), score per opening and per repertoire, recent games. */
 export function Games() {
   const { gamesDays, gamesSpeeds } = useSettings();
-  const [tab, setTab] = useState<'errors' | 'novelties'>('errors');
   const [shown, setShown] = useState(PAGE);
   const [notice, setNotice] = useState<string | null>(null);
   const reps = useQuery({ queryKey: ['repertoires'], queryFn: api.repertoires });
@@ -51,7 +46,7 @@ export function Games() {
   const restore = useMutation({ mutationFn: api.restoreInbox, onSuccess: () => qc.invalidateQueries({ queryKey: ['games-report'] }) });
   const byId = new Map((reps.data ?? []).map((r) => [r.id, r]));
   const r = report.data;
-  const items = r?.inbox[tab] ?? [];
+  const items = r?.inbox.errors ?? [];
 
   return (
     <div className="games-page stack">
@@ -77,26 +72,14 @@ export function Games() {
 
       {r && r.games > 0 && (
         <>
-          <Tabs
-            block
-            value={tab}
-            onChange={(t) => {
-              setTab(t);
-              setShown(PAGE);
-              setNotice(null);
-            }}
-            tabs={[
-              { id: 'errors', label: 'Erreurs' },
-              { id: 'novelties', label: 'Nouveautés' },
-            ]}
-          />
-          <p className="muted small-text" style={{ margin: 0 }}>{KIND_HINT[tab]} Du plus fréquent au moins fréquent.</p>
+          <h3 style={{ margin: 0 }}>Erreurs</h3>
+          <p className="muted small-text" style={{ margin: 0 }}>Vous avez joué autre chose que votre coup préparé. Du plus fréquent au moins fréquent.</p>
           {notice && (
             <p className="notice success">
               {notice} <Link to="/train">Entraîner</Link>
             </p>
           )}
-          {items.length === 0 && <p className="muted">Rien ici.</p>}
+          {items.length === 0 && <p className="muted">Aucune erreur.</p>}
           {items.slice(0, shown).map((item) => (
             <InboxRow key={item.key} item={item} rep={byId.get(item.repertoireId)} onDone={setNotice} />
           ))}
@@ -104,6 +87,7 @@ export function Games() {
             <Button variant="ghost" onClick={() => setShown(shown + PAGE)}>Voir plus ({items.length - shown})</Button>
           )}
 
+          <OpeningStats report={r} />
           <RepertoireStats report={r} reps={byId} />
           <RecentGames report={r} reps={byId} />
         </>
@@ -120,6 +104,84 @@ function ResultBar({ results }: { results: Results }) {
       <span className="draw" style={{ width: pct(results.draw / n) }} />
       <span className="loss" style={{ width: pct(results.loss / n) }} />
     </span>
+  );
+}
+
+const OPENINGS_SHOWN = 8;
+
+/** Score per named opening and colour; a click shows its variations. */
+function OpeningStats({ report }: { report: GamesReport }) {
+  const [open, setOpen] = useState<Set<string>>(new Set());
+  const [all, setAll] = useState(false);
+  const toggle = (key: string) => {
+    const next = new Set(open);
+    if (!next.delete(key)) next.add(key);
+    setOpen(next);
+  };
+  const colors: Color[] = ['white', 'black'];
+  const more = colors.some((c) => report.openings.filter((o) => o.color === c).length > OPENINGS_SHOWN);
+  const explorer = (ucis: string[], color: Color) =>
+    `/explorer?${new URLSearchParams({ line: ucis.join(','), ...(color === 'black' ? { color: 'black' } : {}) })}`;
+  return (
+    <section className="card">
+      <h3>Par ouverture</h3>
+      <div className="table-wrap">
+        <table className="lines">
+          <thead>
+            <tr>
+              <th />
+              <th>Parties</th>
+              <th>Score</th>
+            </tr>
+          </thead>
+          {colors.map((color) => {
+            const rows = report.openings.filter((o) => o.color === color);
+            if (!rows.length) return null;
+            return (
+              <tbody key={color}>
+                {(all ? rows : rows.slice(0, OPENINGS_SHOWN)).map((o) => {
+                  const key = `${color}|${o.family}`;
+                  const expandable = o.variations.length > 1 || o.variations[0]?.name !== o.family;
+                  const isOpen = open.has(key);
+                  return [
+                    <tr key={key} className={expandable ? 'clickable' : undefined} onClick={expandable ? () => toggle(key) : undefined}>
+                      <td>
+                        <span className={`dot ${color}`} /> {o.family}
+                        {expandable && <span className="muted small-text"> {isOpen ? '▾' : '▸'}</span>}
+                      </td>
+                      <td>{o.games}</td>
+                      <td className="meter-cell">
+                        {pct(score(o.results))} <ResultBar results={o.results} />
+                      </td>
+                    </tr>,
+                    ...(isOpen
+                      ? o.variations.map((v) => (
+                          <tr key={`${key}|${v.name}`} className="small-text">
+                            <td style={{ paddingLeft: 28 }}>
+                              <Link to={explorer(v.ucis, color)} title={`${v.eco} · ouvrir dans l’Explorer`}>
+                                {v.name === o.family ? 'Ligne principale' : v.name.slice(o.family.length + 1).trim()}
+                              </Link>
+                            </td>
+                            <td>{v.games}</td>
+                            <td className="meter-cell">
+                              {pct(score(v.results))} <ResultBar results={v.results} />
+                            </td>
+                          </tr>
+                        ))
+                      : []),
+                  ];
+                })}
+              </tbody>
+            );
+          })}
+        </table>
+      </div>
+      {more && (
+        <Button variant="ghost" onClick={() => setAll(!all)}>
+          {all ? 'Moins d’ouvertures' : 'Toutes les ouvertures'}
+        </Button>
+      )}
+    </section>
   );
 }
 
@@ -180,21 +242,18 @@ function RepertoireStats({ report, reps }: { report: GamesReport; reps: Map<stri
 
 /** The report without one inbox item (shown at once, before the server's new report). */
 function withoutItem(r: GamesReport, item: InboxItem): GamesReport {
-  const keep = (i: InboxItem) => i.key !== item.key;
-  const wasError = r.inbox.errors.some((i) => i.key === item.key);
+  const errors = r.inbox.errors.filter((i) => i.key !== item.key);
   return {
     ...r,
     inbox: {
-      errors: r.inbox.errors.filter(keep),
-      novelties: r.inbox.novelties.filter(keep),
-      errorCount: Math.max(0, r.inbox.errorCount - (wasError ? 1 : 0)),
+      errors,
+      errorCount: Math.max(0, r.inbox.errorCount - (r.inbox.errors.length - errors.length)),
     },
   };
 }
 
 function InboxRow({ item, rep, onDone }: { item: InboxItem; rep: RepertoireSummary | undefined; onDone: (message: string) => void }) {
   const qc = useQueryClient();
-  const navigate = useNavigate();
   // Dealt with: off the list (and the badge of Mes parties) at once, then the new report; the
   // Entraîner badge counts a position sent to review.
   const hide = () => {
@@ -220,13 +279,6 @@ function InboxRow({ item, rep, onDone }: { item: InboxItem; rep: RepertoireSumma
     return learnt;
   };
   const position = lineText(item.line.sans) || 'la position initiale';
-  const now = useMutation({
-    mutationFn: sendToReview,
-    onSuccess: () => {
-      hide();
-      navigate(`/r/${item.repertoireId}/train?${new URLSearchParams({ from: item.fen, mode: 'review' })}`);
-    },
-  });
   const later = useMutation({
     mutationFn: sendToReview,
     onSuccess: (learnt) => {
@@ -239,28 +291,21 @@ function InboxRow({ item, rep, onDone }: { item: InboxItem; rep: RepertoireSumma
     },
   });
   const dismiss = useMutation({ mutationFn: () => api.dismissInbox(item.key), onSuccess: hide });
-  const busy = now.isPending || later.isPending || dismiss.isPending;
+  const busy = later.isPending || dismiss.isPending;
 
   const line = item.line.sans;
-  const afterMove = [...item.line.ucis, item.move.uci];
-  const after = [...line, item.move.san];
-  // Opened on the line with the move (and, after an opponent's move, your usual reply) as a draft:
-  // nothing is saved until "Enregistrer la variante".
-  const draft = item.kind !== 'deviation' && item.replies[0] ? [...afterMove, item.replies[0].uci] : afterMove;
-  const editor = `/r/${item.repertoireId}?${new URLSearchParams({ line: draft.join(',') })}`;
-  const error = now.error ?? later.error ?? dismiss.error;
+  // The position in the Explorer (statistics, engine, every repertoire), from my side.
+  const explorer = `/explorer?${new URLSearchParams({ ...(item.line.ucis.length ? { line: item.line.ucis.join(',') } : {}), ...(rep?.color === 'black' ? { color: 'black' } : {}) })}`;
+  const error = later.error ?? dismiss.error;
 
-  // Thumbnail: the position, with the opponent's move (orange) or my move (red) and the prepared ones (green).
-  const arrows: MiniArrow[] =
-    item.kind === 'deviation'
-      ? [
-          ...item.expected.flatMap((san) => {
-            const m = playSanOn(positionFromFen(item.fen), san);
-            return m ? [{ uci: m.uci, kind: 'repertoire' as const }] : [];
-          }),
-          { uci: item.move.uci, kind: 'mistake' },
-        ]
-      : [{ uci: item.move.uci, kind: 'popular' }];
+  // Thumbnail: the position, with my move (red) and the prepared ones (green).
+  const arrows: MiniArrow[] = [
+    ...item.expected.flatMap((san) => {
+      const m = playSanOn(positionFromFen(item.fen), san);
+      return m ? [{ uci: m.uci, kind: 'repertoire' as const }] : [];
+    }),
+    { uci: item.move.uci, kind: 'mistake' },
+  ];
 
   const color = rep?.color ?? 'white';
   const dialog = useRef<HTMLDialogElement>(null);
@@ -279,35 +324,20 @@ function InboxRow({ item, rep, onDone }: { item: InboxItem; rep: RepertoireSumma
   );
   const actions = (
     <div className="row inbox-actions">
-      {item.kind === 'deviation' && (
-        <>
-          <Button size="sm" variant="primary" disabled={busy} onClick={() => now.mutate()} title="Réviser cette position maintenant">
-            Réviser
-          </Button>
-          <Button size="sm" disabled={busy} onClick={() => later.mutate()} title="Ajouter cette position à vos révisions du jour">
-            Plus tard
-          </Button>
-        </>
-      )}
-      <Button
-        size="sm"
-        variant={item.kind === 'deviation' ? 'ghost' : 'primary'}
-        to={editor}
-        title="Préparer dans l’éditeur : ouvrir le répertoire sur cette ligne (rien n’est enregistré sans votre accord)"
-      >
-        Préparer
+      <Button size="sm" variant="primary" disabled={busy} onClick={() => later.mutate()} title="Ajouter cette position à vos révisions du jour">
+        À réviser
       </Button>
-      <Button size="sm" variant="ghost" disabled={busy} onClick={() => dismiss.mutate()} title="Masquer cet élément">Ignorer</Button>
+      <Button size="sm" disabled={busy} onClick={() => dismiss.mutate()} title="Masquer cet élément">Ignorer</Button>
+      <Button size="sm" variant="ghost" icon="compass" to={explorer} title="Voir cette position dans l’Explorer (statistiques, moteur, vos répertoires)">
+        Explorer
+      </Button>
     </div>
   );
   const errorText = error && <p className="error small-text">{error.message}</p>;
 
   return (
-    // On touch screens: swipe right to ignore, left to review later (errors).
-    <SwipeRow
-      right={{ label: 'Ignorer', action: () => dismiss.mutateAsync() }}
-      left={item.kind === 'deviation' ? { label: 'Plus tard', action: () => later.mutateAsync() } : undefined}
-    >
+    // On touch screens: swipe left to ignore, right to review later.
+    <SwipeRow right={{ label: 'À réviser', action: () => later.mutateAsync() }} left={{ label: 'Ignorer', action: () => dismiss.mutateAsync() }}>
       {/* The whole card opens the detail, except its buttons and links. */}
       <article className="card game-card clickable" onClick={(e) => !(e.target as HTMLElement).closest('button, a') && open()}>
         <button type="button" className="thumb-button" onClick={open} aria-label="Voir le détail et les parties">
@@ -342,19 +372,9 @@ function InboxRow({ item, rep, onDone }: { item: InboxItem; rep: RepertoireSumma
               <MiniBoard fen={item.fen} orientation={color} arrows={arrows} className="mini-board-large" />
               {head}
               <p className="inbox-body">
-                {item.kind === 'deviation' && (
-                  <>
-                    Vous avez joué <strong>{moveText(line, item.move.san, true)}</strong> au lieu de{' '}
-                    <strong>{item.expected.map((s) => moveText(line, s, true)).join(' ou ')}</strong>.{' '}
-                  </>
-                )}
-                {item.kind === 'novelty' && <>L’adversaire a joué un coup que vous n’avez pas préparé. </>}
-                {item.kind === 'end' && <>Votre ligne s’arrête ici. </>}
-                {plural(item.games, 'partie', 'parties')}, score {pct(score(item.results))}
-                {item.replies.length > 0 && (
-                  <> · vos réponses : {item.replies.map((x) => `${moveText(after, x.san, true)} (${x.games}, ${pct(score(x.results))})`).join(', ')}</>
-                )}
-                .
+                Vous avez joué <strong>{moveText(line, item.move.san, true)}</strong> au lieu de{' '}
+                <strong>{item.expected.map((s) => moveText(line, s, true)).join(' ou ')}</strong>.{' '}
+                {plural(item.games, 'partie', 'parties')}, score {pct(score(item.results))}.
               </p>
               {actions}
               {errorText}
@@ -368,7 +388,6 @@ function InboxRow({ item, rep, onDone }: { item: InboxItem; rep: RepertoireSumma
                           {g.opponent} <span className="muted">{g.opponentRating ?? ''}</span>
                         </td>
                         <td className={`result ${g.result}`}>{RESULT[g.result]}</td>
-                        {item.kind !== 'deviation' && <td className="small-text">{g.reply ? moveText(after, g.reply, true) : '—'}</td>}
                         <td>
                           <a className="small-text" href={g.url} target="_blank" rel="noreferrer">partie ↗</a>
                         </td>

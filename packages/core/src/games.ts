@@ -6,8 +6,8 @@ import type { Repertoire, RepMove } from './repertoire.js';
 export type GameAnalysis =
   /** I played something else than my prepared move. */
   | { kind: 'my-deviation'; ply: number; fen: string; played: PlayedMove; expected: RepMove[] }
-  /** The opponent played a move I have not prepared. `myReply`: what I answered in the game. */
-  | { kind: 'opponent-novelty'; ply: number; fen: string; played: PlayedMove; known: RepMove[]; myReply?: PlayedMove }
+  /** The opponent played a move I have not prepared. */
+  | { kind: 'opponent-novelty'; ply: number; fen: string; played: PlayedMove }
   /** The repertoire has nothing more here (end of a prepared line). */
   | { kind: 'end-of-prep'; ply: number; fen: string; next?: PlayedMove }
   /** The whole game stayed inside the repertoire. */
@@ -52,34 +52,8 @@ export function analyzeGame(rep: Repertoire, game: string[] | GameLine): GameAna
     if (prepared.length === 0) return { kind: 'end-of-prep', ply, fen, next: played };
     if (prepared.some((m) => m.uci === played.uci)) continue;
     if (rep.isMyTurn(fen)) return { kind: 'my-deviation', ply, fen, played, expected: prepared };
-    return { kind: 'opponent-novelty', ply, fen, played, known: prepared, myReply: line.at(ply + 1) ?? undefined };
+    return { kind: 'opponent-novelty', ply, fen, played };
   }
-}
-
-/**
- * Among several repertoires of my color, the ones the game follows the longest (all of them
- * when several leave it at the same move), with the analysis of each.
- */
-export function bestRepertoires<T extends { rep: Repertoire }>(
-  candidates: T[],
-  game: string[] | GameLine,
-): { candidate: T; analysis: GameAnalysis }[] {
-  const line = game instanceof GameLine ? game : new GameLine(game);
-  let best: { candidate: T; analysis: GameAnalysis }[] = [];
-  for (const candidate of candidates) {
-    const analysis = analyzeGame(candidate.rep, line);
-    if (!best.length || analysis.ply > best[0]!.analysis.ply) best = [{ candidate, analysis }];
-    else if (analysis.ply === best[0]!.analysis.ply) best.push({ candidate, analysis });
-  }
-  return best;
-}
-
-/** Among several repertoires of my color, the one the game follows the longest. */
-export function bestRepertoire<T extends { rep: Repertoire }>(
-  candidates: T[],
-  game: string[] | GameLine,
-): { candidate: T; analysis: GameAnalysis } | null {
-  return bestRepertoires(candidates, game)[0] ?? null;
 }
 
 /**

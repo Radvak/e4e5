@@ -217,7 +217,7 @@ export function RepertoireEditor({ me }: { me: Me }) {
 
   /**
    * Arrows: green = move in the repertoire (thicker = more popular), orange = popular move
-   * (3%+ of games) that is not in the repertoire.
+   * (3%+ of games) that is not in the repertoire, or next move of the line not saved yet.
    */
   const shapes = useMemo<DrawShape[]>(() => {
     const ed = explorer.data?.data;
@@ -239,7 +239,8 @@ export function RepertoireEditor({ me }: { me: Me }) {
     // Drawn last, so its outline stays visible over an arrow on the same line.
     if (next) {
       const w = width(share.get(next.uci) ?? 0, 9);
-      out.push(arrow(next.uci, 'outline', w + OUTLINE_EXTRA), arrow(next.uci, 'next', w));
+      const saved = here.some((m) => m.uci === next.uci);
+      out.push(arrow(next.uci, 'outline', w + OUTLINE_EXTRA), arrow(next.uci, saved ? 'next' : 'nextDraft', w));
     }
     for (const [i, m] of (ed?.moves ?? []).entries()) {
       const s = share.get(m.uci) ?? 0;

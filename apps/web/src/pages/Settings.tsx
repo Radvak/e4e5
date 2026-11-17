@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import type { Me } from '../api';
+import { gapCutoffFor, LINE_DEPTHS } from '@tabiya/core';
+import type { Me, TrainingSummary } from '../api';
 import { RatingRange } from '../components/RatingRange';
-import { explorerParams, NO_LIMIT, SPEED_CHOICES, SPEED_NAMES, useSettings, type LearnOrder, type SpeedChoice } from '../settings';
-import { PageHeader } from '../ui';
+import { depthPct, explorerParams, NO_LIMIT, SPEED_CHOICES, SPEED_NAMES, useSettings, type LearnOrder, type SpeedChoice } from '../settings';
+import { PageHeader, plural } from '../ui';
+import { useTrainingSummary } from '../useTrainingSummary';
 
 const PERIODS = [
   { days: 30, label: '30 derniers jours' },
@@ -12,8 +14,6 @@ const PERIODS = [
   { days: 0, label: 'Toutes les parties' },
 ];
 const GAME_SPEEDS = ['bullet', 'blitz', 'rapid', 'classical', 'daily'];
-const CUTOFFS = [0.005, 0.01, 0.02, 0.05];
-const pct = (x: number) => `${(100 * x).toLocaleString('fr-FR')} %`;
 
 /** Paramètres: the app's settings (games analysed, statistics, training, board). Accounts: Account page. */
 export function Settings({ me }: { me: Me }) {
@@ -131,7 +131,7 @@ export function Settings({ me }: { me: Me }) {
             <option value="repertoire">Ordre du répertoire</option>
           </select>
         </div>
-        <KeepShareSetting />
+        <LineDepthSetting me={me} />
         <div className="setting">
           <div className="what">
             <strong>Temps pour répondre</strong>
@@ -143,48 +143,44 @@ export function Settings({ me }: { me: Me }) {
             ))}
           </select>
         </div>
-        <div className="setting">
-          <div className="what">
-            <strong>Coups manquants</strong>
-            <div className="hint">Coups adverses non préparés joués dans au moins cette part des parties.</div>
-          </div>
-          <select value={settings.gapCutoff} onChange={(e) => settings.setGapCutoff(Number(e.target.value))}>
-            {CUTOFFS.map((c) => (
-              <option key={c} value={c}>{pct(c)}</option>
-            ))}
-          </select>
-        </div>
       </section>
     </div>
   );
 }
 
 /**
- * Shortened lines: % of each repertoire's positions trained, the most likely at my level first.
- * Saved after a pause while dragging (each value recomputes the training counts).
+ * Depth of the lines: positions trained (and holes listed) from a share of the games at my level.
+ * Each choice shows the positions it trains in the active repertoires, more telling than the share.
  */
-function KeepShareSetting() {
-  const { keepShare, setKeepShare } = useSettings();
-  const [value, setValue] = useState(keepShare);
-  useEffect(() => {
-    if (value === keepShare) return;
-    const t = setTimeout(() => setKeepShare(value), 400);
-    return () => clearTimeout(t);
-  }, [value]);
+function LineDepthSetting({ me }: { me: Me }) {
+  const { lineDepth, setLineDepth } = useSettings();
+  const summary = useTrainingSummary(me);
+  const active = (summary.data ?? []).filter((s) => s.active);
+  const sum = (f: (s: TrainingSummary) => number | undefined) => (summary.data ? active.reduce((n, s) => n + (f(s) ?? 0), 0) : undefined);
+  const withStats = active.every((s) => s.byDepth);
+  const choices = [
+    ...LINE_DEPTHS.map((d) => ({ depth: d as number, positions: withStats ? sum((s) => s.byDepth?.[String(d)]) : undefined, label: `au moins ${depthPct(d)} des parties` })),
+    { depth: 0, positions: sum((s) => s.positions), label: 'lignes entières' },
+  ];
   return (
-    <div className="setting">
+    <div className="setting setting-block">
       <div className="what">
-        <strong>Longueur des lignes</strong>
+        <strong>Profondeur des lignes</strong>
         <div className="hint">
-          {value === 100
-            ? 'Toutes les positions de vos répertoires sont entraînées.'
-            : `Seules les ${value} % de positions les plus probables à votre niveau (statistiques Lichess) sont entraînées, dans chaque répertoire.`}
+          Une position est entraînée si on la rencontre dans au moins cette part des parties à votre niveau (statistiques Lichess).
+          Les coups manquants sont signalés à partir du même seuil{lineDepth === 0 ? ` (${depthPct(gapCutoffFor(0))} avec les lignes entières)` : ''}.
+          Positions de vos répertoires en entraînement.
         </div>
       </div>
-      <label className="range-setting">
-        <input type="range" min={1} max={100} value={value} onChange={(e) => setValue(Number(e.target.value))} aria-label="Part des positions entraînées" />
-        <span>{value === 100 ? '100 % (lignes entières)' : `${value} %`}</span>
-      </label>
+      <div className="depth-choices" role="radiogroup" aria-label="Profondeur des lignes">
+        {choices.map((c) => (
+          <label key={c.depth} className={`depth-choice ${lineDepth === c.depth ? 'on' : ''}`}>
+            <input type="radio" name="line-depth" checked={lineDepth === c.depth} onChange={() => setLineDepth(c.depth)} />
+            <strong>{c.positions === undefined ? '…' : plural(c.positions, 'position', 'positions')}</strong>
+            <span className="muted">{c.label}</span>
+          </label>
+        ))}
+      </div>
     </div>
   );
 }

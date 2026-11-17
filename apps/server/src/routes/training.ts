@@ -2,7 +2,7 @@
  * Training: spaced-repetition reviews (FSRS) of my moves, in the positions where it is my turn.
  * A move card belongs to the user, not to a repertoire: a move learnt once is known everywhere.
  */
-import { groupLines, keptPositions, lineStarts, positionReview, Repertoire, trainingPositions } from '@tabiya/core';
+import { gapCutoffFor, groupLines, keptPositions, LINE_DEPTHS, lineStarts, positionReview, Repertoire, trainingPositions } from '@tabiya/core';
 import { and, eq, gte, inArray } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { createEmptyCard, fsrs, Rating, type CardInput } from 'ts-fsrs';
@@ -27,13 +27,12 @@ const summaryQuery = z.object({
   /** New lines to learn per day, all repertoires together (1000: no limit). */
   newPerDay: z.coerce.number().int().min(0).max(1000).default(5),
   /**
-   * Shortened lines: share (0.01-1) of each repertoire's positions kept, the most likely to come
-   * up (see core keptPositions), with the statistics settings below. 1: every position.
+   * Depth of the lines: positions trained from this probability of coming up at the user's level
+   * (see core keptPositions), with the statistics settings below. 0: whole lines.
    */
-  keep: z.coerce.number().min(0.01).max(1).default(1),
+  depth: z.coerce.number().min(0).max(0.2).default(0),
   speeds: z.string().optional(),
   ratings: z.string().optional(),
-  cutoff: z.string().optional(),
 });
 
 type CardRow = typeof moveCards.$inferSelect;
@@ -131,11 +130,12 @@ export async function trainingRoutes(app: FastifyInstance) {
    * today (a move not learnt yet), lines to go through, and total.
    */
   app.get('/api/training/summary', async (req) => {
-    const { dayStart, newPerDay, keep, speeds, ratings, cutoff } = summaryQuery.parse(req.query);
+    const { dayStart, newPerDay, depth, speeds, ratings } = summaryQuery.parse(req.query);
     const reps = await db.select().from(repertoires).where(eq(repertoires.userId, req.user!.id));
     if (!reps.length) return [];
-    // Reach probabilities for shortened lines (the gap finder's, as the training page uses).
-    const stats = keep < 1 && speeds && ratings ? gapsQuery.safeParse({ speeds, ratings, cutoff }) : null;
+    // Reach probabilities (the gap finder's, as the training page uses, same cutoff so the same
+    // cached report): the lines' depth, and the positions trained at each depth.
+    const stats = speeds && ratings ? gapsQuery.safeParse({ speeds, ratings, cutoff: gapCutoffFor(depth) }) : null;
     // Statistics unavailable (error): whole lines, like the training page.
     const gaps =
       stats?.success && stats.data.speeds.length && stats.data.ratings.length
@@ -158,7 +158,8 @@ export async function trainingRoutes(app: FastifyInstance) {
       const graph = new Repertoire(r.color, moves.filter((m) => m.repertoireId === r.id));
       const reach = gaps?.[r.color]?.reach;
       const all = trainingPositions(graph);
-      const kept = reach ? keptPositions(all, (f) => reach[f], keep) : null;
+      const reachOf = (f: string) => reach?.[f];
+      const kept = reach ? keptPositions(all, reachOf, depth) : null;
       const list = kept ? all.filter((p) => kept.has(p.fen)) : all;
       const state = new Map(list.map((p) => [p.fen, positionReview(graph.movesAt(p.fen), (uci) => cardMap.get(`${p.fen} ${uci}`), now)]));
       const fresh = list.filter((p) => state.get(p.fen)!.status === 'new');
@@ -167,6 +168,10 @@ export async function trainingRoutes(app: FastifyInstance) {
       return {
         r,
         total: list.length,
+        /** Every position of mine in the repertoire (whole lines). */
+        positions: all.length,
+        /** Positions trained at each depth of the lines (null: statistics unavailable). */
+        byDepth: reach ? Object.fromEntries(LINE_DEPTHS.map((d) => [String(d), keptPositions(all, reachOf, d).size])) : null,
         /** Lines of the repertoire: its distinct line ends. */
         totalLines: [...graph.reachable()].filter((f) => graph.movesAt(f).length === 0).length,
         due: dueSet.size,

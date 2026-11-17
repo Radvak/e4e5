@@ -9,7 +9,7 @@
  * stored data for the requested range are fetched in the background (`pending`): the client
  * asks again until nothing is pending, and each pass may reach deeper positions.
  */
-import { findGaps, gapCandidate, Repertoire, rankRepertoires, turnOf, type Color } from '@tabiya/core';
+import { findGaps, gapCandidate, LINE_DEPTHS, Repertoire, rankRepertoires, turnOf, type Color } from '@tabiya/core';
 import { eq, inArray, sql } from 'drizzle-orm';
 import type { FastifyBaseLogger, FastifyInstance } from 'fastify';
 import { z } from 'zod';
@@ -22,13 +22,15 @@ import { statsParams } from './explorer.js';
 
 export const gapsQuery = statsParams.extend({
   /** Holes listed, and statistics fetched, from this probability. */
-  cutoff: z.coerce.number().min(0.002).max(0.2).default(0.01),
+  cutoff: z.coerce.number().min(Math.min(...LINE_DEPTHS)).max(0.2).default(0.01),
 });
 /**
- * The analysis explores down to a quarter of the listed cutoff: enough for the holes (a hole
- * reached by several move orders adds up), much faster than a fine exploration.
+ * The analysis explores down to a quarter of the smallest depth of the lines (or of the listed
+ * cutoff): enough for the holes (a hole reached by several move orders adds up) and for the
+ * positions trained at each depth (Paramètres shows them all). Stored statistics only, so cheap;
+ * fetches stay at the asked cutoff.
  */
-const exploreFor = (cutoff: number) => cutoff / 4;
+const exploreFor = (cutoff: number) => Math.min(cutoff, ...LINE_DEPTHS) / 4;
 /** Answers kept until the repertoires, the settings or the stored statistics change. */
 const cache = new Map<string, { signature: string; at: number; body: unknown }>();
 const CACHE_MS = 10 * 60_000;
@@ -77,7 +79,9 @@ export async function gapsReport(user: User, q: z.infer<typeof gapsQuery>, log: 
     const opponentFens = [...new Set(colorMoves.map((m) => m.fromFen))].filter((f) => turnOf(f) !== color);
     const stored = await storedStats(opponentFens, q.speeds, q.ratings);
     const statsAt = (fen: string) => stored.get(fen)?.data;
-    const report = findGaps(merged, statsAt, { cutoff: EXPLORE });
+    // Each of my moves carries the whole probability: how often a position comes up if I play its
+    // line (two repertoires 1. e4 and 1. d4 do not halve each other's positions and holes).
+    const report = findGaps(merged, statsAt, { cutoff: EXPLORE, split: false });
 
     // Fetched in the background: positions without exact statistics, reached often enough.
     const often = (fen: string) => (report.reached.get(fen) ?? 0) >= q.cutoff;
@@ -87,26 +91,20 @@ export async function gapsReport(user: User, q: z.infer<typeof gapsQuery>, log: 
 
     const candidates = own.map((r) => gapCandidate(r.id, new Repertoire(color, colorMoves.filter((m) => m.repertoireId === r.id))));
     return {
-      /** Expected number of moves played in the preparation (a lower bound when `unknown` > 0). */
-      depth: report.depth / 2,
-      lost: report.lost,
-      ends: report.ends,
-      /** Share of games reaching positions without statistics. */
-      unknown: report.unknown,
       truncated: report.truncated,
       /** Positions analysed with statistics of another range (exact ones not stored yet). */
       approximate: approximate.length,
-      /** Positions without any statistics. */
-      missing: report.missingStats.length,
+      /** Positions without any statistics, reached often enough to matter (they are fetched). */
+      missing: report.missingStats.filter((m) => m.prob >= q.cutoff).length,
       /** Positions being fetched in the background: ask again later. */
       pending,
       /**
-       * Probability of reaching each position where it is my turn (the positions to learn),
-       * explored down to EXPLORE: orders the new positions by how often they come up.
+       * Probability of reaching each position of the repertoire if I play its line (capped at 1:
+       * move orders of mine meeting again add up), explored down to EXPLORE: orders
+       * the new positions by how often they come up, and stops the lines (core keptPositions,
+       * which needs the opponent's positions too to bound the ones without statistics).
        */
-      reach: Object.fromEntries(
-        [...report.reached].filter(([fen]) => turnOf(fen) === color).map(([fen, p]) => [fen, Math.round(p * 1e6) / 1e6]),
-      ),
+      reach: Object.fromEntries([...report.reached].map(([fen, p]) => [fen, Math.round(Math.min(1, p) * 1e6) / 1e6])),
       gaps: report.gaps
         .filter((g) => g.prob >= q.cutoff)
         .slice(0, MAX_GAPS)
@@ -116,7 +114,7 @@ export async function gapsReport(user: User, q: z.infer<typeof gapsQuery>, log: 
             kind: g.kind,
             fen: g.fen,
             move: g.move ?? null,
-            prob: g.prob,
+            prob: Math.min(1, g.prob),
             line: g.path.map((m) => m.san),
             ucis: g.path.map((m) => m.uci),
             /** null: a deviation inside every repertoire's trunk (belongs to none of them). */

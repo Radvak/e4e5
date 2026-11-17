@@ -118,7 +118,7 @@ export function Repertoires({ me }: { me: Me }) {
       <PageHeader
         title="Répertoires"
         subtitle={list.length ? plural(list.length, 'répertoire', 'répertoires') : undefined}
-        actions={<Button variant="primary" icon="plus" onClick={() => setCreating(!creating)}>Nouveau</Button>}
+        actions={list.length > 0 && <Button variant="primary" icon="plus" onClick={() => setCreating(!creating)}>Nouveau</Button>}
       />
 
       {creating && (
@@ -234,7 +234,15 @@ function RepertoireRow({ rep, counts, missing }: { rep: RepertoireSummary; count
       </div>
       <div className="info">
         <Link className="name" to={`/r/${rep.id}`} onClick={stop}>{rep.name}</Link>
-        <div className="meta">{counts ? plural(counts.totalLines, 'ligne', 'lignes') : '…'}</div>
+        <div className="meta">
+          {counts ? plural(counts.totalLines, 'ligne', 'lignes') : '…'}
+          {/* Depth of the lines (Paramètres): the positions trained out of all of them. */}
+          {counts && counts.total < counts.positions && (
+            <span title="Positions entraînées à la profondeur des lignes choisie (Paramètres), sur toutes celles du répertoire">
+              {' · '}{counts.total} / {plural(counts.positions, 'position', 'positions')}
+            </span>
+          )}
+        </div>
         <div className="badges">
           {rep.active && counts && counts.dueLines > 0 && (
             <span className="badge warn" title="Lignes à revoir aujourd’hui">{counts.dueLines} à revoir</span>

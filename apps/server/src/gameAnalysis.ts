@@ -57,8 +57,6 @@ export interface GameReport {
   path: PlayedMove[];
   /** The move played there (mine for a deviation, the opponent's otherwise). */
   played: PlayedMove | null;
-  /** My answer to an opponent novelty, or to the opponent's move after the end of a line. */
-  reply: PlayedMove | null;
   /** My prepared moves, for a deviation. */
   expected: string[];
 }
@@ -84,7 +82,6 @@ export function analyseGames(rows: Game[], reps: RepInfo[]): GameReport[] {
       fen: line.at(ply)?.fromFen ?? '',
       path: line.slice(ply),
       played: line.at(ply),
-      reply: null,
       expected: [],
     });
     const myFirstPly = game.color === 'white' ? 0 : 1;
@@ -97,14 +94,13 @@ export function analyseGames(rows: Game[], reps: RepInfo[]): GameReport[] {
     const base = { game, repertoireId: owner, kind: a.kind, ply: a.ply, fen, path };
     switch (a.kind) {
       case 'in-book':
-        return { ...base, played: null, reply: null, expected: [] };
+        return { ...base, played: null, expected: [] };
       case 'my-deviation':
-        return { ...base, played: a.played, reply: null, expected: a.expected.map((m) => m.san) };
+        return { ...base, played: a.played, expected: a.expected.map((m) => m.san) };
       case 'opponent-novelty':
-        return { ...base, played: a.played, reply: a.myReply ?? null, expected: [] };
+        return { ...base, played: a.played, expected: [] };
       case 'end-of-prep':
-        // After the opponent's move, my answer extends the line too.
-        return { ...base, played: a.next ?? null, reply: side.merged.isMyTurn(a.fen) ? null : line.at(a.ply + 1), expected: [] };
+        return { ...base, played: a.next ?? null, expected: [] };
     }
   });
 }

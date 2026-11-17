@@ -84,8 +84,12 @@ export interface ReviewLogEntry { repertoireId: string; grade: Grade; isNew: boo
 export interface TrainingSummary {
   repertoireId: string;
   active: boolean;
-  /** Positions to train, and lines of the repertoire. */
+  /** Positions to train (at the depth of the lines), and lines of the repertoire. */
   total: number;
+  /** Every position of mine in the repertoire (whole lines). */
+  positions: number;
+  /** Positions trained at each depth of the lines (key: core LINE_DEPTHS value; null: no statistics). */
+  byDepth: Record<string, number> | null;
   totalLines: number;
   /** Positions due, and the lines they form. */
   due: number;
@@ -119,17 +123,11 @@ export interface Gap {
 }
 /** Analysis of all the repertoires of one colour together. */
 export interface GapReport {
-  /** Expected number of moves played in the preparation (a minimum when `unknown` > 0). */
-  depth: number;
-  lost: number;
-  ends: number;
-  /** Share of games reaching positions without statistics. */
-  unknown: number;
   truncated: boolean;
   approximate: number;
   missing: number;
   pending: number;
-  /** Probability of reaching each position where it is my turn (positions to learn). */
+  /** Probability of reaching each position of the repertoires if I play its line. */
   reach: Record<string, number>;
   gaps: Gap[];
 }
@@ -209,35 +207,40 @@ export interface SyncState {
   counts: Partial<Record<'chesscom' | 'lichess', number>>;
   jobs: SyncJob[];
 }
+/** An error: a move of mine other than the prepared one(s). */
 export interface InboxItem {
   key: string;
-  kind: 'novelty' | 'deviation' | 'end';
   repertoireId: string;
   fen: string;
   line: { sans: string[]; ucis: string[] };
   move: { san: string; uci: string };
   games: number;
   results: Results;
-  replies: { san: string; uci: string; games: number; results: Results }[];
   expected: string[];
   lastPlayedAt: string;
-  example: string;
-  /** Every game of the item, most recent first; reply: my answer after an opponent's move. */
-  gameList: { url: string; playedAt: string; result: GameResult; speed: string; opponent: string; opponentRating: number | null; reply: string | null }[];
+  /** Every game of the item, most recent first. */
+  gameList: { url: string; playedAt: string; result: GameResult; opponent: string; opponentRating: number | null }[];
 }
 export interface GamesReport {
   games: number;
   repertoires: { id: string; games: number; results: Results; bookMoves: number }[];
   outside: { color: Color; move: string; games: number; results: Results }[];
-  /** errors: my deviations; novelties: opponents' new moves, within a line or after its end. */
-  inbox: { errors: InboxItem[]; novelties: InboxItem[]; errorCount: number };
+  /** Score per named opening (Lichess names), per colour, most played first. */
+  openings: {
+    color: Color;
+    family: string;
+    games: number;
+    results: Results;
+    variations: { name: string; eco: string; ucis: string[]; games: number; results: Results }[];
+  }[];
+  /** errors: my deviations from the repertoires. */
+  inbox: { errors: InboxItem[]; errorCount: number };
   recent: {
     id: string;
     url: string;
     playedAt: string;
     color: Color;
     result: GameResult;
-    speed: string;
     opponent: string;
     opponentRating: number | null;
     repertoireId: string | null;
@@ -273,16 +276,14 @@ export const api = {
   importPgn: (id: string, pgn: string) => request<ImportResult>('POST', `/api/repertoires/${id}/import-pgn`, { pgn }),
   cards: () => request<ReviewCard[]>('GET', '/api/cards'),
   review: (id: string, fen: string, uci: string, grade: Grade) => request<ReviewCard>('POST', `/api/repertoires/${id}/review`, { fen, uci, grade }),
-  /** `short`: shortened lines (share kept, 0-1) with the statistics settings giving the probabilities. */
-  trainingSummary: (dayStart: number, newPerDay: number, short?: { keep: number; speeds: string[]; ratings: number[]; cutoff: number }) =>
+  /** `lines`: depth of the lines (0: whole lines) with the statistics settings giving the probabilities. */
+  trainingSummary: (dayStart: number, newPerDay: number, lines?: { depth: number; speeds: string[]; ratings: number[] }) =>
     request<TrainingSummary[]>(
       'GET',
       `/api/training/summary?${new URLSearchParams({
         dayStart: String(dayStart),
         newPerDay: String(newPerDay),
-        ...(short && short.keep < 1
-          ? { keep: String(short.keep), speeds: short.speeds.join(','), ratings: short.ratings.join(','), cutoff: String(short.cutoff) }
-          : {}),
+        ...(lines ? { depth: String(lines.depth), speeds: lines.speeds.join(','), ratings: lines.ratings.join(',') } : {}),
       })}`,
     ),
   statsHistory: (days: number) => request<ReviewLogEntry[]>('GET', `/api/stats/history?days=${days}`),

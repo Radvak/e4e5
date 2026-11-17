@@ -341,7 +341,21 @@ kbd { display: inline-block; min-width: 18px; padding: 0 4px; margin: 0 1px; bor
   .line-done { animation: none; transform: translate(-50%, -50%); }
   .line-done circle, .line-done path, .editor-board:has(.line-done) .board-frame { animation: none; stroke-dashoffset: 0; }
 }
-.answer-timer { height: 4px; margin: 8px var(--page-pad) 0; border-radius: 2px; background: var(--surface-2); overflow: hidden; }
+/* Paused review: the board is blurred (no peeking), a button over it to resume. */
+.editor-board.paused .board-frame { filter: blur(14px); pointer-events: none; transition: filter 0.15s; }
+.pause-overlay {
+  position: absolute; top: 42%; left: 50%; transform: translate(-50%, -50%); z-index: 5;
+  padding: 12px 22px; border-radius: 999px; font-weight: 600; color: #fff;
+  background: rgba(24, 24, 27, 0.7); border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+.timer-row { display: flex; align-items: center; gap: 6px; margin: 8px var(--page-pad) 0; }
+.pause-btn {
+  flex: none; width: 22px; height: 22px; padding: 0; border: none; border-radius: 4px;
+  background: none; color: var(--muted, inherit); font-size: 10px; line-height: 1; letter-spacing: -1px; opacity: 0.7;
+}
+.pause-btn:hover { opacity: 1; background: var(--surface-2); }
+.answer-timer { flex: 1; height: 4px; border-radius: 2px; background: var(--surface-2); overflow: hidden; }
 .answer-timer > div { height: 100%; background: var(--accent); transform-origin: left; animation: answer-timer linear forwards; }
 @keyframes answer-timer { from { transform: scaleX(1); } 80% { background: var(--accent); } to { transform: scaleX(0); background: #e5534b; } }
 .drill-actions { display: flex; justify-content: center; gap: 6px; margin-top: 8px; padding: 0 var(--page-pad); }
@@ -584,8 +598,8 @@ kbd { display: inline-block; min-width: 18px; padding: 0 4px; margin: 0 1px; bor
 /* Swipe actions (touch): the card slides over a coloured band with the action. */
 .swipe-row { position: relative; touch-action: pan-y; border-radius: var(--radius); }
 .swipe-bg { position: absolute; inset: 0; display: flex; align-items: center; padding: 0 22px; border-radius: var(--radius); font-weight: 700; color: #fff; }
-.swipe-bg.right { justify-content: flex-start; background: var(--surface-3); color: var(--text); }
-.swipe-bg.left { justify-content: flex-end; background: var(--accent); }
+.swipe-bg.right { justify-content: flex-start; background: var(--accent); }
+.swipe-bg.left { justify-content: flex-end; background: var(--surface-3); color: var(--text); }
 .swipe-content { position: relative; }
 /* Detail of a card: bigger board, the whole explanation and every game. */
 .game-detail { width: min(560px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); padding: 0; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--text); cursor: auto; }
@@ -620,7 +634,27 @@ kbd { display: inline-block; min-width: 18px; padding: 0 4px; margin: 0 1px; bor
 .install-prompt p { margin: 0; }
 .install-prompt .row { justify-content: flex-end; }
 @media (min-width: 640px) { .install-prompt { left: auto; right: 20px; bottom: 20px; width: 360px; } }
-/* Paramètres: slider with its value (e.g. length of the lines). */
-.range-setting { display: flex; align-items: center; gap: 10px; min-width: 220px; flex: 1; max-width: 360px; }
-.range-setting input { flex: 1; accent-color: var(--accent); }
-.range-setting span { min-width: 4.5em; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* Paramètres > Profondeur des lignes: one choice per row, the positions it trains first. */
+.setting-block { flex-direction: column; align-items: stretch; }
+.depth-choices { display: flex; flex-direction: column; gap: 4px; }
+.depth-choice {
+  display: grid; grid-template-columns: auto 9em 1fr; align-items: center; gap: 10px;
+  padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+.depth-choice.on { border-color: var(--accent); background: var(--accent-soft); }
+.depth-choice input { accent-color: var(--accent); margin: 0; }
+.depth-choice strong { font-weight: 600; }
+
+/* Header: Lichess statistics being fetched in the background (positions left). */
+.stats-progress {
+  display: inline-flex; align-items: center; gap: 6px; margin-right: 10px;
+  color: var(--muted); font-size: 0.8rem; font-variant-numeric: tabular-nums;
+}
+.stats-progress .spinner {
+  width: 10px; height: 10px; border-radius: 50%;
+  border: 1.5px solid var(--border-strong); border-top-color: var(--muted);
+  animation: stats-spin 1s linear infinite;
+}
+@keyframes stats-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .stats-progress .spinner { animation: none; } }

@@ -166,28 +166,41 @@ export function positionReview(
 }
 
 /**
- * The positions kept for training when lines are shortened to the `keep` share (0-1) of the
- * positions most likely to come up: positions sorted by `reach` (probability of reaching them
- * at the user's level; unknown: least likely), ties the shallowest first; the first
- * ceil(keep × n) are kept. A line stops at its first position left out: a position is kept only
- * when the previous position of mine on its line is kept too. keep >= 1: every position.
+ * Depth of the lines (Paramètres): a position is trained, and a hole listed, when it comes up in
+ * at least this share of the games at the user's level. 0: whole lines.
+ */
+export const LINE_DEPTHS = [0.05, 0.01, 0.005, 0.002, 0.001, 0.0005] as const;
+/** Holes listed from this share of the games with whole lines (no depth to follow). */
+export const WHOLE_LINES_GAP_CUTOFF = 0.01;
+/** Share of the games from which holes are listed, for a depth of the lines. */
+export const gapCutoffFor = (depth: number) => (depth > 0 ? depth : WHOLE_LINES_GAP_CUTOFF);
+
+/**
+ * The positions trained when lines stop at `minReach`: a position is kept when it comes up in at
+ * least `minReach` of the games (`reach`: probability of reaching it at the user's level), and
+ * the previous position of mine on its line is kept too (a line stops at its first position left
+ * out). Unknown probability (statistics missing on the way): the one of the deepest position of
+ * its line that is known, an upper bound, so the line goes on until its statistics come.
+ * minReach <= 0: every position.
  */
 export function keptPositions(
   positions: TrainingPosition[],
   reach: (fen: string) => number | undefined,
-  keep: number,
+  minReach: number,
 ): Set<string> {
-  if (keep >= 1) return new Set(positions.map((p) => p.fen));
-  const n = Math.ceil(Math.max(0, keep) * positions.length);
-  const ranked = positions
-    .map((p, i) => ({ p, i, r: reach(p.fen) ?? -1 }))
-    .sort((a, b) => b.r - a.r || a.p.path.length - b.p.path.length || a.i - b.i);
-  const top = new Set(ranked.slice(0, n).map((x) => x.p.fen));
+  if (minReach <= 0) return new Set(positions.map((p) => p.fen));
+  const bound = (p: TrainingPosition) => {
+    for (const fen of [p.fen, ...p.path.map((m) => m.fromFen).reverse()]) {
+      const r = reach(fen);
+      if (r !== undefined) return r;
+    }
+    return 1; // nothing known on the line (no statistics at all yet)
+  };
   const isPosition = new Set(positions.map((p) => p.fen));
   const kept = new Set<string>();
   for (const p of [...positions].sort((a, b) => a.path.length - b.path.length)) {
     const prev = p.path.length >= 2 ? p.path.at(-2)!.fromFen : null;
-    if (top.has(p.fen) && (!prev || !isPosition.has(prev) || kept.has(prev))) kept.add(p.fen);
+    if (bound(p) >= minReach && (!prev || !isPosition.has(prev) || kept.has(prev))) kept.add(p.fen);
   }
   return kept;
 }

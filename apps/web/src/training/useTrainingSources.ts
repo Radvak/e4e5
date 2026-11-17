@@ -44,9 +44,9 @@ export interface Source {
 
 const cardKey = (fen: string, uci: string) => `${fen} ${uci}`;
 
-/** Shortened lines: the `keep` share (0-1) of each repertoire's positions, the most likely (`reach`). */
+/** Lines stopped at the positions coming up in at least `minReach` of the games (`reach`). */
 export interface Shorten {
-  keep: number;
+  minReach: number;
   reach: (color: Color, fen: string) => number | undefined;
 }
 
@@ -71,7 +71,7 @@ export function useTrainingSources(ids: string[], from: string | null, shorten?:
         const data = repQueries[i]?.data;
         if (!data) return [];
         const rep = new Repertoire(data.color, data.moves);
-        const kept = shorten && shorten.keep < 1 ? keptPositions(trainingPositions(rep), (f) => shorten.reach(data.color, f), shorten.keep) : null;
+        const kept = shorten && shorten.minReach > 0 ? keptPositions(trainingPositions(rep), (f) => shorten.reach(data.color, f), shorten.minReach) : null;
         const positions = trainingPositionsFrom(rep, from ?? START_FEN);
         const cardOf = (fen: string, uci: string) => cards.get(cardKey(fen, uci));
         const times = (fen: string) => (uci: string) => {

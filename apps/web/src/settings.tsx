@@ -1,4 +1,4 @@
-import { bucketsFor, RATING_BUCKETS, type Speed } from '@tabiya/core';
+import { bucketsFor, gapCutoffFor, RATING_BUCKETS, type Speed } from '@tabiya/core';
 import { createContext, useContext, useState, type ReactNode } from 'react';
 import type { Me } from './api';
 
@@ -33,9 +33,14 @@ interface Settings {
   /** New lines to learn per day, all repertoires together (NO_LIMIT: no limit). */
   newPerDay: number;
   setNewPerDay: (n: number) => void;
-  /** Gap finder: holes listed from this share of games. */
+  /**
+   * Depth of the lines: positions trained, and holes listed, from this share of the games at my
+   * level (core LINE_DEPTHS; 0: whole lines).
+   */
+  lineDepth: number;
+  setLineDepth: (n: number) => void;
+  /** Gap finder: holes listed from this share of games (from `lineDepth`). */
   gapCutoff: number;
-  setGapCutoff: (n: number) => void;
   /** Played games analysed: last `gamesDays` days (0: all), of these speeds. */
   gamesDays: number;
   setGamesDays: (n: number) => void;
@@ -44,9 +49,6 @@ interface Settings {
   /** Order of the new positions to learn: most played at my level first, or the repertoire's order. */
   learnOrder: LearnOrder;
   setLearnOrder: (o: LearnOrder) => void;
-  /** Shortened lines: % of each repertoire's positions trained, the most likely first (100: all). */
-  keepShare: number;
-  setKeepShare: (n: number) => void;
   /** Move sounds on the boards (read by components/sound.ts from the same localStorage key). */
   sound: boolean;
   setSound: (on: boolean) => void;
@@ -57,6 +59,9 @@ interface Settings {
   answerSeconds: number;
   setAnswerSeconds: (n: number) => void;
 }
+
+/** A depth of the lines (share of the games) as a percentage: "0,5 %". */
+export const depthPct = (x: number) => `${(100 * x).toLocaleString('fr-FR')} %`;
 
 export type LearnOrder = 'frequency' | 'repertoire';
 /** "Sans limite" for the new lines per day. */
@@ -99,17 +104,16 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const [speed, setSpeed] = usePersisted<SpeedChoice>('speed', 'both');
   const [range, setRange] = usePersisted<RatingRange | null>('ratingRange', null);
   const [newPerDay, setNewPerDay] = usePersisted('newLinesPerDayAll', 5);
-  const [gapCutoff, setGapCutoff] = usePersisted('gapCutoff', 0.01);
+  const [lineDepth, setLineDepth] = usePersisted('lineDepth', 0.01);
   const [gamesDays, setGamesDays] = usePersisted('gamesDays', 90);
-  const [gamesSpeeds, setGamesSpeeds] = usePersisted<string[]>('gamesSpeeds', ['blitz', 'rapid', 'classical', 'daily']);
+  const [gamesSpeeds, setGamesSpeeds] = usePersisted<string[]>('gamesSpeeds', ['blitz', 'rapid', 'classical']);
   const [learnOrder, setLearnOrder] = usePersisted<LearnOrder>('learnOrder', 'frequency');
   const [sound, setSound] = usePersisted(SOUND_KEY, true);
-  const [keepShare, setKeepShare] = usePersisted('keepShare', 100);
   const [haptics, setHaptics] = usePersisted(HAPTICS_KEY, true);
   const [answerSeconds, setAnswerSeconds] = usePersisted('answerSeconds', 15);
   return (
     <Ctx.Provider
-      value={{ speed, setSpeed, range, setRange, newPerDay, setNewPerDay, gapCutoff, setGapCutoff, gamesDays, setGamesDays, gamesSpeeds, setGamesSpeeds, learnOrder, setLearnOrder, sound, setSound, haptics, setHaptics, keepShare, setKeepShare, answerSeconds, setAnswerSeconds }}
+      value={{ speed, setSpeed, range, setRange, newPerDay, setNewPerDay, lineDepth, setLineDepth, gapCutoff: gapCutoffFor(lineDepth), gamesDays, setGamesDays, gamesSpeeds, setGamesSpeeds, learnOrder, setLearnOrder, sound, setSound, haptics, setHaptics, answerSeconds, setAnswerSeconds }}
     >
       {children}
     </Ctx.Provider>

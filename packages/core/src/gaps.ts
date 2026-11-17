@@ -7,12 +7,15 @@
  *   games. Repertoire moves are followed; a move that transposes back into the repertoire is
  *   followed too; any other move is a hole.
  * - my turn: the probability is split equally between my prepared moves (I play one of them),
- *   so the total stays at 100%. No prepared move at all is a hole too ("no answer").
+ *   so the total stays at 100%. With `split: false`, each of my moves carries it whole: the
+ *   probability of a position if I play its line (what to train, which holes matter). No
+ *   prepared move at all is a hole too ("no answer").
  *
  * Every game ends its preparation somewhere: an unprepared opponent move, the end of a line, a
  * position without statistics, or a position too rare to explore (under `cutoff`). The average
  * of these depths, weighted by probability, is the expected preparation depth. Positions under
- * the cutoff count with the depth reached so far, so a smaller cutoff is more exact.
+ * the cutoff count with the depth reached so far, so a smaller cutoff is more exact. These
+ * shares (depth, lost, ends, unknown, belowCutoff) only add up with `split` (the default).
  */
 import { totalGames, type ExplorerResponse } from './explorer.js';
 import { playUci, START_FEN } from './position.js';
@@ -47,7 +50,10 @@ export interface GapReport {
   unknown: number;
   /** Share of games reaching positions too rare to explore (counted at the depth reached). */
   belowCutoff: number;
-  /** Probability of reaching each explored position. */
+  /**
+   * Probability of reaching each explored position, and of the positions just past them too rare
+   * to explore (under `cutoff`). Positions behind missing statistics are not in it.
+   */
   reached: Map<string, number>;
   /** Opponent positions explored without statistics, most likely first: fetch them, run again. */
   missingStats: { fen: string; prob: number }[];
@@ -60,6 +66,8 @@ export interface GapReport {
 export interface GapOptions {
   /** Positions reached with a smaller probability are not explored. Default 1%. */
   cutoff?: number;
+  /** Split the probability between my prepared moves (default), or give it whole to each. */
+  split?: boolean;
   root?: string;
   /** Plies played before `root` (for the depth). */
   rootPly?: number;
@@ -83,7 +91,7 @@ export interface PrepEnd {
 export function findGaps(
   rep: Repertoire,
   statsAt: (fen: string) => ExplorerResponse | null | undefined,
-  { cutoff = 0.01, root = START_FEN, rootPly = 0, maxNodes = 200_000, onEnd }: GapOptions = {},
+  { cutoff = 0.01, split = true, root = START_FEN, rootPly = 0, maxNodes = 200_000, onEnd }: GapOptions = {},
 ): GapReport {
   const gaps = new Map<string, Gap>();
   const missing = new Map<string, number>();
@@ -115,6 +123,8 @@ export function findGaps(
     };
     if (p < cutoff || onPath.has(fen) || ++nodes > maxNodes) {
       if (nodes > maxNodes) truncated = true;
+      // Too rare: its probability is known (not explored further), so it is not "unknown".
+      else if (p < cutoff && !onPath.has(fen)) reached.set(fen, (reached.get(fen) ?? 0) + p);
       belowCutoff += p;
       return stop(p, 'too-rare');
     }
@@ -127,7 +137,7 @@ export function findGaps(
         stop(p, 'hole');
         addGap({ kind: 'no-answer', fen, prob: p, path });
       }
-      for (const m of moves) visit(m.toFen, p / moves.length, [...path, m]);
+      for (const m of moves) visit(m.toFen, split ? p / moves.length : p, [...path, m]);
     } else if (!moves.length) {
       ends += p;
       stop(p, 'line-end');

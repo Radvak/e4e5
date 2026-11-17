@@ -42,23 +42,28 @@ describe('keptPositions (shortened lines)', () => {
   const d = { fen: 'd', path: [m('a', 'a2'), m('a2', 'd')] };
   const positions = [a, b, c, d];
   const reach: Record<string, number> = { a: 1, b: 0.6, c: 0.5, d: 0.4 };
+  const at = (r: Record<string, number>) => (f: string) => r[f];
 
-  it('keeps everything at 100%', () => {
-    expect([...keptPositions(positions, () => undefined, 1)]).toEqual(['a', 'b', 'c', 'd']);
+  it('keeps everything with whole lines', () => {
+    expect([...keptPositions(positions, () => undefined, 0)]).toEqual(['a', 'b', 'c', 'd']);
   });
 
-  it('keeps the most likely share', () => {
-    expect([...keptPositions(positions, (f) => reach[f], 0.5)].sort()).toEqual(['a', 'b']);
-    expect([...keptPositions(positions, (f) => reach[f], 0.75)].sort()).toEqual(['a', 'b', 'c']);
+  it('keeps the positions coming up in at least the share of the games', () => {
+    expect([...keptPositions(positions, at(reach), 0.55)].sort()).toEqual(['a', 'b']);
+    expect([...keptPositions(positions, at(reach), 0.5)].sort()).toEqual(['a', 'b', 'c']);
   });
 
   it('stops a line at its first position left out', () => {
     // c is likelier than b (move orders adding up) but comes after it on its line.
-    const r = { ...reach, b: 0.1, c: 0.9 };
-    expect([...keptPositions(positions, (f) => r[f as keyof typeof r], 0.75)].sort()).toEqual(['a', 'd']);
+    expect([...keptPositions(positions, at({ ...reach, b: 0.1, c: 0.9 }), 0.3)].sort()).toEqual(['a', 'd']);
   });
 
-  it('ranks unknown probabilities last, the shallowest first', () => {
-    expect([...keptPositions(positions, (f) => (f === 'a' ? 1 : undefined), 0.75)].sort()).toEqual(['a', 'b', 'd']);
+  it('bounds an unknown probability by the deepest known one on its line', () => {
+    // Statistics missing at a1 (opponent to move): b and c are unknown, bounded by a (1).
+    expect([...keptPositions(positions, at({ a: 1, d: 0.4 }), 0.5)].sort()).toEqual(['a', 'b', 'c']);
+    // Known small at a1: b and c are bounded by it, left out.
+    expect([...keptPositions(positions, at({ a: 1, a1: 0.2, d: 0.4 }), 0.3)].sort()).toEqual(['a', 'd']);
+    // Nothing known at all: everything (the statistics are coming).
+    expect(keptPositions(positions, () => undefined, 0.5).size).toBe(4);
   });
 });

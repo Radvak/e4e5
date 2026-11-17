@@ -37,16 +37,16 @@ export function Training({ me }: { me: Me }) {
   const all = useQuery({ queryKey: ['repertoires'], queryFn: api.repertoires, enabled: !id });
   // All repertoires: the active ones only (paused ones are left out).
   const ids = useMemo(() => (id ? [id] : (all.data ?? []).filter((r) => r.active).map((r) => r.id)), [id, all.data]);
-  const { newPerDay, speed, range, learnOrder, keepShare } = useSettings();
+  const { newPerDay, speed, range, learnOrder, lineDepth } = useSettings();
   // Reach probabilities at the user's level (gap finder): order of the new positions (when
   // learning by frequency), branch followed to finish a line, and shortened lines.
   const gaps = useGaps(me);
-  // Shortened lines (Paramètres), also when training a chosen part (?from=: the share is taken
-  // over the whole repertoire); not without statistics.
-  const shortening = keepShare < 100;
+  // Depth of the lines (Paramètres), also when training a chosen part (?from=); whole lines
+  // without statistics.
+  const shortening = lineDepth > 0;
   const shorten = useMemo(
-    () => (shortening && gaps.data ? { keep: keepShare / 100, reach: (color: Color, fen: string) => gaps.data?.[color]?.reach[fen] } : null),
-    [shortening, keepShare, gaps.data],
+    () => (shortening && gaps.data ? { minReach: lineDepth, reach: (color: Color, fen: string) => gaps.data?.[color]?.reach[fen] } : null),
+    [shortening, lineDepth, gaps.data],
   );
   const { sources, loading, review } = useTrainingSources(ids, from, shorten);
   // The daily limit of new lines is shared by all repertoires: lines learnt today elsewhere count.
@@ -116,7 +116,7 @@ export function Training({ me }: { me: Me }) {
           <Button size="sm" variant="ghost" onClick={() => setParams({})}>Tout entraîner</Button>
         </p>
       )}
-      {shortening && <ShortenNotice gaps={gaps} colors={[...new Set(sources.map((s) => s.color))]} keep={keepShare} />}
+      {shortening && <ShortenNotice gaps={gaps} colors={[...new Set(sources.map((s) => s.color))]} />}
       {review.error && <p className="error">{review.error.message}</p>}
 
       <p className="muted small-text mode-hint">
@@ -162,11 +162,8 @@ export function Training({ me }: { me: Me }) {
   );
 }
 
-/**
- * Shortened lines: what the probabilities rest on. Without statistics (error), nothing is cut;
- * statistics being fetched may still change the cut; positions without statistics come last.
- */
-function ShortenNotice({ gaps, colors, keep }: { gaps: ReturnType<typeof useGaps>; colors: Color[]; keep: number }) {
+/** Without statistics (error), nothing is cut: says so. */
+function ShortenNotice({ gaps, colors }: { gaps: ReturnType<typeof useGaps>; colors: Color[] }) {
   const reports = colors.map((c) => gaps.data?.[c]).filter((r) => !!r);
   const settings = <Link to="/settings#entrainement">Paramètres</Link>;
   if (gaps.isError || (gaps.data && !reports.length)) {
@@ -176,14 +173,5 @@ function ShortenNotice({ gaps, colors, keep }: { gaps: ReturnType<typeof useGaps
       </p>
     );
   }
-  if (!gaps.data) return null;
-  const pending = reports.reduce((n, r) => n + r.pending, 0);
-  const missing = reports.reduce((n, r) => n + r.missing, 0);
-  return (
-    <p className="muted small-text">
-      Lignes raccourcies aux {keep} % de positions les plus probables ({settings}).
-      {pending > 0 && ` Statistiques en cours de chargement (${pending} positions) : la coupe peut encore changer.`}
-      {missing > 0 && ` ${missing} positions adverses sans statistiques : les suites sont classées comme les moins probables.`}
-    </p>
-  );
+  return null;
 }

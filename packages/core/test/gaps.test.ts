@@ -81,6 +81,13 @@ describe('gap finder', () => {
     expect(ends.reduce((n, e) => n + e.prob * e.ply, 0)).toBeCloseTo(report.depth);
     expect(ends.filter((e) => e.kind === 'hole').map((e) => e.path.map((m) => m.san).join(' '))).toEqual(['e4 d6 Nf3']);
     expect(report.reached.get(afterSic)).toBeCloseTo(0.5);
+    // Without splitting between my answers: the probability if I play the line.
+    const whole = findGaps(r, (fen) => table.get(fen), { split: false });
+    expect(whole.reached.get(after('e2e4', 'c7c5'))).toBeCloseTo(0.5);
+    expect(whole.reached.get(afterSic)).toBeCloseTo(0.5);
+    // 1... c5 2. Nf3 d6 and 1... d6 2. Nf3 c5 meet again: 0.25 + 0.25.
+    expect(whole.reached.get(after('e2e4', 'c7c5', 'g1f3', 'd7d6'))).toBeCloseTo(0.5);
+    expect(whole.gaps.map((g) => [g.move?.san, g.prob])).toEqual([['Nf6', 0.25]]);
 
     // A move outside the repertoire that transposes into it is not a hole.
     const r2 = rep('white', '1. e4 c5 2. Nf3 d6 3. d4 *\n\n1. e4 d6 2. Nf3 c5 3. d4 *');
@@ -100,6 +107,8 @@ describe('gap finder', () => {
     expect(report.gaps).toEqual([]);
     expect(report.belowCutoff).toBeCloseTo(0.005);
     expect(report.depth).toBeCloseTo(0.995 * 3 + 0.005 * 2); // 1... a6 2. d4 not explored: ply 2 counted
+    // Its probability is known all the same (a line stops there, it is not "unknown").
+    expect(report.reached.get(after('e2e4', 'a7a6'))).toBeCloseTo(0.005);
   });
 });
 

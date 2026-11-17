@@ -7,46 +7,51 @@ import { db } from '../db/client.js';
 import { games, gameSyncs, inboxDismissed } from '../db/schema.js';
 import { analyseGames, loadRepertoires, type GameReport } from '../gameAnalysis.js';
 import { startSync, syncJobs } from '../gamesync.js';
+import { openingOf } from '../openings.js';
 
 const reportQuery = z.object({
   /** Games of the last `days` days (0: all). */
   days: z.coerce.number().int().min(0).max(3650).default(90),
   speeds: z
     .string()
-    .default('blitz,rapid,classical,daily')
+    .default('blitz,rapid,classical')
     .transform((s) => s.split(',').filter(Boolean)),
 });
 const MAX_ITEMS = 40;
 
 type Results = { win: number; draw: number; loss: number };
+
+/** Score of the games of one opening (family), with its named variations. */
+interface OpeningStats {
+  color: 'white' | 'black';
+  family: string;
+  games: number;
+  results: Results;
+  variations: { name: string; eco: string; ucis: string[]; games: number; results: Results }[];
+}
 const emptyResults = (): Results => ({ win: 0, draw: 0, loss: 0 });
 
+/** An error: a move of mine other than the prepared one(s), at one place of a repertoire. */
 interface InboxItem {
   key: string;
-  kind: 'novelty' | 'deviation' | 'end';
   repertoireId: string;
   fen: string;
   /** Moves from the start to `fen`. */
   line: { sans: string[]; ucis: string[] };
-  /** Opponent's novelty, my deviation, or the move played after the end of the line. */
+  /** The move I played. */
   move: { san: string; uci: string };
   games: number;
   results: Results;
-  /** My answers after the opponent's move (novelty, end of line), most played first. */
-  replies: { san: string; uci: string; games: number; results: Results }[];
-  /** My prepared moves (deviation). */
+  /** My prepared moves. */
   expected: string[];
   lastPlayedAt: string;
-  example: string;
-  /** Every game of the item, most recent first (with my answer, after an opponent's move). */
+  /** Every game of the item, most recent first. */
   gameList: {
     url: string;
     playedAt: string;
     result: 'win' | 'draw' | 'loss';
-    speed: string;
     opponent: string;
     opponentRating: number | null;
-    reply: string | null;
   }[];
 }
 
@@ -101,8 +106,22 @@ export async function gameRoutes(app: FastifyInstance) {
     const perRep = new Map<string, { games: number; results: Results; plies: number }>();
     const outside = new Map<string, { color: string; move: string; games: number; results: Results }>();
     const inbox = new Map<string, InboxItem>();
+    // Per named opening (all the games, in a repertoire or not).
+    const openings = new Map<string, OpeningStats>();
     for (const r of reports) {
       const result = r.game.result;
+      const opening = openingOf(r.game.moves);
+      if (opening) {
+        const key = `${r.game.color}|${opening.family}`;
+        let o = openings.get(key);
+        if (!o) openings.set(key, (o = { color: r.game.color, family: opening.family, games: 0, results: emptyResults(), variations: [] }));
+        o.games++;
+        o.results[result]++;
+        let v = o.variations.find((x) => x.name === opening.name);
+        if (!v) o.variations.push((v = { name: opening.name, eco: opening.eco, ucis: opening.ucis, games: 0, results: emptyResults() }));
+        v.games++;
+        v.results[result]++;
+      }
       if (r.repertoireId === null) {
         const move = r.played ? lineText([...r.path, r.played].map((m) => m.san)) : '—';
         const key = `${r.game.color}|${move}`;
@@ -122,10 +141,8 @@ export async function gameRoutes(app: FastifyInstance) {
     }
 
     const byGames = (a: InboxItem, b: InboxItem) => b.games - a.games || b.lastPlayedAt.localeCompare(a.lastPlayedAt);
-    const items = [...inbox.values()].sort(byGames);
-    // Two lists: my own deviations (errors), and what the opponents brought that the repertoire
-    // does not answer: a novelty within a line or a move after its end, the same thing to me.
-    const errors = items.filter((i) => i.kind === 'deviation');
+    // My own deviations (what the opponents bring is in the missing moves of the repertoires).
+    const errors = [...inbox.values()].sort(byGames);
     return {
       games: rows.length,
       repertoires: reps.filter((r) => !paused.has(r.id)).map((r) => {
@@ -133,9 +150,11 @@ export async function gameRoutes(app: FastifyInstance) {
         return { id: r.id, games: s?.games ?? 0, results: s?.results ?? emptyResults(), bookMoves: s?.games ? s.plies / s.games / 2 : 0 };
       }),
       outside: [...outside.values()].sort((a, b) => b.games - a.games),
+      openings: [...openings.values()]
+        .map((o) => ({ ...o, variations: o.variations.sort((a, b) => b.games - a.games) }))
+        .sort((a, b) => b.games - a.games),
       inbox: {
         errors: errors.slice(0, MAX_ITEMS),
-        novelties: items.filter((i) => i.kind !== 'deviation').slice(0, MAX_ITEMS),
         /** All errors not ignored (the list is cut at MAX_ITEMS): the badge of the Mes parties tab. */
         errorCount: errors.length,
       },
@@ -148,7 +167,6 @@ export async function gameRoutes(app: FastifyInstance) {
           playedAt: r.game.playedAt.toISOString(),
           color: r.game.color,
           result: r.game.result,
-          speed: r.game.speed,
           opponent: r.game.opponent,
           opponentRating: r.game.opponentRating,
           repertoireId: r.repertoireId,
@@ -182,34 +200,28 @@ export async function gameRoutes(app: FastifyInstance) {
 /** "1. e4 c6" */
 const lineText = (sans: string[]) => sans.map((san, i) => (i % 2 === 0 ? `${i / 2 + 1}. ${san}` : san)).join(' ');
 
-const KINDS = { 'opponent-novelty': 'novelty', 'my-deviation': 'deviation', 'end-of-prep': 'end' } as const;
-
 /**
- * Adds a game to its inbox item. A dismissed item stays hidden, except an error (my deviation):
- * it was dealt with (sent to review, or ignored) when dismissed, so a game played after that
- * makes it come back, with the games since then only.
+ * Adds a game where I left my preparation to its error. A dismissed error was dealt with (sent
+ * to review, or ignored): a game played after that makes it come back, with the games since then only.
  */
 function addToInbox(inbox: Map<string, InboxItem>, r: GameReport, hidden: Map<string, Date>) {
-  if (!(r.kind in KINDS) || !r.played || !r.repertoireId) return;
-  const kind = KINDS[r.kind as keyof typeof KINDS];
-  const key = `${kind}|${r.repertoireId}|${r.fen}|${r.played.uci}`;
+  if (r.kind !== 'my-deviation' || !r.played || !r.repertoireId) return;
+  // "deviation|…": the keys of the errors already dismissed.
+  const key = `deviation|${r.repertoireId}|${r.fen}|${r.played.uci}`;
   const dismissedAt = hidden.get(key);
-  if (dismissedAt && (kind !== 'deviation' || r.game.playedAt <= dismissedAt)) return;
+  if (dismissedAt && r.game.playedAt <= dismissedAt) return;
   let item = inbox.get(key);
   if (!item) {
     item = {
       key,
-      kind,
       repertoireId: r.repertoireId,
       fen: r.fen,
       line: { sans: r.path.map((m) => m.san), ucis: r.path.map((m) => m.uci) },
       move: { san: r.played.san, uci: r.played.uci },
       games: 0,
       results: emptyResults(),
-      replies: [],
       expected: r.expected,
       lastPlayedAt: '',
-      example: r.game.url,
       gameList: [],
     };
     inbox.set(key, item);
@@ -217,22 +229,13 @@ function addToInbox(inbox: Map<string, InboxItem>, r: GameReport, hidden: Map<st
   item.games++;
   item.results[r.game.result]++;
   const at = r.game.playedAt.toISOString();
-  if (at > item.lastPlayedAt) [item.lastPlayedAt, item.example] = [at, r.game.url];
+  if (at > item.lastPlayedAt) item.lastPlayedAt = at;
   // The games come oldest first.
   item.gameList.unshift({
     url: r.game.url,
     playedAt: at,
     result: r.game.result,
-    speed: r.game.speed,
     opponent: r.game.opponent,
     opponentRating: r.game.opponentRating,
-    reply: r.reply?.san ?? null,
   });
-  if (r.reply) {
-    let reply = item.replies.find((x) => x.uci === r.reply!.uci);
-    if (!reply) item.replies.push((reply = { san: r.reply.san, uci: r.reply.uci, games: 0, results: emptyResults() }));
-    reply.games++;
-    reply.results[r.game.result]++;
-    item.replies.sort((a, b) => b.games - a.games);
-  }
 }

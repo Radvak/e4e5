@@ -82,8 +82,15 @@ Planned: `review_cards` (FSRS state per user move), `game_syncs`, `inbox_items`.
   another); each game's end of preparation goes to the repertoire following its line the
   furthest, past that repertoire's trunk (the line before its first choice). "Top holes" list,
   with a "prepare in…" menu of all repertoires of the colour, ranked by the same logic. Explores
-  down to 0.01% of games on stored statistics; the cutoff (0.5–5%) only sets which holes are
-  listed and which missing statistics the background queue fetches (deduplicated, waits out 429s).
+  down to a quarter of the smallest line depth on stored statistics; the cutoff only sets which
+  holes are listed and which missing statistics the background queue fetches (deduplicated,
+  waits out 429s).
+- [x] **4b. Depth of the lines** (Paramètres, one setting): a position is trained, and a hole
+  listed, when it comes up in at least 5% / 1% / 0.5% / 0.2% / 0.1% / 0.05% of the games at my
+  level (each of my moves carries the whole probability, so two repertoires do not halve each
+  other), or whole lines (holes then from 1%). A line stops at its first position left out;
+  without statistics a position takes the bound of its deepest known ancestor. Each choice shows
+  the positions it trains in the active repertoires.
 - [x] **5. Game sync** (Lichess and Chess.com): background sync (Chess.com monthly archives one
   request at a time, from the month of the last synced game; Lichess ndjson export `since`),
   games stored in `games` (SAN moves), cursor in `game_syncs`. Each game is compared with all

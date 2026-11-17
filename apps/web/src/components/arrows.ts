@@ -6,6 +6,7 @@
 export const ARROWS = {
   repertoire: { color: '#3fb950', label: 'dans votre répertoire' },
   next: { color: '#3fb950', label: 'coup suivant (→)' },
+  nextDraft: { color: '#f0883e', label: 'coup suivant, pas encore enregistré (→)' },
   popular: { color: '#f0883e', label: 'joué souvent, pas dans votre répertoire' },
   engine: { color: '#58a6ff', label: 'meilleur coup du moteur' },
   level: { color: '#bc8cff', label: 'meilleur coup à votre niveau' },
@@ -20,7 +21,7 @@ export const isPopular = (rank: number, share: number) => rank < 6 && share >= 0
 /** chessground brushes for the arrow kinds. */
 export const BRUSHES = {
   ...Object.fromEntries(
-    Object.entries(ARROWS).map(([key, a]) => [key, { key, color: a.color, opacity: key === 'next' ? 1 : 0.85, lineWidth: 10 }]),
+    Object.entries(ARROWS).map(([key, a]) => [key, { key, color: a.color, opacity: key === 'next' || key === 'nextDraft' ? 1 : 0.85, lineWidth: 10 }]),
   ),
   /** White arrow drawn just under the next move, slightly wider: a thin outline. */
   outline: { key: 'outline', color: '#ffffff', opacity: 1, lineWidth: 10 },

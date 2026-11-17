@@ -438,11 +438,23 @@ function Drill({
   /** The clock runs on a learnt move until it is answered, revealed or hinted. */
   const timing = asking && answerSeconds > 0 && !revealed && !hinted;
 
+  /** Paused: the clock stops and the board is blurred (kept from one question to the next). */
+  const [paused, setPaused] = useState(false);
+  /** Time left on the clock of this question / retry (what remains after a pause). */
+  const clockKey = `${round}-${retries}`;
+  const left = useRef({ key: '', ms: 0 });
+  if (left.current.key !== clockKey) left.current = { key: clockKey, ms: answerSeconds * 1000 };
+
   useEffect(() => {
-    if (!timing) return;
-    const t = setTimeout(() => update({ revealed: true, mistakes: mistakes + 1 }), answerSeconds * 1000);
-    return () => clearTimeout(t);
-  }, [timing, round, retries]);
+    if (!timing || paused) return;
+    const clock = left.current;
+    const start = Date.now();
+    const t = setTimeout(() => update({ revealed: true, mistakes: mistakes + 1 }), clock.ms);
+    return () => {
+      clearTimeout(t);
+      clock.ms = Math.max(0, clock.ms - (Date.now() - start));
+    };
+  }, [timing, paused, clockKey]);
 
   const outcome = (helped: boolean) => outcomeOf(isNew, mistakes, revealed || helped);
 
@@ -495,14 +507,19 @@ function Drill({
 
   return (
     <div className="editor">
-      <div className="editor-board">
+      <div className={`editor-board${paused ? ' paused' : ''}`}>
         <Board
           fen={last?.toFen ?? START_FEN}
           orientation={source.color}
           lastMove={last?.uci}
           shapes={shapes}
-          onMove={asking ? play : undefined}
+          onMove={asking && !paused ? play : undefined}
         />
+        {paused && (
+          <button className="pause-overlay" onClick={() => setPaused(false)}>
+            ▶ Reprendre
+          </button>
+        )}
         {lineDone && played && (
           <div className="line-done" role="status">
             <svg viewBox="0 0 52 52" aria-hidden="true">
@@ -517,14 +534,26 @@ function Drill({
             ♻️ <strong>{alternative.san}</strong> est aussi dans ton répertoire — cherche l’autre !
           </div>
         )}
-        <div className="answer-timer">
-          {timing && <div key={`${round}-${retries}`} style={{ animationDuration: `${answerSeconds}s` }} />}
+        <div className="timer-row">
+          <div className="answer-timer">
+            {timing && (
+              <div key={clockKey} style={{ animationDuration: `${answerSeconds}s`, animationPlayState: paused ? 'paused' : 'running' }} />
+            )}
+          </div>
+          <button
+            className="pause-btn"
+            onClick={() => setPaused(!paused)}
+            title={paused ? 'Reprendre' : 'Pause (cache l’échiquier)'}
+            aria-label={paused ? 'Reprendre' : 'Pause'}
+          >
+            {paused ? '▶' : '❚❚'}
+          </button>
         </div>
         <div className="drill-actions">
-          <button onClick={hint} disabled={!asking} title={hinted || revealed ? 'Jouer le coup' : 'Montrer la pièce à jouer'}>
+          <button onClick={hint} disabled={!asking || paused} title={hinted || revealed ? 'Jouer le coup' : 'Montrer la pièce à jouer'}>
             💡 Indice
           </button>
-          <button onClick={abandon} disabled={!asking} title="Voir la ligne jusqu’à la fin">
+          <button onClick={abandon} disabled={!asking || paused} title="Voir la ligne jusqu’à la fin">
             🏳 Abandon
           </button>
           <button onClick={toExplorer} title="Ouvrir cette position dans l’Explorer">
