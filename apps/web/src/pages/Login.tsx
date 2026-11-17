@@ -26,7 +26,7 @@ export function Login() {
 
   return (
     <div className="login">
-      <div className="brand-mark">♞</div>
+      <img className="brand-mark" src="/icons/icon.svg" alt="" />
       <h1>Mon cahier</h1>
       <p>Construisez votre répertoire d’ouvertures, voyez ce que jouent les joueurs de votre niveau, et faites-le grandir avec vos propres parties.</p>
       {loginError && <p className="notice error">{ERRORS[loginError] ?? ERRORS.failed}</p>}

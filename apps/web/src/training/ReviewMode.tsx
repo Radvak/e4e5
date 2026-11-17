@@ -27,7 +27,7 @@ interface Question extends Item {
 /** Why a line stops after my move: its end, the shortened lines, or a sequel already reviewed. */
 type LineEnd = 'end' | 'cut' | 'done';
 /** Pause on the end of a line before the next one. */
-const LINE_END_MS = 1500;
+const LINE_END_MS = 1100;
 
 const same = (a: Item, b: Item) => a.source.id === b.source.id && a.target.fen === b.target.fen;
 

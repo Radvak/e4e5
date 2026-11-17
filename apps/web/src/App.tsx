@@ -98,7 +98,7 @@ export function App() {
     <div className="shell">
       <header className="appbar">
         <Link to="/repertoires" className="brand">
-          <span className="brand-mark">♞</span>
+          <img className="brand-mark" src="/icons/icon.svg" alt="" />
           Mon cahier
         </Link>
         <nav className="appnav">
