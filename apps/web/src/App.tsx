@@ -9,6 +9,7 @@ import { Games, useGamesReport } from './pages/Games';
 import { Login } from './pages/Login';
 import { RepertoireEditor } from './pages/RepertoireEditor';
 import { Repertoires } from './pages/Repertoires';
+import { Account } from './pages/Account';
 import { Settings } from './pages/Settings';
 import { Training } from './pages/Training';
 import { Button, Icon, Menu, plural, type IconName } from './ui';
@@ -119,6 +120,7 @@ export function App() {
             </>
           }
           items={[
+            { label: 'Mon compte', to: '/compte' },
             { label: 'Paramètres', to: '/settings' },
             { label: 'Se déconnecter', onClick: logout, danger: true },
           ]}
@@ -138,6 +140,7 @@ export function App() {
           <Route path="/bilan/parties" element={<Redirect to="/parties" />} />
           <Route path="/bilan/progres" element={<Redirect to="/train" />} />
           <Route path="/settings" element={<Settings me={me.data} />} />
+          <Route path="/compte" element={<Account me={me.data} />} />
           <Route path="/stats" element={<Redirect to="/train" />} />
           <Route path="/gaps" element={<Redirect to="/repertoires" />} />
           <Route path="/games" element={<Redirect to="/parties" />} />

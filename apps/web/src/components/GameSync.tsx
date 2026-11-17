@@ -64,7 +64,7 @@ export function GameSyncInline() {
   if (!linked.length) {
     return (
       <p className="muted small-text">
-        <Link to="/settings#parties">Liez Chess.com ou Lichess</Link> pour analyser vos parties.
+        <Link to="/compte#comptes">Liez Chess.com ou Lichess</Link> pour analyser vos parties.
       </p>
     );
   }

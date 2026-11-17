@@ -304,7 +304,7 @@ export function Explorer({ me }: { me: Me }) {
             <>
               {!me.lichess ? (
                 <p className="muted">
-                  Liez votre compte Lichess dans les <Link to="/settings#parties">paramètres</Link> pour voir vos propres parties.
+                  Liez votre compte Lichess dans <Link to="/compte#comptes">Mon compte</Link> pour voir vos propres parties.
                 </p>
               ) : (
                 <p className="muted small-text">
