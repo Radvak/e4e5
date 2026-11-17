@@ -9,3 +9,4 @@ data
 **/*.db.bak*
 .git
 tools/sync/sync.config.json
+tools/sync/games

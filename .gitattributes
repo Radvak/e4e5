@@ -1,0 +1,2 @@
+# Extracted Lichess games (pnpm sync extract): stored with Git LFS.
+tools/sync/games/*.pgn.zst filter=lfs diff=lfs merge=lfs -text
