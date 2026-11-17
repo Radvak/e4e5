@@ -23,8 +23,11 @@ import { SEED_DIR } from './paths.js';
 import { positionStats, seedImports } from './db/schema.js';
 import { explorerCooldownUntil, explorerFetch, RateLimited } from './lichess.js';
 
-/** Stored statistics older than this are refreshed when Lichess is reachable. */
-const REFRESH_AFTER_MS = 30 * 86_400_000;
+/**
+ * Stored statistics older than this are refreshed when Lichess is reachable. Opening statistics
+ * move very slowly (millions of games per position), so a year-old answer is still reliable.
+ */
+const REFRESH_AFTER_MS = 365 * 86_400_000;
 const MAX_MOVES = 30;
 
 export interface StatsMeta {

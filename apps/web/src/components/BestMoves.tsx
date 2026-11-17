@@ -163,7 +163,7 @@ export function LevelLines({
                       </button>
                     ))}
                   </span>
-                  {engineBest === m.uci && <span className="sf-tag" title="Aussi le meilleur coup de Stockfish">SF</span>}
+                  {engineBest === m.uci && <span className="sf-tag" title="Aussi le meilleur coup de Stockfish" aria-label="Aussi le meilleur coup de Stockfish"><Icon name="engine" size={14} /></span>}
                   <span className="games muted" title={`${m.games.toLocaleString('fr-FR')} parties avec ce coup`}>{games(m.games)}</span>
                   {m.replies.length > 0 && (
                     <button
