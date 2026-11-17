@@ -1,4 +1,4 @@
-import { bestMoves, fenKey, positionFromFen, RATING_BUCKETS, type ExplorerResponse } from '@prepa-cahier/core';
+import { fenKey, positionFromFen, RATING_BUCKETS, type ExplorerResponse } from '@prepa-cahier/core';
 import { and, eq } from 'drizzle-orm';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
@@ -7,20 +7,11 @@ import { db } from '../db/client.js';
 import { repertoires, repMoves } from '../db/schema.js';
 import { env } from '../env.js';
 import { exportGame, explorerFetch, explorerStream, RateLimited } from '../lichess.js';
-import { getStats, prefetchStats, slim, storedStats } from '../stats.js';
+import { getStats, prefetchStats, slim } from '../stats.js';
+import { REACH_STEPS, suggestMoves } from '../suggest.js';
 
 const SPEEDS = ['bullet', 'blitz', 'rapid', 'classical'];
 const RATINGS: readonly number[] = RATING_BUCKETS;
-/**
- * Suggested moves: probability thresholds of the successive steps of the search (a position
- * reached in fewer games, if I play the line, is not explored).
- */
-const REACH_STEPS = [0.5, 0.25, 0.12, 0.06];
-/** From the 12% step on, only this many of my first moves (best at the step before) go deeper. */
-const KEEP_DEEP = 3;
-/** Positions a search may need (Lichess allows one request at a time). */
-const MAX_POSITIONS = 250;
-
 /** Speeds and rating buckets of an explorer request, validated, deduplicated and sorted. */
 export const statsParams = z.object({
   speeds: z.string().transform((s) => [...new Set(s.split(','))].filter((x) => SPEEDS.includes(x)).sort()),
@@ -52,13 +43,9 @@ export async function explorerRoutes(app: FastifyInstance) {
 
   /**
    * Suggested moves for the side to move: best expected score over the likely lines
-   * (`bestMoves`). Runs on stored statistics, step by step with a smaller probability threshold
-   * each time (`REACH_STEPS`): the answer is the ranking at the smallest threshold whose
-   * positions are all known, so the candidates are compared on the same lines. From the fourth
-   * step on, only the best `KEEP_DEEP` moves of the step before are looked at deeper; the others
-   * keep their score of that step. The next step is fetched in the background (most reached
-   * positions first) and `pending` says to ask again. A search wanting more than
-   * `MAX_POSITIONS` positions stops at the step before.
+   * (`suggestMoves`). The positions of the next step are fetched in the background and
+   * `pending` says to ask again; positions stored for another range are fetched for the asked
+   * one once the search is complete.
    */
   app.get('/api/explorer/best', { preHandler: requireUser }, async (req, reply) => {
     const q = query.parse(req.query);
@@ -66,47 +53,12 @@ export async function explorerRoutes(app: FastifyInstance) {
     if (!root) return reply.code(400).send({ error: 'FEN invalide' });
     if (!q.speeds.length || !q.ratings.length) return reply.code(400).send({ error: 'speeds and ratings required' });
     const token = req.user!.lichessToken ?? env.lichessAppToken;
-    const target = REACH_STEPS.at(-1)!;
-
-    const known = new Map<string, { data: ExplorerResponse; exact: boolean }>();
     const first = await getStats(root, q.speeds, q.ratings, token, req.log);
-    if (!first.data) return { moves: [], reach: null, target, pending: 0 };
-    known.set(root, { data: first.data, exact: first.meta.exact });
-    const run = (minReach: number, only?: string[]) => bestMoves(root, (f) => known.get(f)?.data, { minReach, only });
-
-    // Each move's own win rate first (nothing explored), then each step in turn, loading the
-    // stored positions it reaches (the deeper ones are only reached once their parents are known).
-    let moves = run(2).moves;
-    let reach: number | null = null;
-    let missing: string[] = [];
-    for (const [i, step] of REACH_STEPS.entries()) {
-      const only = i >= 2 ? moves.filter((m) => m.minReach === reach).slice(0, KEEP_DEEP).map((m) => m.uci) : undefined;
-      let next = run(step, only);
-      for (let pass = 0; pass < 16 && next.missing.length; pass++) {
-        const found = await storedStats(next.missing.map((m) => m.fen), q.speeds, q.ratings);
-        if (!found.size) break;
-        for (const [f, s] of found) known.set(f, s);
-        next = run(step, only);
-      }
-      if (next.missing.length) {
-        if (known.size + next.missing.length <= MAX_POSITIONS) missing = next.missing.map((m) => m.fen); // most reached first
-        break;
-      }
-      // Moves looked at deeper first (best first), then the pruned ones as ranked at their step.
-      moves = [...next.moves, ...moves.filter((m) => !next.moves.some((n) => n.uci === m.uci))];
-      reach = step;
-    }
-    // Only the next step is queued. Positions stored for another range are used meanwhile, and
-    // fetched for the asked range once the search is complete.
-    const toFetch = missing.length ? missing : reach === target ? [...known].filter(([, s]) => !s.exact).map(([f]) => f) : [];
+    if (!first.data) return { moves: [], reach: null, target: REACH_STEPS.at(-1)!, pending: 0 };
+    const { missing, approximate, ...found } = await suggestMoves(root, { data: first.data, exact: first.meta.exact }, q.speeds, q.ratings);
+    const toFetch = missing.length ? missing : found.reach === found.target ? approximate : [];
     const pending = token && toFetch.length ? prefetchStats(toFetch, q.speeds, q.ratings, token, req.log) : 0;
-    return {
-      // minReach over 1: the move's own win rate (nothing explored).
-      moves: moves.map((m) => ({ ...m, minReach: m.minReach > 1 ? null : m.minReach })),
-      reach,
-      target,
-      pending,
-    };
+    return { ...found, pending };
   });
 
   /** Top and recent games of the position (Lichess players at that level). Not stored. */

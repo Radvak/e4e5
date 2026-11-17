@@ -34,29 +34,40 @@ export function BestMoves({ fen, history, speeds, ratings, onPlay }: { fen: stri
       </p>
       <ul className="suggestion-list">
         {moves.map((m) => {
-          const sans = m.line.map((x) => x.san);
           // Not looked at deeper (behind at the step before): its score is from that step.
           const pruned = m.minReach !== reach;
+          const after = [...history, m.san];
           return (
             <li key={m.uci}>
               <button className={`suggestion ${pruned ? 'pruned' : ''}`} onClick={() => onPlay(m.uci)}>
                 <span className="line">
                   <span className="best-move">{moveText(history, m.san, true)}</span>
-                  {sans.length > 1 && (
-                    <span className="muted"> {sans.slice(1).map((san, i) => moveText([...history, ...sans.slice(0, i + 1)], san)).join(' ')}</span>
-                  )}
                   {pruned && <span className="muted small-text"> ({m.minReach === null ? 'coup seul' : `lignes à ${pct(m.minReach)} et plus`})</span>}
                 </span>
-                <span className="freq" title={`Lichess : ${pct(m.direct)} après ce coup, sur ${m.games} parties`}>
+                <span className="freq" title={`Lichess : ${pct(m.direct)} après ce coup seul, sur ${m.games} parties`}>
                   <strong>{pct(m.score)}</strong>
-                  <span className="muted small-text"> · {pct(m.direct)} · {games(m.games)}</span>
+                  <span className="muted small-text"> · {games(m.games)}</span>
                 </span>
               </button>
+              {m.replies.length > 0 && (
+                <ul className="suggestion-replies">
+                  {m.replies.map((r) => (
+                    <li key={r.uci}>
+                      <span className="reply">
+                        {moveText(after, r.san)}
+                        <span className="muted small-text"> {pct(r.share)}</span>
+                        {r.answer && <span className="answer"> {moveText([...after, r.san], r.answer.san, true)}</span>}
+                      </span>
+                      <span className="reply-score">{pct(r.score)}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </li>
           );
         })}
       </ul>
-      <p className="muted small-text">Score espéré · score Lichess du coup seul · parties.</p>
+      <p className="muted small-text">Score espéré · parties. Sous chaque coup : les réponses adverses (part des parties), votre meilleure suite et le score espéré après.</p>
     </section>
   );
 }

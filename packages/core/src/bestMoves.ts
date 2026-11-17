@@ -42,6 +42,8 @@ export interface BestMovesOptions {
   prior?: number;
   /** Only these of my moves at the start (UCI), e.g. the best ones at a smaller depth. */
   only?: string[];
+  /** Opponent replies listed under each suggested move. */
+  maxReplies?: number;
 }
 
 export interface SuggestedMove {
@@ -57,6 +59,22 @@ export interface SuggestedMove {
   minReach: number;
   /** The move, then the expected line: the most played reply, my best move, … */
   line: { uci: string; san: string }[];
+  /**
+   * Why it scores so: the opponent's replies to it (most played first, `maxReplies` at most),
+   * each with my best answer and the expected score after it. Empty when nothing is explored.
+   */
+  replies: SuggestedReply[];
+}
+
+export interface SuggestedReply {
+  uci: string;
+  san: string;
+  /** Share of the games where the opponent plays it. */
+  share: number;
+  /** My best answer (none: the line is not explored further). */
+  answer?: { uci: string; san: string };
+  /** Expected score after the reply, from my side. */
+  score: number;
 }
 
 export interface BestMovesReport {
@@ -70,6 +88,8 @@ type Line = { uci: string; san: string }[];
 interface Value {
   score: number;
   line: Line;
+  /** On the opponent's turn: the replies, most played first. */
+  replies?: SuggestedReply[];
 }
 
 const DEFAULTS: Required<BestMovesOptions> = {
@@ -80,6 +100,7 @@ const DEFAULTS: Required<BestMovesOptions> = {
   minGames: 30,
   prior: 50,
   only: [],
+  maxReplies: 3,
 };
 
 /** Score of results from `color`'s side, shrunk towards `towards` with `prior` pseudo-games. */
@@ -113,7 +134,7 @@ export function bestMoves(
     const self = { uci: m.uci, san: m.san };
     const next = depthLeft > 1 && reach >= o.minReach ? playUci(fen, m.uci) : null;
     const deeper = next ? opponentTurn(next.toFen, leaf, reach, depthLeft - 1) : null;
-    return deeper ? { score: deeper.score, line: [self, ...deeper.line] } : { score: leaf, line: [self] };
+    return deeper ? { score: deeper.score, line: [self, ...deeper.line], replies: deeper.replies } : { score: leaf, line: [self] };
   };
 
   /** My turn: my best move (null: statistics not known, the caller keeps its own score). */
@@ -138,6 +159,7 @@ export function bestMoves(
     let score = 0;
     let seen = 0;
     let likely: { share: number; line: Line } | null = null;
+    const replies: SuggestedReply[] = [];
     for (const r of stats.moves) {
       const share = totalGames(r) / total;
       seen += share;
@@ -145,11 +167,13 @@ export function bestMoves(
       const next = reach * share >= o.minReach ? playUci(fen, r.uci) : null;
       const deeper = next ? myTurn(next.toFen, leaf, reach * share, depthLeft) : null;
       score += share * (deeper?.score ?? leaf);
+      replies.push({ uci: r.uci, san: r.san, share, score: deeper?.score ?? leaf, ...(deeper?.line[0] ? { answer: deeper.line[0] } : {}) });
       if (!likely || share > likely.share) likely = { share, line: [{ uci: r.uci, san: r.san }, ...(deeper?.line ?? [])] };
     }
     // Replies too rare to be listed by the explorer: the position's own score.
     score += Math.max(0, 1 - seen) * base;
-    return { score, line: likely?.line ?? [] };
+    replies.sort((a, b) => b.share - a.share);
+    return { score, line: likely?.line ?? [], replies };
   };
 
   const stats = statsAt(root);
@@ -158,7 +182,16 @@ export function bestMoves(
   const roots = o.only.length ? stats.moves.filter((m) => o.only.includes(m.uci)) : candidatesOf(stats, o.rootCandidates);
   const moves = roots.map((m) => {
     const v = myMove(root, m, own, 1, o.maxDepth);
-    return { uci: m.uci, san: m.san, games: totalGames(m), direct: scoreOf(m, color, 0, 0), score: v.score, minReach: o.minReach, line: v.line };
+    return {
+      uci: m.uci,
+      san: m.san,
+      games: totalGames(m),
+      direct: scoreOf(m, color, 0, 0),
+      score: v.score,
+      minReach: o.minReach,
+      line: v.line,
+      replies: (v.replies ?? []).slice(0, o.maxReplies),
+    };
   });
   return {
     moves: moves.sort((a, b) => b.score - a.score),

@@ -37,6 +37,26 @@ describe('best moves', () => {
     expect(r.moves[1]!.score).toBeCloseTo(0.55);
   });
 
+  it('explains each move by the opponent replies, my answer and the score after each', () => {
+    const table = new Map([
+      [START_FEN, stats([['e2e4', 'e4', 500, 0, 500]])],
+      // 1. e4: e5 in 75% of the games, c5 in 25%.
+      [after('e2e4'), stats([['c7c5', 'c5', 100, 0, 150], ['e7e5', 'e5', 375, 0, 375]])],
+      [after('e2e4', 'e7e5'), stats([['g1f3', 'Nf3', 280, 0, 120], ['f1c4', 'Bc4', 220, 0, 380]])],
+      [after('e2e4', 'c7c5'), stats([['b1c3', 'Nc3', 120, 0, 130]])],
+    ]);
+    const r = bestMoves(START_FEN, (f) => table.get(f), { maxDepth: 2, prior: 0 });
+    const [e5, c5] = r.moves[0]!.replies;
+    expect(e5).toMatchObject({ san: 'e5', answer: { san: 'Nf3' } });
+    expect(e5!.share).toBeCloseTo(0.75);
+    expect(e5!.score).toBeCloseTo(0.7);
+    expect(c5).toMatchObject({ san: 'c5', answer: { san: 'Nc3' } });
+    expect(c5!.score).toBeCloseTo(0.48);
+    expect(r.moves[0]!.score).toBeCloseTo(0.75 * 0.7 + 0.25 * 0.48);
+    // Nothing explored: no replies.
+    expect(bestMoves(START_FEN, (f) => table.get(f), { minReach: 2 }).moves[0]!.replies).toEqual([]);
+  });
+
   it('finds a strong move two moves deep behind a worse first move (depth 3)', () => {
     const table = new Map([
       // 1. d4 scores 55% and stays at 55%; 1. e4 scores 45%…
