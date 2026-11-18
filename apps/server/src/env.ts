@@ -35,7 +35,7 @@ export const env = {
    * its signing keys (comma-separated: upload key and Play App Signing key), published in
    * /.well-known/assetlinks.json so the app opens full screen, without Chrome's address bar.
    */
-  androidPackage: get('ANDROID_PACKAGE', 'dev.fly.tabiya.twa'),
+  androidPackage: get('ANDROID_PACKAGE', 'com.tabiya'),
   androidSha256Fingerprints: (process.env.ANDROID_SHA256_FINGERPRINTS ?? '')
     .split(',')
     .map((f) => f.trim().toUpperCase())
