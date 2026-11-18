@@ -1,0 +1,5 @@
+# Everything Bubblewrap generates from twa-manifest.json, and the signing key (never committed)
+*
+!.gitignore
+!twa-manifest.json
+!README.md

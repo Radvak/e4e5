@@ -30,4 +30,14 @@ export const env = {
    * games (shared by every account). Unset: that import is disabled.
    */
   syncToken: process.env.SYNC_TOKEN || null,
+  /**
+   * Android app (Trusted Web Activity, tools/android): package name and SHA-256 fingerprints of
+   * its signing keys (comma-separated: upload key and Play App Signing key), published in
+   * /.well-known/assetlinks.json so the app opens full screen, without Chrome's address bar.
+   */
+  androidPackage: get('ANDROID_PACKAGE', 'dev.fly.tabiya.twa'),
+  androidSha256Fingerprints: (process.env.ANDROID_SHA256_FINGERPRINTS ?? '')
+    .split(',')
+    .map((f) => f.trim().toUpperCase())
+    .filter(Boolean),
 };

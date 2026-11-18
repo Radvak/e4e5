@@ -40,6 +40,22 @@ app.setErrorHandler((err, _req, reply) => {
 await importSeeds(app.log);
 
 app.get('/api/health', async () => ({ ok: true }));
+// Digital Asset Links of the Android app (Trusted Web Activity): empty list without fingerprints.
+app.get('/.well-known/assetlinks.json', async (_req, reply) => {
+  reply.header('Cache-Control', 'public, max-age=3600');
+  return env.androidSha256Fingerprints.length === 0
+    ? []
+    : [
+        {
+          relation: ['delegate_permission/common.handle_all_urls'],
+          target: {
+            namespace: 'android_app',
+            package_name: env.androidPackage,
+            sha256_cert_fingerprints: env.androidSha256Fingerprints,
+          },
+        },
+      ];
+});
 await app.register(authRoutes);
 await app.register(repertoireRoutes);
 await app.register(explorerRoutes);
