@@ -1,4 +1,4 @@
-import { fenKey, positionFromFen, RATING_BUCKETS, type ExplorerResponse } from '@tabiya/core';
+import { fenKey, positionFromFen, RATING_BUCKETS } from '@tabiya/core';
 import { and, eq } from 'drizzle-orm';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
@@ -6,8 +6,9 @@ import { requireUser } from '../auth.js';
 import { db } from '../db/client.js';
 import { repertoires, repMoves } from '../db/schema.js';
 import { env } from '../env.js';
-import { exportGame, explorerFetch, explorerStream, RateLimited } from '../lichess.js';
-import { getStats, prefetchStats, slim } from '../stats.js';
+import { exportGame, explorerFetch, RateLimited } from '../lichess.js';
+import { myGameMoves, myGamesAt } from '../myGames.js';
+import { getStats, prefetchStats } from '../stats.js';
 import { REACH_STEPS, suggestMoves } from '../suggest.js';
 
 const SPEEDS = ['bullet', 'blitz', 'rapid', 'classical'];
@@ -86,38 +87,28 @@ export async function explorerRoutes(app: FastifyInstance) {
   });
 
   /**
-   * The user's own Lichess games in this position (Lichess "player" explorer): move statistics
-   * and recent games. The first request indexes the games: `done: false` means ask again.
+   * The user's own games in this position, Lichess and Chess.com (the synced games, see
+   * myGames.ts): move statistics and recent games.
    */
   app.get('/api/explorer/mine', { preHandler: requireUser }, async (req, reply) => {
     const q = z
       .object({
         fen: z.string().min(10).max(120),
         color: z.enum(['white', 'black']),
-        speeds: statsParams.shape.speeds,
+        speeds: z.string().transform((s) => s.split(',').filter(Boolean)),
+        days: z.coerce.number().int().min(0).max(3650).default(0),
       })
       .parse(req.query);
     const fen = parseFen(q.fen);
     if (!fen) return reply.code(400).send({ error: 'FEN invalide' });
     const user = req.user!;
-    if (!user.lichessUsername) return reply.code(409).send({ error: 'Liez votre compte Lichess dans les paramètres', reason: 'no-lichess' });
-    const token = user.lichessToken ?? env.lichessAppToken;
-    if (!token) return reply.code(409).send({ error: 'Liez Lichess dans les paramètres', reason: 'no-token' });
-    const params = new URLSearchParams({
-      variant: 'standard',
-      player: user.lichessUsername,
-      color: q.color,
-      fen: `${fen} 0 1`,
-      recentGames: '8',
-      ...(q.speeds.length ? { speeds: q.speeds.join(',') } : {}),
-    });
-    try {
-      const { data, done } = await explorerStream(`/player?${params}`, token, 8000);
-      const raw = (data ?? { white: 0, draws: 0, black: 0, moves: [] }) as ExplorerResponse & { recentGames?: ExplorerGame[] };
-      return { player: user.lichessUsername, done, data: slim(raw), recentGames: (raw.recentGames ?? []).map(game) };
-    } catch (e) {
-      return lichessError(e, reply);
-    }
+    return myGamesAt(user.id, { lichess: user.lichessUsername, chesscom: user.chesscomUsername }, { ...q, fen });
+  });
+
+  /** The moves of one of the user's synced games, to replay it on the board. */
+  app.get<{ Params: { id: string } }>('/api/my-games/:id', { preHandler: requireUser }, async (req, reply) => {
+    const moves = await myGameMoves(req.user!.id, req.params.id);
+    return moves ? { moves } : reply.code(404).send({ error: 'Partie introuvable' });
   });
 
   /** Moves prepared in this position in any of the user's repertoires (both colours). */

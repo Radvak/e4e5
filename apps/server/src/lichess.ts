@@ -67,49 +67,6 @@ export function explorerFetch(path: string, token: string): Promise<unknown> {
   return task;
 }
 
-/**
- * Streaming explorer endpoint (ndjson, e.g. `/player`, which indexes on demand and sends
- * updated results until done). Waits at most `maxMs`, then answers the latest result with
- * `done: false`. Goes through the same one-at-a-time queue as `explorerFetch`.
- */
-export function explorerStream(path: string, token: string, maxMs: number): Promise<{ data: unknown; done: boolean }> {
-  const task = queue.then(async () => {
-    if (Date.now() < cooldownUntil) throw new RateLimited(cooldownUntil);
-    const abort = new AbortController();
-    const timer = setTimeout(() => abort.abort(), maxMs);
-    let latest: unknown = null;
-    let done = false;
-    try {
-      const res = await fetch(`${env.explorerUrl}${path}`, {
-        headers: { Authorization: `Bearer ${token}`, 'User-Agent': UA, Accept: 'application/x-ndjson' },
-        signal: abort.signal,
-      });
-      if (res.status === 429) {
-        cooldownUntil = Date.now() + 60_000;
-        throw new RateLimited(cooldownUntil);
-      }
-      if (!res.ok || !res.body) throw new Error(`Lichess explorer ${res.status}: ${(await res.text()).slice(0, 200)}`);
-      const decoder = new TextDecoder();
-      let buffer = '';
-      for await (const chunk of res.body as unknown as AsyncIterable<Uint8Array>) {
-        buffer += decoder.decode(chunk, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop()!;
-        for (const line of lines) if (line.trim()) latest = JSON.parse(line);
-      }
-      if (buffer.trim()) latest = JSON.parse(buffer);
-      done = true;
-    } catch (e) {
-      if (!abort.signal.aborted) throw e;
-    } finally {
-      clearTimeout(timer);
-    }
-    return { data: latest, done };
-  });
-  queue = task.catch(() => undefined);
-  return task;
-}
-
 export interface ExportedGame {
   id: string;
   players: { white: { user?: { name: string }; rating?: number }; black: { user?: { name: string }; rating?: number } };

@@ -161,12 +161,23 @@ export interface ExplorerGameRef {
   /** Move played in the position (Lichess players database only). */
   uci: string | null;
 }
+/** One of my synced games in a position (rating: null when the site did not give it). */
+export interface MyGameRef {
+  id: string;
+  source: 'lichess' | 'chesscom';
+  url: string;
+  winner: 'white' | 'black' | null;
+  speed: string;
+  white: { name: string; rating: number | null };
+  black: { name: string; rating: number | null };
+  month: string;
+  uci: string | null;
+}
 export interface MyGames {
-  player: string;
-  /** false: Lichess is still indexing the games, ask again. */
-  done: boolean;
   data: ExplorerResponse;
-  recentGames: ExplorerGameRef[];
+  recentGames: MyGameRef[];
+  /** Positions indexed up to this ply: deeper, no games. */
+  maxPly: number;
 }
 export interface RepertoireMoveHere {
   repertoireId: string;
@@ -294,8 +305,9 @@ export const api = {
       'GET',
       `/api/explorer/games?${new URLSearchParams({ fen, speeds: speeds.join(','), ratings: ratings.join(',') })}`,
     ),
-  myGames: (fen: string, color: Color, speeds: string[]) =>
-    request<MyGames>('GET', `/api/explorer/mine?${new URLSearchParams({ fen, color, speeds: speeds.join(',') })}`),
+  myGames: (fen: string, color: Color, speeds: string[], days: number) =>
+    request<MyGames>('GET', `/api/explorer/mine?${new URLSearchParams({ fen, color, speeds: speeds.join(','), days: String(days) })}`),
+  myGameMoves: (id: string) => request<{ moves: string[] }>('GET', `/api/my-games/${encodeURIComponent(id)}`),
   repertoireMovesAt: (fen: string) => request<RepertoireMoveHere[]>('GET', `/api/explorer/repertoires?${new URLSearchParams({ fen })}`),
   lichessGame: (id: string) => request<LichessGame>('GET', `/api/lichess-games/${id}`),
   syncState: () => request<SyncState>('GET', '/api/games/sync'),

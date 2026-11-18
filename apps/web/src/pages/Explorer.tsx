@@ -4,7 +4,7 @@ import type { DrawShape } from 'chessground/draw';
 import type { Key } from 'chessground/types';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { api, ApiError, type ExplorerGameRef, type Me, type RepertoireMoveHere } from '../api';
+import { api, ApiError, type ExplorerGameRef, type Me, type MyGameRef, type RepertoireMoveHere } from '../api';
 import { isPopular } from '../components/arrows';
 import { Board } from '../components/Board';
 import { EngineLines, EngineToggle } from '../components/EnginePanel';
@@ -62,8 +62,9 @@ function restore() {
  * statistics (players of your level, or only your own games) and the games behind them.
  */
 export function Explorer({ me }: { me: Me }) {
-  const { speed, range } = useSettings();
+  const { speed, range, gamesSpeeds, gamesDays } = useSettings();
   const ex = explorerParams(me, speed, range);
+  const hasAccount = !!me.lichess || !!me.chesscom;
   const [params, setParams] = useSearchParams();
   // The line is kept in the URL (?line=e2e4,e7e5: reload and share keep the position) and in
   // localStorage, to find it again when coming back from another page without one.
@@ -114,14 +115,13 @@ export function Explorer({ me }: { me: Me }) {
     retry: false,
     enabled: source === 'lichess',
   });
+  // My synced games (Lichess and Chess.com), with the games settings of the Parties page.
   const mine = useQuery({
-    queryKey: ['explorer-mine', fen, orientation, ex.speeds],
-    queryFn: () => api.myGames(fen, orientation, ex.speeds),
-    enabled: source === 'mine' && !!me.lichess,
+    queryKey: ['explorer-mine', fen, orientation, gamesSpeeds, gamesDays],
+    queryFn: () => api.myGames(fen, orientation, gamesSpeeds, gamesDays),
+    enabled: source === 'mine' && hasAccount,
     retry: false,
     staleTime: 60_000,
-    // Lichess indexes the player's games on the first request: ask again until it is done.
-    refetchInterval: (q) => (q.state.data && !q.state.data.done ? 3000 : false),
   });
   const games = useQuery({
     queryKey: ['explorer-games', fen, ex.speeds, ex.ratings],
@@ -194,7 +194,8 @@ export function Explorer({ me }: { me: Me }) {
 
   /** Replays a game: its moves become the line, at the current position when it goes through it. */
   const loadGame = useMutation({
-    mutationFn: api.lichessGame,
+    // My synced games (any site) from the database, the others from Lichess.
+    mutationFn: (id: string) => (source === 'mine' ? api.myGameMoves(id) : api.lichessGame(id)),
     onSuccess: (g) => {
       const pos = positionFromFen(START_FEN);
       const moves: PlayedMove[] = [];
@@ -323,15 +324,16 @@ export function Explorer({ me }: { me: Me }) {
           )}
           {source === 'mine' && (
             <>
-              {!me.lichess ? (
+              {!hasAccount ? (
                 <p className="muted">
-                  Liez votre compte Lichess dans <Link to="/compte#comptes">Mon compte</Link> pour voir vos propres parties.
+                  Liez Lichess ou indiquez votre pseudo Chess.com dans <Link to="/compte#comptes">Mon compte</Link> pour voir vos propres parties.
                 </p>
               ) : (
                 <p className="muted small-text">
-                  Vos parties Lichess ({mine.data?.player ?? me.lichess.username}) avec les <strong>{orientation === 'white' ? 'Blancs' : 'Noirs'}</strong>,{' '}
-                  {speedsLabel(ex.speeds)} — retournez l’échiquier pour vos parties avec les {orientation === 'white' ? 'Noirs' : 'Blancs'}.
-                  {mine.data && !mine.data.done && ' Lichess indexe vos parties…'}
+                  Vos parties synchronisées ({[me.lichess && `Lichess ${me.lichess.username}`, me.chesscom && `Chess.com ${me.chesscom.username}`].filter(Boolean).join(', ')}) avec les{' '}
+                  <strong>{orientation === 'white' ? 'Blancs' : 'Noirs'}</strong>, {speedsLabel(gamesSpeeds)}, {gamesDays ? `${gamesDays} derniers jours` : 'toutes'} (
+                  <Link to="/settings">Parties analysées</Link>) — retournez l’échiquier pour vos parties avec les {orientation === 'white' ? 'Noirs' : 'Blancs'}.
+                  {mine.data && ply >= mine.data.maxPly && ` Seuls les ${mine.data.maxPly / 2} premiers coups sont indexés.`}
                 </p>
               )}
               {mine.isLoading && <p className="muted">Chargement de vos parties…</p>}
@@ -373,7 +375,7 @@ function groupByMove(rows: RepertoireMoveHere[]) {
 
 const RESULT = { white: '1-0', black: '0-1' } as const;
 
-function GameList({ title, games, onOpen }: { title: string; games: ExplorerGameRef[]; onOpen: (id: string) => void }) {
+function GameList({ title, games, onOpen }: { title: string; games: (ExplorerGameRef | MyGameRef)[]; onOpen: (id: string) => void }) {
   return (
     <>
       <h4 className="games-title">{title}</h4>
@@ -393,7 +395,13 @@ function GameList({ title, games, onOpen }: { title: string; games: ExplorerGame
                 <td>{g.winner ? RESULT[g.winner] : '½-½'}</td>
                 <td className="muted">{[g.speed, g.month].filter(Boolean).join(' · ')}</td>
                 <td>
-                  <a href={`https://lichess.org/${g.id}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} title="Ouvrir sur Lichess">
+                  <a
+                    href={'url' in g ? g.url : `https://lichess.org/${g.id}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    title={'source' in g && g.source === 'chesscom' ? 'Ouvrir sur Chess.com' : 'Ouvrir sur Lichess'}
+                  >
                     ↗
                   </a>
                 </td>

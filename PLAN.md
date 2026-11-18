@@ -104,7 +104,8 @@ Planned: `review_cards` (FSRS state per user move), `game_syncs`, `inbox_items`.
   play a line as a draft); search box (moves, FEN, comment text) with `/` shortcut.
 - [x] **6b. Explorer page**: free board (flip, reset, ←/→, line kept in the URL), Stockfish, moves of all
   repertoires in the position (with links into each), Lichess players statistics or **my games**
-  (Lichess player explorer, ndjson stream, indexing on demand; Chess.com games need phase 5),
+  (the synced Lichess and Chess.com games, with the speeds and period of the games settings;
+  indexed in memory per user by position over the first 30 plies, rebuilt when the games change),
   top / recent games, a click replays the game on the board.
 - [ ] **6. Polish**: search/jump to position, mobile
   layout, PWA, sharing a repertoire with a friend (read-only link / copy).
