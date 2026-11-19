@@ -32,6 +32,8 @@ const LINE_END_MS = 1100;
 
 /** Same position (cards belong to the user: the same position in two repertoires is one question). */
 const same = (a: Item, b: Item) => a.target.fen === b.target.fen;
+/** Dots of the questions passed shown left of the swipe bar (then "+N"). */
+const MAX_DOTS = 8;
 /**
  * A position answered less than this ago waits behind the others (FSRS learning steps make it due
  * again after a minute): it is not asked twice in a row while something else is to do.
@@ -126,6 +128,8 @@ export function ReviewMode({
   const answered = useRef(new Map<string, number>());
   /** Positions of the lines given up in this session (asked after the others). */
   const skipped = useRef(new Set<string>());
+  /** Questions passed with a swipe, last one last (a swipe the other way comes back to it). */
+  const [passed, setPassed] = useState<Question[]>([]);
   const firstOf = (items: Item[]) => items.find((p) => !skipped.current.has(`${p.source.id}|${p.target.fen}`)) ?? items[0];
   /** reviewed: all answers; asked: positions already learnt; firstTry: asked and right first time. */
   const [stats, setStats] = useState({ reviewed: 0, asked: 0, firstTry: 0 });
@@ -279,6 +283,8 @@ export function ReviewMode({
   const record = (q: Question, outcome: Outcome) => {
     const grade: Grade = outcome === 'correct' ? 'good' : 'again';
     answered.current.set(q.target.fen, Date.now());
+    // Answered after all (it came back in the queue): no longer waiting among the passed ones.
+    setPassed((list) => (list.some((p) => same(p, q)) ? list.filter((p) => !same(p, q)) : list));
     // Bonus position (asked to finish the line, not due soon): only a mistake is recorded, so a
     // right answer leaves its schedule unchanged. Due soon: recorded, so it does not come back alone.
     const card = latest(q.source).cardOf(q.target.fen, q.expected.uci);
@@ -315,17 +321,33 @@ export function ReviewMode({
   };
 
   /**
-   * Swipe to the right (bar under the board): the next question now. During the pause after an answer, the one
+   * Swipe to the left (bar under the board): the next question now. During the pause after an answer, the one
    * waiting; while asked, this line is passed without recording anything (asked after the others).
    */
+  const lineKeys = (q: Item & { expected: RepMove }) =>
+    [{ toFen: q.target.fen }, ...restOfLine(q.source, q.expected)].map((m) => `${q.source.id}|${m.toFen}`);
   const onSkip = (q: Question) => {
     if (pending.current) return pending.current();
-    for (const m of [{ toFen: q.target.fen }, ...restOfLine(q.source, q.expected)]) skipped.current.add(`${q.source.id}|${m.toFen}`);
+    for (const k of lineKeys(q)) skipped.current.add(k);
+    setPassed((list) => [...list.filter((p) => !same(p, q)), q]);
     const items = queue.items.filter((p) => !same(p, q));
     const first = firstOf(items.filter((p) => !skipped.current.has(`${p.source.id}|${p.target.fen}`))) ?? firstOf(items);
     if (first && same(first, q)) return;
     setNow(Date.now());
     ask(first ? question(first) : null);
+  };
+
+  /** Swipe to the right: back to the last question passed (its line is no longer put aside). */
+  const onBack = () => {
+    const last = passed.at(-1);
+    if (!last) return;
+    clearTimeout(jumpTimer.current);
+    jumpTimer.current = undefined;
+    pending.current = null;
+    for (const k of lineKeys(last)) skipped.current.delete(k);
+    setPassed((list) => list.slice(0, -1));
+    setNow(Date.now());
+    ask(question(last));
   };
 
   if (!current) {
@@ -370,6 +392,8 @@ export function ReviewMode({
       question={current}
       onAnswered={(played, outcome) => onAnswered(current, played, outcome)}
       onSkip={() => onSkip(current)}
+      passed={passed.length}
+      onBack={onBack}
     />
   );
 }
@@ -399,7 +423,7 @@ function restOfLine(source: Source, move: RepMove): RepMove[] {
  * my previous move, then plays the opponent's reply. A new move is shown; two wrong tries or
  * the time running out reveal it. Another move of my repertoire (an alternative) is not a
  * mistake: try again. One button: the piece to move (hint), then the solution (the move is
- * played, helped, and the line goes on). Swipe to the right on the bar under the board: the
+ * played, helped, and the line goes on). Swipe to the left on the bar under the board: the
  * next question.
  */
 function Drill({
@@ -408,13 +432,19 @@ function Drill({
   question,
   onAnswered,
   onSkip,
+  passed,
+  onBack,
 }: {
   /** Changes with each question. Not used as a React key: the board must stay mounted. */
   round: number;
   question: Question;
   onAnswered: (played: RepMove, outcome: Outcome) => void;
-  /** Swipe to the right on the bar under the board: the next question. */
+  /** Swipe to the left on the bar under the board: the next question. */
   onSkip: () => void;
+  /** Questions passed so far (a dot each, left of the bar). */
+  passed: number;
+  /** Swipe to the right: back to the last question passed. */
+  onBack: () => void;
   /** The line ends with the move just played (shown until the next line). */
   lineDone: boolean;
 }) {
@@ -506,7 +536,7 @@ function Drill({
   };
 
   /**
-   * Swipe to the right on the bar under the board (like Android's gesture bar): its handle follows
+   * Swipe to the left on the bar under the board (like Android's gesture bar): its handle follows
    * the finger, and past a threshold the next question comes. The board keeps its gestures.
    */
   const handle = useRef<HTMLSpanElement>(null);
@@ -531,8 +561,8 @@ function Drill({
       if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
       s.axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
     }
-    // Only to the right (the left gives a little, nothing happens).
-    if (s.axis === 'x') slide(dx > 0 ? dx : dx / 6);
+    // To the left: pass; to the right: back to a question passed (if any, else it gives a little).
+    if (s.axis === 'x') slide(dx < 0 || passed > 0 ? dx : dx / 6);
   };
   const endSwipe = (e: React.TouchEvent<HTMLDivElement>) => {
     const s = swipe.current;
@@ -541,7 +571,9 @@ function Drill({
     const t = e.changedTouches[0];
     if (!s || !t || s.axis !== 'x' || e.type === 'touchcancel') return;
     const dx = t.clientX - s.x;
-    if (dx > Math.max(50, e.currentTarget.getBoundingClientRect().width * 0.25)) onSkip();
+    const threshold = Math.max(50, e.currentTarget.getBoundingClientRect().width * 0.25);
+    if (-dx > threshold) onSkip();
+    else if (dx > threshold && passed > 0) onBack();
   };
 
   /** The moves on the board, from the start. */
@@ -620,10 +652,16 @@ function Drill({
           onTouchMove={onTouchMove}
           onTouchEnd={endSwipe}
           onTouchCancel={endSwipe}
-          title="Balayez vers la droite pour passer à la suite"
+          title={passed ? `Balayez vers la gauche pour passer, vers la droite pour revenir (${passed} passée${passed > 1 ? 's' : ''})` : 'Balayez vers la gauche pour passer à la suite'}
         >
+          {passed > 0 && (
+            <span className="swipe-passed" aria-label={`${passed} question${passed > 1 ? 's' : ''} passée${passed > 1 ? 's' : ''}`}>
+              {Array.from({ length: Math.min(passed, MAX_DOTS) }, (_, i) => <span key={i} className="dot-passed" />)}
+              {passed > MAX_DOTS && <span className="more">+{passed - MAX_DOTS}</span>}
+            </span>
+          )}
           <span ref={handle} className="swipe-handle" aria-hidden="true" />
-          <span className="swipe-label muted">balayez → pour passer</span>
+          <span className="swipe-label muted">{passed ? '← passer · revenir →' : '← balayez pour passer'}</span>
         </div>
       </div>
     </div>

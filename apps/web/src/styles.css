@@ -676,9 +676,12 @@ button.badge:focus-visible { outline: 2px solid currentColor; outline-offset: 1p
 .level-table .explorer .wdl .bar { min-width: 40px; }
 @media (max-width: 480px) { .level-table td.count .share { display: none; } }
 .rep-row .meta .known { color: var(--text); font-weight: 600; }
-/* Review: a bar under the board to swipe to the right for the next question, like Android's
+/* Review: a bar under the board to swipe to the left for the next question, like Android's
    gesture bar (touch screens only). Sideways moves stay with the script, vertical ones scroll. */
 .swipe-bar { display: none; position: relative; align-items: center; justify-content: center; height: 36px; margin: 8px var(--page-pad) 0; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
 .swipe-handle { width: 72px; height: 5px; border-radius: 3px; background: var(--border-strong); }
 .swipe-label { position: absolute; bottom: -6px; font-size: 0.68rem; pointer-events: none; }
 @media (hover: none) and (pointer: coarse) { .swipe-bar { display: flex; } }
+.swipe-passed { position: absolute; left: 0; top: 50%; transform: translateY(-50%); display: flex; align-items: center; gap: 4px; pointer-events: none; }
+.swipe-passed .dot-passed { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+.swipe-passed .more { font-size: 0.68rem; color: var(--muted); margin-left: 2px; }
