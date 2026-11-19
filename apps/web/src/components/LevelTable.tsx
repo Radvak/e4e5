@@ -1,4 +1,5 @@
 import { playUci, totalGames, type Color, type ExplorerResponse, type PlayedMove } from '@tabiya/core';
+import { San } from './Nag';
 import { Fragment, useState } from 'react';
 import type { BestMovesResponse } from '../api';
 import { moveText } from '../chessText';
@@ -28,8 +29,8 @@ export function useLevelSort() {
  * The Lichess moves of the position merged with the search at my level: one row per move with
  * its score, number of games (absolute: how reliable the score is) and win/draw/loss bar. The score is the move's own one
  * (wins + draws / 2, from my side) at 0, else the expected score over the lines followed while
- * they come up in at least the share of the games chosen with the slider of the footer (my turn
- * only; the number of moves follows from it). Sorted by score or by
+ * they come up in at least the share of the games set by the box of the footer (checked: 6 %; my
+ * turn only; the number of moves follows from it). Sorted by score or by
  * frequency (arrows of the headers); the first rows, "N autres coups" for the others. A row
  * unfolds into the expected line and the opponent's replies.
  */
@@ -39,6 +40,7 @@ export function LevelTable({
   color,
   firstMoveNumber,
   inRep,
+  nagsOf,
   onPick,
   onPlay,
   markPopular,
@@ -60,6 +62,8 @@ export function LevelTable({
   /** Ply count of the position (for move numbers). */
   firstMoveNumber: number;
   inRep: (uci: string) => boolean;
+  /** PGN annotations of a move of my repertoires here (!, ?, …): the move is coloured. */
+  nagsOf?: (uci: string) => readonly number[] | null | undefined;
   onPick: (uci: string) => void;
   onPlay: (moves: PlayedMove[]) => void;
   markPopular: boolean;
@@ -118,7 +122,7 @@ export function LevelTable({
   };
   const numbered = (i: number, san: string) => moveText(Array(firstMoveNumber + i).fill(''), san, true);
 
-  // The slider sets how likely a line must stay to be followed (thresholds of the search steps),
+  // The box sets how likely a line must stay to be followed (thresholds of the search steps),
   // not a number of moves: how far the lines go follows from it, and varies with the position.
   const steps = level?.steps ?? [0.5, 0.25, 0.12, 0.06];
   const threshold = (d: number) => (d > 0 ? `lignes ≥ ${pct(steps[d - 1]!)}` : 'coup seul');
@@ -190,7 +194,7 @@ export function LevelTable({
                 >
                   <td className="san">
                     {prepared ? '✓ ' : ''}
-                    {m.san}
+                    <San san={m.san} nags={nagsOf?.(m.uci)} />
                     {engineBest === m.uci && (
                       <span className="sf-tag" title="Aussi le meilleur coup de Stockfish" aria-label="Aussi le meilleur coup de Stockfish">
                         <Icon name="engine" size={12} />
@@ -269,20 +273,17 @@ export function LevelTable({
         <label className="level-depth" title={why}>
           {computing && <span className="pulse" aria-hidden="true" />}
           <input
-            type="range"
-            min={0}
-            max={maxDepth}
-            step={1}
-            value={canSearch ? depth : 0}
+            type="checkbox"
+            checked={canSearch && depth > 0}
             disabled={!canSearch}
-            onChange={(e) => onDepth(Number(e.target.value))}
-            aria-label="Lignes suivies : jusqu’à quelle part des parties (à gauche : score de chaque coup seul)"
-            aria-valuetext={threshold(canSearch ? depth : 0)}
+            onChange={(e) => onDepth(e.target.checked ? maxDepth : 0)}
+            aria-label="Profondeur : suivre les lignes probables à votre niveau (sinon : score de chaque coup seul)"
           />
-          {threshold(canSearch ? depth : 0)}
-          {plies > 1 && ` · ${plies} demi-coups`}
-          {short && ` · ${short}`} · Lichess {range}
+          <span className="level-info">
+            {!canSearch ? 'tour adverse' : `profondeur${depth > 0 && plies > 1 ? ` · ${plies} ½-coups` : ''}${depth > 0 && short ? ` · ${short}` : ''}`}
+          </span>
         </label>
+        <span className="level-range">Lichess {range}</span>
       </div>
     </>
   );

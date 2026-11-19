@@ -27,10 +27,10 @@ const STATUSES: { id: StatusFilter; label: string }[] = [
   { id: 'paused', label: 'En pause' },
 ];
 const SORTS: { id: Sort; label: string }[] = [
+  { id: 'recent', label: 'Plus récents' },
   { id: 'name', label: 'Nom' },
   { id: 'due', label: 'À revoir' },
   { id: 'lines', label: 'Nombre de lignes' },
-  { id: 'recent', label: 'Plus récents' },
 ];
 
 /** Lower case without accents, for the search. */
@@ -62,7 +62,7 @@ export function Repertoires({ me }: { me: Me }) {
   const query = params.get('q') ?? '';
   const colorFilter = oneOf<ColorFilter>(params.get('couleur'), ['all', 'white', 'black'], 'all');
   const status = oneOf<StatusFilter>(params.get('etat'), STATUSES.map((s) => s.id), 'all');
-  const sort = oneOf<Sort>(params.get('tri'), SORTS.map((s) => s.id), 'name');
+  const sort = oneOf<Sort>(params.get('tri'), SORTS.map((s) => s.id), 'recent');
   const setParam = (key: string, value: string, def: string) =>
     setParams(
       (p) => {
@@ -188,7 +188,7 @@ export function Repertoires({ me }: { me: Me }) {
             <select aria-label="Filtrer par état" value={status} onChange={(e) => setParam('etat', e.target.value, 'all')}>
               {statusOptions.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
             </select>
-            <select aria-label="Trier" value={sort} onChange={(e) => setParam('tri', e.target.value, 'name')}>
+            <select aria-label="Trier" value={sort} onChange={(e) => setParam('tri', e.target.value, 'recent')}>
               {SORTS.map((s) => <option key={s.id} value={s.id}>Tri : {s.label}</option>)}
             </select>
           </div>

@@ -140,16 +140,6 @@ export interface BestMovesResponse {
   pending: number;
 }
 
-export interface ExplorerGameRef {
-  id: string;
-  winner: 'white' | 'black' | null;
-  speed: string | null;
-  white: { name: string; rating: number };
-  black: { name: string; rating: number };
-  month: string;
-  /** Move played in the position (Lichess players database only). */
-  uci: string | null;
-}
 /** One of my synced games in a position (rating: null when the site did not give it). */
 export interface MyGameRef {
   id: string;
@@ -176,17 +166,8 @@ export interface RepertoireMoveHere {
   san: string;
   isMain: boolean;
   comment: string | null;
-}
-export interface LichessGame {
-  id: string;
-  white: { name: string; rating: number | null };
-  black: { name: string; rating: number | null };
-  winner: 'white' | 'black' | null;
-  status: string;
-  speed: string;
-  date: string;
-  /** SAN moves. */
-  moves: string[];
+  /** PGN annotations of the move (!, ?, …). */
+  nags: number[] | null;
 }
 
 export type GameResult = 'win' | 'draw' | 'loss';
@@ -280,11 +261,6 @@ export const api = {
     request<ReviewCard>('POST', `/api/repertoires/${id}/review`, answer),
   gaps: (speeds: string[], ratings: number[], cutoff: number) =>
     request<GapsResponse>('GET', `/api/gaps?${new URLSearchParams({ speeds: speeds.join(','), ratings: ratings.join(','), cutoff: String(cutoff) })}`),
-  explorerGames: (fen: string, speeds: string[], ratings: number[]) =>
-    request<{ topGames: ExplorerGameRef[]; recentGames: ExplorerGameRef[] }>(
-      'GET',
-      `/api/explorer/games?${new URLSearchParams({ fen, speeds: speeds.join(','), ratings: ratings.join(',') })}`,
-    ),
   myGames: (fen: string, color: Color, speeds: string[], days: number) =>
     request<MyGames>('GET', `/api/explorer/mine?${new URLSearchParams({ fen, color, speeds: speeds.join(','), days: String(days) })}`),
   myGameMoves: (id: string) => request<{ moves: string[] }>('GET', `/api/my-games/${encodeURIComponent(id)}`),
@@ -292,7 +268,6 @@ export const api = {
   opening: (line: string) =>
     request<{ eco: string; name: string } | null>('GET', `/api/explorer/opening?${new URLSearchParams({ line })}`),
   repertoireMovesAt: (fen: string) => request<RepertoireMoveHere[]>('GET', `/api/explorer/repertoires?${new URLSearchParams({ fen })}`),
-  lichessGame: (id: string) => request<LichessGame>('GET', `/api/lichess-games/${id}`),
   syncState: () => request<SyncState>('GET', '/api/games/sync'),
   startSync: (source: 'chesscom' | 'lichess') => request<SyncJob>('POST', '/api/games/sync', { source }),
   gamesReport: (days: number, speeds: string[]) =>

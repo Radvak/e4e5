@@ -106,7 +106,7 @@ Planned: `review_cards` (FSRS state per user move), `game_syncs`, `inbox_items`.
   repertoires in the position (with links into each), Lichess players statistics or **my games**
   (the synced Lichess and Chess.com games, with the speeds and period of the games settings;
   indexed in memory per user by position over the first 30 plies, rebuilt when the games change),
-  top / recent games, a click replays the game on the board.
+  and, with my games only, my recent games in the position (a click replays the game on the board).
 - [ ] **6. Polish**: search/jump to position, mobile
   layout, PWA, sharing a repertoire with a friend (read-only link / copy).
 - [x] **7. Hosting**: Fly.io app `tabiya` (https://tabiya.fly.dev), one machine in

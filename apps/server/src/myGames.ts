@@ -14,7 +14,8 @@ type Game = typeof games.$inferSelect;
 /** Positions indexed: the opening, where the explorer is used. */
 export const MAX_PLY = 30;
 const IDLE_MS = 10 * 60_000;
-const RECENT = 8;
+/** Recent games returned per move played in the position. */
+const RECENT = 10;
 
 interface Index {
   signature: string;
@@ -108,9 +109,15 @@ export async function myGamesAt(userId: string, names: { lichess: string | null;
     m[winner]++;
   }
   data.moves = [...perMove.values()].sort((a, b) => b.white + b.draws + b.black - (a.white + a.draws + a.black));
+  // The most recent games of each move (the Explorer unfolds a move into its games).
+  const count = new Map<number, number>();
   const recentGames = through
     .sort((a, b) => b.game.playedAt.getTime() - a.game.playedAt.getTime())
-    .slice(0, RECENT)
+    .filter(({ code }) => {
+      const n = count.get(code) ?? 0;
+      count.set(code, n + 1);
+      return n < RECENT;
+    })
     .map(({ game: g, code }) => {
       const me = { name: (g.source === 'lichess' ? names.lichess : names.chesscom) ?? 'moi', rating: g.myRating };
       const opponent = { name: g.opponent, rating: g.opponentRating };

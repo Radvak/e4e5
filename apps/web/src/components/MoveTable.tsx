@@ -1,5 +1,8 @@
 import { totalGames, type ExplorerResponse } from '@tabiya/core';
+import { Fragment, useState, type ReactNode } from 'react';
+import { Icon } from '../ui';
 import { isPopular } from './arrows';
+import { San } from './Nag';
 
 function pct(n: number, total: number) {
   return total ? (100 * n) / total : 0;
@@ -7,9 +10,11 @@ function pct(n: number, total: number) {
 
 /**
  * One row per move: games (share in brackets), win/draw/loss bar. Moves in the repertoire are marked.
- * `limit`: only the most played moves, plus the repertoire moves played less often.
+ * `limit`: only the most played moves, plus the repertoire moves played less often. `detail`: what
+ * a row unfolds into (chevron), e.g. the games with that move.
  */
-export function MoveTable({ data, inRep, onPick, limit, markPopular = true }: { data: ExplorerResponse; inRep: (uci: string) => boolean; onPick: (uci: string) => void; limit?: number; markPopular?: boolean }) {
+export function MoveTable({ data, inRep, nagsOf, onPick, limit, markPopular = true, detail }: { data: ExplorerResponse; inRep: (uci: string) => boolean; nagsOf?: (uci: string) => readonly number[] | null | undefined; onPick: (uci: string) => void; limit?: number; markPopular?: boolean; detail?: (uci: string) => ReactNode }) {
+  const [open, setOpen] = useState<string | null>(null);
   const total = totalGames(data);
   if (total === 0) return <p className="muted">Aucune partie dans cette position.</p>;
   const moves = limit ? data.moves.filter((m, i) => i < limit || inRep(m.uci)) : data.moves;
@@ -21,14 +26,18 @@ export function MoveTable({ data, inRep, onPick, limit, markPopular = true }: { 
           const prepared = inRep(m.uci);
           // Same colours as the arrows: green in the repertoire, orange popular but missing.
           const popular = markPopular && !prepared && isPopular(data.moves.indexOf(m), n / total);
+          const isOpen = !!detail && open === m.uci;
           return (
+            <Fragment key={m.uci}>
             <tr
-              key={m.uci}
               className={prepared ? 'in-rep' : popular ? 'popular' : ''}
               onClick={() => onPick(m.uci)}
               title={prepared ? 'Dans votre répertoire' : popular ? 'Joué souvent, pas dans votre répertoire' : 'Jouer ce coup'}
             >
-              <td className="san">{prepared ? '✓ ' : ''}{m.san}</td>
+              <td className="san">
+                {prepared ? '✓ ' : ''}
+                <San san={m.san} nags={nagsOf?.(m.uci)} />
+              </td>
               <td className="games">
                 {n.toLocaleString('fr-FR')}{' '}
                 <span className="share">({pct(n, total).toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} %)</span>
@@ -40,7 +49,25 @@ export function MoveTable({ data, inRep, onPick, limit, markPopular = true }: { 
                   <span className="b" style={{ width: `${pct(m.black, n)}%` }} />
                 </div>
               </td>
+              {detail && (
+                <td className="unfold-col" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    className={`unfold ${isOpen ? 'open' : ''}`}
+                    onClick={() => setOpen(isOpen ? null : m.uci)}
+                    title={isOpen ? 'Masquer les parties' : 'Voir les parties avec ce coup'}
+                    aria-expanded={isOpen}
+                  >
+                    <Icon name="chevron" size={16} />
+                  </button>
+                </td>
+              )}
             </tr>
+            {isOpen && (
+              <tr className="move-detail">
+                <td colSpan={4}>{detail!(m.uci)}</td>
+              </tr>
+            )}
+            </Fragment>
           );
         })}
       </tbody>

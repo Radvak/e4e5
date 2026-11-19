@@ -1,23 +1,22 @@
 import { playSanOn, playUci, positionFromFen, START_FEN, totalGames, type Color, type PlayedMove } from '@tabiya/core';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQueries, useQuery } from '@tanstack/react-query';
 import type { DrawShape } from 'chessground/draw';
 import type { Key } from 'chessground/types';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { api, ApiError, type ExplorerGameRef, type Me, type MyGameRef, type RepertoireMoveHere } from '../api';
+import { api, ApiError, type Me, type MyGameRef, type RepertoireMoveHere } from '../api';
 import { isPopular } from '../components/arrows';
 import { Board } from '../components/Board';
 import { EngineLines, EngineToggle } from '../components/EnginePanel';
-import { JumpBox } from '../components/JumpBox';
+import { lineText, parseMoves } from '../components/lineText';
 import { useEngine } from '../engine/useEngine';
-import { LevelLines, LevelToggle, topLevelMove, useBestMoves, useLevelToggle } from '../components/BestMoves';
+import { LEVEL_STEPS, LevelToggle, topLevelMove, useBestMoves, useLevelDepth, useLevelToggle } from '../components/BestMoves';
+import { ExplorerPanel } from '../components/ExplorerPanel';
 import { MoveTable } from '../components/MoveTable';
+import { moveNag, San } from '../components/Nag';
 import { OpeningName } from '../components/OpeningName';
-import { StatsSource } from '../components/StatsSource';
 import { explorerParams, rangeLabel, speedsLabel, useSettings } from '../settings';
-import { PageHeader, Tabs } from '../ui';
-
-type Source = 'lichess' | 'mine';
+import { Icon, PageHeader } from '../ui';
 
 /** Moves from the initial position, as UCI, for links. */
 const ucis = (line: PlayedMove[]) => line.map((m) => m.uci).join(',');
@@ -60,7 +59,8 @@ function restore() {
 
 /**
  * Free exploration of any position: board, the moves of all your repertoires, Lichess
- * statistics (players of your level, or only your own games) and the games behind them.
+ * statistics of players of your level (violet card) and your own games (each move unfolds into
+ * its games).
  */
 export function Explorer({ me }: { me: Me }) {
   const { speed, range, gamesSpeeds, gamesDays } = useSettings();
@@ -73,8 +73,6 @@ export function Explorer({ me }: { me: Me }) {
   const [line, setLineState] = useState<PlayedMove[]>(initial.line);
   const [ply, setPlyState] = useState(initial.ply);
   const [orientation, setOrientation] = useState<Color>(initial.orientation);
-  const [source, setSource] = useState<Source>(() => (localStorage.getItem('explorerSource') === 'mine' ? 'mine' : 'lichess'));
-  const [showGames, setShowGames] = useState(false);
 
   const sync = (l: PlayedMove[], p: number, o = orientation) => {
     setParams({ ...(p ? { line: ucis(l.slice(0, p)) } : {}), ...(o === 'black' ? { color: 'black' } : {}) }, { replace: true });
@@ -109,27 +107,27 @@ export function Explorer({ me }: { me: Me }) {
   };
 
   const repMoves = useQuery({ queryKey: ['explorer-reps', fen], queryFn: () => api.repertoireMovesAt(fen) });
+  // Annotations of the moves of the line (from my repertoires): the moves of each position of the
+  // line, same queries as above (cached), so going back and forth costs nothing.
+  const pathPositions = useQueries({
+    queries: line.map((m) => ({ queryKey: ['explorer-reps', m.fromFen], queryFn: () => api.repertoireMovesAt(m.fromFen), staleTime: 60_000 })),
+  });
+  const pathNags = line.map((m, i) => pathPositions[i]?.data?.find((r) => r.uci === m.uci && r.nags?.length)?.nags ?? null);
+  const [levelOn, toggleLevel] = useLevelToggle();
   const lichess = useQuery({
     queryKey: ['explorer', fen, ex.speeds, ex.ratings],
     queryFn: () => api.explorer(fen, ex.speeds, ex.ratings),
     staleTime: Infinity,
     retry: false,
-    enabled: source === 'lichess',
+    // The arrows of the popular moves, and the violet card (Lichess statistics merged with the search).
   });
   // My synced games (Lichess and Chess.com), with the games settings of the Parties page.
   const mine = useQuery({
     queryKey: ['explorer-mine', fen, orientation, gamesSpeeds, gamesDays],
     queryFn: () => api.myGames(fen, orientation, gamesSpeeds, gamesDays),
-    enabled: source === 'mine' && hasAccount,
+    enabled: hasAccount,
     retry: false,
     staleTime: 60_000,
-  });
-  const games = useQuery({
-    queryKey: ['explorer-games', fen, ex.speeds, ex.ratings],
-    queryFn: () => api.explorerGames(fen, ex.speeds, ex.ratings),
-    enabled: source === 'lichess' && showGames,
-    staleTime: Infinity,
-    retry: false,
   });
 
   // Stockfish, with the same on/off setting as the repertoire editor.
@@ -140,10 +138,11 @@ export function Explorer({ me }: { me: Me }) {
   };
   const engine = useEngine(fen, engineOn);
   const best = engineOn ? engine.lines[0]?.pv[0] : undefined;
-  // Moves at my level for the side to move (Lichess explorer), only when asked.
-  const [levelOn, toggleLevel] = useLevelToggle();
-  const level = useBestMoves(fen, ex.speeds, ex.ratings, levelOn);
-  const levelBest = levelOn ? topLevelMove(level.data) : undefined;
+  // Moves at my level for the side to move (Lichess explorer), only when asked: the violet card.
+  const [levelDepth, onDepth] = useLevelDepth();
+  const depth = levelOn ? levelDepth : 0;
+  const level = useBestMoves(fen, ex.speeds, ex.ratings, depth > 0, depth);
+  const levelBest = depth > 0 ? topLevelMove(level.data) : undefined;
   /** Plays an engine line from the current position (follows the line when it matches). */
   const playMoves = (moves: PlayedMove[]) => {
     const follows = moves.every((m, i) => line[ply + i]?.uci === m.uci);
@@ -151,7 +150,8 @@ export function Explorer({ me }: { me: Me }) {
     else setLine([...shown, ...moves], ply + moves.length);
   };
 
-  const data = source === 'lichess' ? lichess.data?.data : mine.data?.data;
+  // The arrows (popular moves) follow the Lichess players of my level.
+  const data = lichess.data?.data;
   const prepared = useMemo(() => groupByMove(repMoves.data ?? []), [repMoves.data]);
   // My move already prepared in a repertoire of the side to move: no popular (orange) moves to suggest.
   const turn: Color = fen.split(' ')[1] === 'b' ? 'black' : 'white';
@@ -167,7 +167,11 @@ export function Explorer({ me }: { me: Me }) {
       brush,
       modifiers: { lineWidth },
     });
-    const out = [...prepared.keys()].map((uci) => arrow(uci, 'repertoire', width(share.get(uci) ?? 0, 9)));
+    // Repertoire moves in green, or in the colour of their annotation (!, ?, !?…) when they have one.
+    const out = [...prepared.values()].map(({ uci, nags }) => {
+      const nag = moveNag(nags);
+      return arrow(uci, nag ? `nag-${nag.kind}` : 'repertoire', width(share.get(uci) ?? 0, 9));
+    });
     for (const [i, m] of (data?.moves ?? []).entries()) {
       const s = share.get(m.uci) ?? 0;
       if (markPopular && isPopular(i, s) && !prepared.has(m.uci)) out.push(arrow(m.uci, 'popular', width(s)));
@@ -176,6 +180,9 @@ export function Explorer({ me }: { me: Me }) {
     if (best) out.push(arrow(best.uci, 'engine', 6));
     return out;
   }, [data, prepared, markPopular, best?.uci, levelBest?.uci]);
+
+  /** The line typed instead of the moves path (pencil, or "/"). */
+  const [editing, setEditing] = useState(false);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -188,15 +195,29 @@ export function Explorer({ me }: { me: Me }) {
       if (e.key === 'f') flip();
       if (e.key === 'e') toggleEngine(!engineOn);
       if (e.key === 'n') toggleLevel(!levelOn);
+      if (e.key === '/') {
+        e.preventDefault();
+        setEditing(true);
+      }
+    };
+    // A line pasted anywhere on the page (not in a field): go there.
+    const onPaste = (e: ClipboardEvent) => {
+      if ((e.target as HTMLElement).closest('textarea, input, select')) return;
+      const moves = parseMoves(e.clipboardData?.getData('text') ?? '');
+      if (moves) setLine(moves, moves.length);
     };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener('paste', onPaste);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('paste', onPaste);
+    };
   });
 
   /** Replays a game: its moves become the line, at the current position when it goes through it. */
   const loadGame = useMutation({
-    // My synced games (any site) from the database, the others from Lichess.
-    mutationFn: (id: string) => (source === 'mine' ? api.myGameMoves(id) : api.lichessGame(id)),
+    // My synced games (any site), from the database.
+    mutationFn: api.myGameMoves,
     onSuccess: (g) => {
       const pos = positionFromFen(START_FEN);
       const moves: PlayedMove[] = [];
@@ -210,12 +231,7 @@ export function Explorer({ me }: { me: Me }) {
     },
   });
 
-  const chooseSource = (s: Source) => {
-    localStorage.setItem('explorerSource', s);
-    setSource(s);
-  };
   const last = line[ply - 1];
-  const gameList = source === 'lichess' ? games.data : mine.data ? { topGames: [], recentGames: mine.data.recentGames } : undefined;
 
   return (
     <>
@@ -244,120 +260,124 @@ export function Explorer({ me }: { me: Me }) {
           firstMoveNumber={ply}
           onPlay={playMoves}
         />
-        <LevelLines
-          enabled={levelOn}
-          fen={fen}
-          firstMoveNumber={ply}
-          speeds={ex.speeds}
-          ratings={ex.ratings}
-          range={rangeLabel(ex.ratings)}
-          engineBest={best?.uci}
-          onPlay={playMoves}
-        />
+        {levelOn && (
+          <ExplorerPanel
+            fen={fen}
+            color={turn}
+            inRep={(uci) => prepared.has(uci)}
+            nagsOf={(uci) => prepared.get(uci)?.nags}
+            stats={lichess.data}
+            error={lichess.error}
+            loading={lichess.isLoading}
+            onPick={play}
+            markPopular={markPopular}
+            firstMoveNumber={ply}
+            onPlay={playMoves}
+            level={{
+              data: level.data,
+              loading: level.isLoading,
+              error: level.error,
+              depth,
+              maxDepth: LEVEL_STEPS,
+              onDepth,
+              canSearch: true,
+              range: rangeLabel(ex.ratings),
+              engineBest: best?.uci,
+            }}
+          />
+        )}
       </div>
 
       <div className="editor-side">
         <section className="panel">
-          <JumpBox onJump={(moves) => setLine(moves, moves.length)} />
-          <div className="moves-path">
-            <button className={`link ${ply === 0 ? 'current' : ''}`} onClick={() => goTo(0)}>Début</button>
-            {line.map((m, i) => (
-              <button
-                key={i}
-                className={['link', i === ply - 1 ? 'current' : '', i >= ply ? 'ahead' : ''].filter(Boolean).join(' ')}
-                onClick={() => goTo(i + 1)}
-              >
-                {i % 2 === 0 ? `${i / 2 + 1}. ` : ''}{m.san}
+          {editing ? (
+            <LineInput
+              initial={lineText(line.slice(0, ply))}
+              onJump={(moves) => {
+                setLine(moves, moves.length);
+                setEditing(false);
+              }}
+              onCancel={() => setEditing(false)}
+            />
+          ) : (
+            <div className="moves-path">
+              {line.length === 0 && <span className="muted">Position initiale</span>}
+              {line.map((m, i) => (
+                <button
+                  key={i}
+                  className={['link', i === ply - 1 ? 'current' : '', i >= ply ? 'ahead' : ''].filter(Boolean).join(' ')}
+                  onClick={() => goTo(i + 1)}
+                >
+                  {i % 2 === 0 ? `${i / 2 + 1}. ` : ''}
+                  <San san={m.san} nags={pathNags[i]} />
+                </button>
+              ))}
+              <button className="line-edit" onClick={() => setEditing(true)} title="Taper ou coller une ligne (/)" aria-label="Taper ou coller une ligne">
+                <Icon name="pencil" size={15} />
               </button>
-            ))}
-          </div>
-          <p className="muted small-text keys">
-            <kbd>←</kbd><kbd>→</kbd> naviguer · <kbd>f</kbd> retourner · <kbd>e</kbd> moteur · <kbd>n</kbd> à votre niveau
-          </p>
-        </section>
-
-        <section className="panel">
-          <h3>Dans vos répertoires</h3>
-          {repMoves.data && prepared.size === 0 && <p className="muted">Aucun répertoire n’a de coup dans cette position.</p>}
+            </div>
+          )}
+          {/* The moves of my repertoires here, numbered as the next move of the line. */}
+          {repMoves.data && prepared.size === 0 && <p className="muted small-text rep-none">Aucun répertoire n’a de coup ici.</p>}
           <ul className="rep-moves">
-            {[...prepared.values()].map(({ san, uci, reps }) => (
-              <li key={uci}>
-                <button className="link san" onClick={() => play(uci)}>{san}</button>
-                {reps.map((r) => (
-                  <Link
-                    key={r.repertoireId}
-                    className="rep-tag"
-                    to={`/r/${r.repertoireId}?${new URLSearchParams({ line: ucis([...shown, playUci(fen, uci)!]) })}`}
-                    title={`Ouvrir ${r.name} sur ce coup${r.comment ? ` — ${r.comment}` : ''}`}
-                  >
-                    <span className={`dot inline ${r.color}`} /> {r.name}
-                  </Link>
-                ))}
+            {[...prepared.values()].map(({ san, uci, nags, reps }) => (
+              <li key={uci} className="rep-here">
+                <button className="link san" onClick={() => play(uci)}>
+                  <span className="move-num">{ply % 2 === 0 ? `${ply / 2 + 1}.` : `${(ply + 1) / 2}…`}</span>
+                  <San san={san} nags={nags} />
+                </button>
+                {/* One line per move: its repertoires side by side, scrolled sideways when they overflow. */}
+                <span className="rep-tags">
+                  {reps.map((r) => (
+                    <Link
+                      key={r.repertoireId}
+                      className="rep-tag"
+                      to={`/r/${r.repertoireId}?${new URLSearchParams({ line: ucis([...shown, playUci(fen, uci)!]) })}`}
+                      title={`Ouvrir ${r.name} sur ce coup${r.comment ? ` — ${r.comment}` : ''}`}
+                    >
+                      <span className={`dot inline ${r.color}`} /> {r.name}
+                    </Link>
+                  ))}
+                </span>
               </li>
             ))}
           </ul>
+          <p className="muted small-text keys">
+            <kbd>←</kbd><kbd>→</kbd> naviguer · <kbd>f</kbd> retourner · <kbd>e</kbd> moteur · <kbd>n</kbd> à votre niveau · <kbd>/</kbd> taper une ligne (ou collez-la)
+          </p>
         </section>
 
 
+        {/* My games in this position: the moves I played, each one unfolding into its games. */}
         <section className="panel">
-          <div className="row">
-            <Tabs
-              value={source}
-              onChange={chooseSource}
-              tabs={[
-                { id: 'lichess', label: 'Joueurs Lichess' },
-                { id: 'mine', label: 'Mes parties' },
-              ]}
+          <h3>Mes parties</h3>
+          {!hasAccount ? (
+            <p className="muted">
+              Liez Lichess ou indiquez votre pseudo Chess.com dans <Link to="/compte#comptes">Mon compte</Link> pour voir vos propres parties.
+            </p>
+          ) : (
+            <p className="muted small-text">
+              Vos parties synchronisées ({[me.lichess && `Lichess ${me.lichess.username}`, me.chesscom && `Chess.com ${me.chesscom.username}`].filter(Boolean).join(', ')}) avec les{' '}
+              <strong>{orientation === 'white' ? 'Blancs' : 'Noirs'}</strong>, {speedsLabel(gamesSpeeds)}, {gamesDays ? `${gamesDays} derniers jours` : 'toutes'} (
+              <Link to="/settings">Parties analysées</Link>) — retournez l’échiquier pour vos parties avec les {orientation === 'white' ? 'Noirs' : 'Blancs'}.
+              {mine.data && ply >= mine.data.maxPly && ` Seuls les ${mine.data.maxPly / 2} premiers coups sont indexés.`}
+            </p>
+          )}
+          {mine.isLoading && <p className="muted">Chargement de vos parties…</p>}
+          {mine.error && <ErrorText error={mine.error} />}
+          {mine.data && (
+            <MoveTable
+              data={mine.data.data}
+              inRep={(uci) => prepared.has(uci)}
+              nagsOf={(uci) => prepared.get(uci)?.nags}
+              onPick={play}
+              markPopular={markPopular}
+              detail={(uci) => <GameRows games={mine.data!.recentGames.filter((g) => g.uci === uci)} onOpen={(id) => loadGame.mutate(id)} />}
             />
-            {data?.opening && <span className="muted small-text" style={{ margin: 0 }}>{data.opening.eco} · {data.opening.name}</span>}
-          </div>
-
-          {source === 'lichess' && (
-            <>
-              <div className="row" style={{ margin: '10px 0' }}>
-                <StatsSource me={me} />
-              </div>
-              {lichess.data && !lichess.data.meta.exact && (
-                <p className="warning small-text">Pas de données pour votre tranche : la plus proche est affichée.</p>
-              )}
-              {lichess.isLoading && <p className="muted">Chargement…</p>}
-              {lichess.error && <ErrorText error={lichess.error} />}
-            </>
-          )}
-          {source === 'mine' && (
-            <>
-              {!hasAccount ? (
-                <p className="muted">
-                  Liez Lichess ou indiquez votre pseudo Chess.com dans <Link to="/compte#comptes">Mon compte</Link> pour voir vos propres parties.
-                </p>
-              ) : (
-                <p className="muted small-text">
-                  Vos parties synchronisées ({[me.lichess && `Lichess ${me.lichess.username}`, me.chesscom && `Chess.com ${me.chesscom.username}`].filter(Boolean).join(', ')}) avec les{' '}
-                  <strong>{orientation === 'white' ? 'Blancs' : 'Noirs'}</strong>, {speedsLabel(gamesSpeeds)}, {gamesDays ? `${gamesDays} derniers jours` : 'toutes'} (
-                  <Link to="/settings">Parties analysées</Link>) — retournez l’échiquier pour vos parties avec les {orientation === 'white' ? 'Noirs' : 'Blancs'}.
-                  {mine.data && ply >= mine.data.maxPly && ` Seuls les ${mine.data.maxPly / 2} premiers coups sont indexés.`}
-                </p>
-              )}
-              {mine.isLoading && <p className="muted">Chargement de vos parties…</p>}
-              {mine.error && <ErrorText error={mine.error} />}
-            </>
-          )}
-          {data && <MoveTable data={data} inRep={(uci) => prepared.has(uci)} onPick={play} markPopular={markPopular} />}
-        </section>
-
-        <details className="panel" open={showGames} onToggle={(e) => setShowGames((e.target as HTMLDetailsElement).open)}>
-          <summary>Parties</summary>
-          {source === 'lichess' && games.isLoading && <p className="muted">Chargement…</p>}
-          {source === 'lichess' && games.error && <ErrorText error={games.error} />}
-          {gameList && (
-            <>
-              {gameList.topGames.length > 0 && <GameList title="Meilleures parties" games={gameList.topGames} onOpen={(id) => loadGame.mutate(id)} />}
-              <GameList title={source === 'mine' ? 'Vos dernières parties' : 'Parties récentes'} games={gameList.recentGames} onOpen={(id) => loadGame.mutate(id)} />
-            </>
           )}
           {loadGame.isPending && <p className="muted small-text">Chargement de la partie…</p>}
           {loadGame.error && <ErrorText error={loadGame.error} />}
-        </details>
+        </section>
       </div>
     </div>
     </>
@@ -366,9 +386,11 @@ export function Explorer({ me }: { me: Me }) {
 
 /** Repertoire moves of the position grouped by move: which repertoires play it. */
 function groupByMove(rows: RepertoireMoveHere[]) {
-  const out = new Map<string, { uci: string; san: string; reps: RepertoireMoveHere[] }>();
+  const out = new Map<string, { uci: string; san: string; nags: number[] | null; reps: RepertoireMoveHere[] }>();
   for (const r of rows) {
-    const g = out.get(r.uci) ?? { uci: r.uci, san: r.san, reps: [] };
+    const g = out.get(r.uci) ?? { uci: r.uci, san: r.san, nags: null, reps: [] };
+    // The annotation of the first repertoire that has one.
+    if (!g.nags?.length && r.nags?.length) g.nags = r.nags;
     g.reps.push(r);
     out.set(r.uci, g);
   }
@@ -377,46 +399,79 @@ function groupByMove(rows: RepertoireMoveHere[]) {
 
 const RESULT = { white: '1-0', black: '0-1' } as const;
 
-function GameList({ title, games, onOpen }: { title: string; games: (ExplorerGameRef | MyGameRef)[]; onOpen: (id: string) => void }) {
+/** My games, one per row (the most recent first): tap one to replay it on the board. */
+function GameRows({ games, onOpen }: { games: MyGameRef[]; onOpen: (id: string) => void }) {
+  if (!games.length) return <p className="muted small-text">Aucune partie.</p>;
   return (
-    <>
-      <h4 className="games-title">{title}</h4>
-      {games.length === 0 ? (
-        <p className="muted small-text">Aucune partie.</p>
-      ) : (
-        <table className="lines games">
-          <tbody>
-            {games.map((g) => (
-              <tr key={g.id} className="clickable" onClick={() => onOpen(g.id)} title="Rejouer cette partie sur l’échiquier">
-                <td>
-                  {g.white.name} <span className="muted">{g.white.rating}</span>
-                </td>
-                <td>
-                  {g.black.name} <span className="muted">{g.black.rating}</span>
-                </td>
-                <td>{g.winner ? RESULT[g.winner] : '½-½'}</td>
-                <td className="muted">{[g.speed, g.month].filter(Boolean).join(' · ')}</td>
-                <td>
-                  <a
-                    href={'url' in g ? g.url : `https://lichess.org/${g.id}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                    title={'source' in g && g.source === 'chesscom' ? 'Ouvrir sur Chess.com' : 'Ouvrir sur Lichess'}
-                  >
-                    ↗
-                  </a>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-    </>
+    <table className="lines games">
+      <tbody>
+        {games.map((g) => (
+          <tr key={g.id} className="clickable" onClick={() => onOpen(g.id)} title="Rejouer cette partie sur l’échiquier">
+            <td>
+              {g.white.name} <span className="muted">{g.white.rating}</span>
+            </td>
+            <td>
+              {g.black.name} <span className="muted">{g.black.rating}</span>
+            </td>
+            <td>{g.winner ? RESULT[g.winner] : '½-½'}</td>
+            <td className="muted">{[g.speed, g.month].filter(Boolean).join(' · ')}</td>
+            <td>
+              <a
+                href={g.url}
+                target="_blank"
+                rel="noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                title={g.source === 'chesscom' ? 'Ouvrir sur Chess.com' : 'Ouvrir sur Lichess'}
+              >
+                ↗
+              </a>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }
 
 function ErrorText({ error }: { error: unknown }) {
   if (error instanceof ApiError && error.status === 404) return <p className="muted">Aucune statistique pour cette position.</p>;
   return <p className="error small-text">{error instanceof Error ? error.message : String(error)}</p>;
+}
+
+/**
+ * The moves path turned into a field (pencil or "/"): the line so far, selected, to edit or
+ * replace by typed or pasted moves ("1. e4 c5 2. Nf3", UCI too). Enter goes there, Escape or
+ * leaving the field cancels.
+ */
+function LineInput({ initial, onJump, onCancel }: { initial: string; onJump: (moves: PlayedMove[]) => void; onCancel: () => void }) {
+  const [text, setText] = useState(initial);
+  const [error, setError] = useState(false);
+  return (
+    <form
+      className="line-input"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!text.trim()) return onJump([]);
+        const moves = parseMoves(text);
+        if (moves) onJump(moves);
+        else setError(true);
+      }}
+    >
+      <input
+        autoFocus
+        onFocus={(e) => e.currentTarget.select()}
+        value={text}
+        onChange={(e) => {
+          setText(e.target.value);
+          setError(false);
+        }}
+        onKeyDown={(e) => e.key === 'Escape' && onCancel()}
+        onBlur={onCancel}
+        placeholder="1. e4 c5 2. Nf3"
+        aria-label="Aller à une ligne : coups de la position initiale"
+        aria-invalid={error}
+      />
+      {error && <span className="error small-text">Coups illégaux ou mal écrits (exemple : 1. e4 c5 2. Nf3).</span>}
+    </form>
+  );
 }

@@ -9,15 +9,14 @@ import { isPopular, OUTLINE_EXTRA, type ArrowKind } from '../components/arrows';
 import { EngineLines, EngineToggle } from '../components/EnginePanel';
 import { useEngine } from '../engine/useEngine';
 import { Board } from '../components/Board';
+import { San } from '../components/Nag';
 import { ExplorerPanel } from '../components/ExplorerPanel';
 import { explorerParams, rangeLabel, useSettings } from '../settings';
-import { LevelToggle, topLevelMove, useBestMoves, useLevelToggle } from '../components/BestMoves';
+import { LEVEL_STEPS, LevelToggle, topLevelMove, useBestMoves, useLevelDepth, useLevelToggle } from '../components/BestMoves';
 import { Suggestions } from '../components/Suggestions';
 import { Button, Menu, PageHeader, plural } from '../ui';
 import { useGaps } from '../useGaps';
 
-/** Steps of the search at my level (server REACH_STEPS): the slider's maximum depth. */
-const LEVEL_STEPS = 4;
 
 /** A move of the line on the board; saved or not is derived from the repertoire. */
 type LineMove = PlayedMove;
@@ -193,19 +192,11 @@ export function RepertoireEditor({ me }: { me: Me }) {
   const engine = useEngine(fen, engineOn);
   // Moves at my level (Lichess explorer): only on my turn, and only when asked (many requests).
   // The toggle (on for the browser session only) shows the statistics card under the board, like
-  // the engine's; the depth is chosen with its slider (kept on this device; 0: the moves' own win
-  // rates, no search).
+  // the engine's; its box follows the likely lines or not (kept on this device; off: the moves' own
+  // win rates, no search).
   const [levelOn, toggleLevel] = useLevelToggle();
-  const [levelDepth, setLevelDepth] = useState(() => {
-    const saved = localStorage.getItem('levelDepth');
-    const d = Number(saved);
-    return saved !== null && d >= 0 && d <= LEVEL_STEPS ? d : LEVEL_STEPS;
-  });
+  const [levelDepth, onDepth] = useLevelDepth();
   const depth = levelOn ? levelDepth : 0;
-  const onDepth = (d: number) => {
-    localStorage.setItem('levelDepth', String(d));
-    setLevelDepth(d);
-  };
   const myTurn = rep.isMyTurn(fen);
   const level = useBestMoves(fen, ex.speeds, ex.ratings, depth > 0 && myTurn, depth);
   const levelBest = depth > 0 && myTurn ? topLevelMove(level.data) : undefined;
@@ -343,7 +334,9 @@ export function RepertoireEditor({ me }: { me: Me }) {
         {levelOn && (
           <ExplorerPanel
             fen={fen}
-            rep={rep}
+            color={rep.color}
+            inRep={(uci) => rep.has(fen, uci)}
+            nagsOf={(uci) => rep.movesAt(fen).find((m) => m.uci === uci)?.nags}
             stats={explorer.data}
             error={explorer.error}
             loading={explorer.isLoading}
@@ -381,7 +374,8 @@ export function RepertoireEditor({ me }: { me: Me }) {
                 onClick={() => goTo(i + 1)}
                 title={rep.has(m.fromFen, m.uci) ? 'Dans votre répertoire' : 'Pas enregistré'}
               >
-                {i % 2 === 0 ? `${i / 2 + 1}. ` : ''}{m.san}
+                {i % 2 === 0 ? `${i / 2 + 1}. ` : ''}
+                <San san={m.san} nags={rep.movesAt(m.fromFen).find((x) => x.uci === m.uci)?.nags} />
               </button>
             ))}
           </div>
@@ -457,7 +451,9 @@ export function RepertoireEditor({ me }: { me: Me }) {
               <li key={m.id} className={`clickable ${options[selected]?.uci === m.uci ? 'selected' : ''}`} onClick={() => play(m.uci)}>
                 <div className="move-main">
                   <div className="row nowrap">
-                    <button className="link san">{m.san}</button>
+                    <button className="link san">
+                      <San san={m.san} nags={m.nags} />
+                    </button>
                     {m.isMain && <span className="badge">principal</span>}
                   </div>
                   {m.comment && <div className="comment move-comment">{m.comment}</div>}

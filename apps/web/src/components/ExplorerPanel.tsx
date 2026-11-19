@@ -1,11 +1,16 @@
-import type { PlayedMove, Repertoire } from '@tabiya/core';
+import type { Color, PlayedMove } from '@tabiya/core';
 import { ApiError, type BestMovesResponse, type Stats, type StatsMeta } from '../api';
 import { rangeLabel, speedsLabel } from '../settings';
 import { LevelTable } from './LevelTable';
 
 interface Props {
   fen: string;
-  rep: Repertoire;
+  /** Scores from this side (the repertoire's colour, or the side to move). */
+  color: Color;
+  /** Marked as prepared (✓). */
+  inRep: (uci: string) => boolean;
+  /** PGN annotations of a move of my repertoires here (!, ?, …): the move is coloured. */
+  nagsOf?: (uci: string) => readonly number[] | null | undefined;
   stats: Stats | undefined;
   error: unknown;
   loading: boolean;
@@ -50,7 +55,7 @@ function provenance(meta: StatsMeta): string | null {
  * Moves played at the user's level in this position, merged with the search at my level (see
  * LevelTable), marked when in the repertoire. Under the board, like the engine lines.
  */
-export function ExplorerPanel({ fen, rep, stats, error, loading, onPick, markPopular = true, firstMoveNumber, onPlay, level }: Props) {
+export function ExplorerPanel({ fen, color, inRep, nagsOf, stats, error, loading, onPick, markPopular = true, firstMoveNumber, onPlay, level }: Props) {
   const data = stats?.data;
   const origin = stats ? provenance(stats.meta) : null;
   const missing = error instanceof ApiError && error.status === 404;
@@ -65,9 +70,10 @@ export function ExplorerPanel({ fen, rep, stats, error, loading, onPick, markPop
         <LevelTable
           data={data}
           fen={fen}
-          color={rep.color}
+          color={color}
           firstMoveNumber={firstMoveNumber}
-          inRep={(uci) => rep.has(fen, uci)}
+          inRep={inRep}
+          nagsOf={nagsOf}
           onPick={onPick}
           onPlay={onPlay}
           markPopular={markPopular}

@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 import { api, type InboxItem, type RepertoireSummary, type ReviewCard } from '../api';
 import { GameErrorCard } from '../components/GameErrorCard';
 import { MiniBoard, type MiniArrow } from '../components/MiniBoard';
+import { San } from '../components/Nag';
 import { lineText } from '../training/common';
 import { useTrainingSources, type Source } from '../training/useTrainingSources';
 import { Button, PageHeader, plural, Tabs } from '../ui';
@@ -161,7 +162,14 @@ function FragileCard({ fragile, rep }: { fragile: Fragile; rep: RepertoireSummar
       <div className="game-card-body">
         <div className="inbox-head">
           <span className="muted inbox-line">{lineText(position.path) || 'Position initiale'} </span>
-          <span className="hole-move">{weak.map((w) => w.move.san).join(' et ')}</span>
+          <span className="hole-move">
+            {weak.map((w, i) => (
+              <span key={w.move.uci}>
+                {i > 0 && ' et '}
+                <San san={w.move.san} nags={w.move.nags} />
+              </span>
+            ))}
+          </span>
         </div>
         <div className="row small-text game-card-meta">
           <span className="rep-tag">

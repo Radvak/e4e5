@@ -1,12 +1,11 @@
 import { fenKey, positionFromFen, RATING_BUCKETS } from '@tabiya/core';
 import { and, eq } from 'drizzle-orm';
-import type { FastifyInstance, FastifyReply } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireUser } from '../auth.js';
 import { db } from '../db/client.js';
 import { repertoires, repMoves } from '../db/schema.js';
 import { env } from '../env.js';
-import { exportGame, explorerFetch, RateLimited } from '../lichess.js';
 import { myGameMoves, myGamesAt } from '../myGames.js';
 import { openingOfUcis } from '../openings.js';
 import { getStats, prefetchStats } from '../stats.js';
@@ -63,30 +62,6 @@ export async function explorerRoutes(app: FastifyInstance) {
     return { ...found, steps: REACH_STEPS, pending };
   });
 
-  /** Top and recent games of the position (Lichess players at that level). Not stored. */
-  app.get('/api/explorer/games', { preHandler: requireUser }, async (req, reply) => {
-    const q = query.parse(req.query);
-    const fen = parseFen(q.fen);
-    if (!fen) return reply.code(400).send({ error: 'FEN invalide' });
-    const token = req.user!.lichessToken ?? env.lichessAppToken;
-    if (!token) return reply.code(409).send({ error: 'Liez Lichess dans les paramètres pour voir les parties', reason: 'no-token' });
-    const params = new URLSearchParams({
-      variant: 'standard',
-      fen,
-      speeds: q.speeds.join(','),
-      ratings: q.ratings.join(','),
-      moves: '0',
-      topGames: '4',
-      recentGames: '4',
-    });
-    try {
-      const raw = (await explorerFetch(`/lichess?${params}`, token)) as { topGames?: ExplorerGame[]; recentGames?: ExplorerGame[] };
-      return { topGames: (raw.topGames ?? []).map(game), recentGames: (raw.recentGames ?? []).map(game) };
-    } catch (e) {
-      return lichessError(e, reply);
-    }
-  });
-
   /**
    * The user's own games in this position, Lichess and Chess.com (the synced games, see
    * myGames.ts): move statistics and recent games.
@@ -132,56 +107,14 @@ export async function explorerRoutes(app: FastifyInstance) {
         san: repMoves.san,
         isMain: repMoves.isMain,
         comment: repMoves.comment,
+        nags: repMoves.nags,
       })
       .from(repMoves)
       .innerJoin(repertoires, eq(repMoves.repertoireId, repertoires.id))
       .where(and(eq(repertoires.userId, req.user!.id), eq(repMoves.fromFen, fen)));
   });
 
-  /** A Lichess game, to replay it on the board. */
-  app.get<{ Params: { id: string } }>('/api/lichess-games/:id', { preHandler: requireUser }, async (req, reply) => {
-    if (!/^[a-zA-Z0-9]{8}$/.test(req.params.id)) return reply.code(400).send({ error: 'Invalid game id' });
-    let g;
-    try {
-      g = await exportGame(req.params.id);
-    } catch (e) {
-      return lichessError(e, reply);
-    }
-    return {
-      id: g.id,
-      white: { name: g.players.white.user?.name ?? 'Anonymous', rating: g.players.white.rating ?? null },
-      black: { name: g.players.black.user?.name ?? 'Anonymous', rating: g.players.black.rating ?? null },
-      winner: g.winner ?? null,
-      status: g.status,
-      speed: g.speed,
-      date: new Date(g.createdAt).toISOString(),
-      moves: g.moves.split(' ').filter(Boolean),
-    };
-  });
 }
-
-/** Game reference as sent by the Lichess explorer. */
-interface ExplorerGame {
-  id: string;
-  uci?: string;
-  winner: 'white' | 'black' | null;
-  speed?: string;
-  white: { name: string; rating: number };
-  black: { name: string; rating: number };
-  year: number;
-  month?: string;
-}
-
-const game = (g: ExplorerGame) => ({
-  id: g.id,
-  winner: g.winner,
-  speed: g.speed ?? null,
-  white: g.white,
-  black: g.black,
-  month: g.month ?? String(g.year),
-  /** Move played in the position (Lichess players database only). */
-  uci: g.uci ?? null,
-});
 
 function parseFen(raw: string): string | null {
   try {
@@ -189,13 +122,4 @@ function parseFen(raw: string): string | null {
   } catch {
     return null;
   }
-}
-
-/** Lichess errors as answers the page can show (rate limit, or Lichess unreachable / failing). */
-function lichessError(e: unknown, reply: FastifyReply) {
-  if (e instanceof RateLimited) return reply.code(429).send({ error: 'Limite de Lichess atteinte, réessayez dans une minute', reason: 'rate-limited' });
-  reply.log.warn({ err: e }, 'Lichess request failed');
-  const status = (e as { statusCode?: number }).statusCode;
-  if (status === 404) return reply.code(404).send({ error: 'Partie introuvable sur Lichess' });
-  return reply.code(502).send({ error: 'Lichess est injoignable', reason: 'unreachable' });
 }

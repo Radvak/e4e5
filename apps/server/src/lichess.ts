@@ -67,26 +67,6 @@ export function explorerFetch(path: string, token: string): Promise<unknown> {
   return task;
 }
 
-export interface ExportedGame {
-  id: string;
-  players: { white: { user?: { name: string }; rating?: number }; black: { user?: { name: string }; rating?: number } };
-  /** SAN moves separated by spaces. */
-  moves: string;
-  winner?: 'white' | 'black';
-  status: string;
-  speed: string;
-  createdAt: number;
-}
-
-/** A Lichess game (public, no token needed). */
-export async function exportGame(id: string): Promise<ExportedGame> {
-  const res = await fetch(`${env.lichessHost}/game/export/${id}?moves=true&clocks=false&evals=false&opening=false`, {
-    headers: { Accept: 'application/json', 'User-Agent': UA },
-  });
-  if (!res.ok) throw Object.assign(new Error(`Lichess game ${id}: ${res.status}`), { statusCode: res.status === 404 ? 404 : 502 });
-  return (await res.json()) as ExportedGame;
-}
-
 /** A game of the Lichess games export (only the fields used). */
 export interface LichessGameExport {
   id: string;

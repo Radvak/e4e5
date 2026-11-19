@@ -386,9 +386,6 @@ button.badge:focus-visible { outline: 2px solid currentColor; outline-offset: 1p
 .bar .d { background: #8a8580; }
 .bar .b { background: #0b0b0b; }
 .source-chip { margin: 0 0 10px; }
-.jump { margin-bottom: 10px; }
-.jump input { flex: 1; min-width: 0; }
-.hits { margin: 6px 0 0; padding-left: 18px; font-size: 0.9rem; }
 .engine .row h3 { margin: 0; }
 .engine-line { display: flex; gap: 10px; align-items: baseline; padding: 6px 0; border-top: 1px solid var(--border); font-size: 0.92rem; }
 .engine-line .eval { min-width: 52px; text-align: center; font-weight: 700; border-radius: 4px; padding: 1px 4px; }
@@ -473,7 +470,8 @@ button.badge:focus-visible { outline: 2px solid currentColor; outline-offset: 1p
 .pgn-import { margin-bottom: 16px; } .pgn-import textarea { margin: 8px 0; }
 
 /* Colours shared with the board arrows (components/arrows.ts): they act as the legend. */
-:root { --rep: #3fb950; --hole: #f0883e; --engine: #58a6ff; --level: #bc8cff; }
+/* --engine: the engine's arrow on the board (dark grey); --engine-ui: the same in the dark interface. */
+:root { --rep: #3fb950; --hole: #f0883e; --engine: #2b2b2b; --engine-ui: #d9d6d0; --level: #bc8cff; }
 .rep-moves .san { color: var(--rep); }
 .rep-moves .unsaved, .rep-moves .san.unsaved { color: var(--text-2); }
 .rep-moves li.selected { box-shadow: inset 3px 0 0 var(--rep); }
@@ -482,9 +480,9 @@ button.badge:focus-visible { outline: 2px solid currentColor; outline-offset: 1p
 .hole-move { color: var(--hole); }
 .suggestion.here { background: rgba(240, 136, 62, 0.1); }
 .suggestion .badge.warn { background: rgba(240, 136, 62, 0.18); color: var(--hole); }
-.engine-line.best .pv button.link:first-child { color: var(--engine); font-weight: 700; }
+.engine-line.best .pv button.link:first-child { color: var(--text); font-weight: 700; }
 .engine-toggle { flex: 0 0 auto; width: 48px; color: var(--muted); }
-.engine-toggle.on { color: #fff; background: var(--engine); border-color: var(--engine); }
+.engine-toggle.on { color: #111; background: var(--engine-ui); border-color: var(--engine-ui); }
 .level-toggle { flex: 0 0 auto; width: 48px; color: var(--muted); }
 .level-toggle.on { color: #fff; background: var(--level); border-color: var(--level); }
 .level-toggle.on:hover { background: #a877f0; }
@@ -501,7 +499,7 @@ button.badge:focus-visible { outline: 2px solid currentColor; outline-offset: 1p
 .level-lines li.pruned .score { background: var(--surface-3); color: var(--muted); font-weight: 600; }
 .level-lines li.pruned .pv { color: var(--text-2); }
 .level-line .games { font-size: 0.8rem; font-variant-numeric: tabular-nums; }
-.level-line .sf-tag { display: inline-grid; place-items: center; width: 20px; height: 20px; flex: none; color: #fff; background: var(--engine); border-radius: 4px; }
+.level-line .sf-tag { display: inline-grid; place-items: center; width: 20px; height: 20px; flex: none; color: #fff; background: var(--engine); border: 1px solid var(--muted); border-radius: 4px; }
 .level-line .unfold { min-height: 0; width: 26px; height: 26px; padding: 0; background: none; border: none; color: var(--muted); }
 .level-line .unfold svg { transition: transform 0.15s; }
 .level-line .unfold.open svg { transform: rotate(90deg); }
@@ -653,7 +651,7 @@ button.badge:focus-visible { outline: 2px solid currentColor; outline-offset: 1p
 .level-table .score { display: inline-block; min-width: 46px; text-align: center; border-radius: 4px; padding: 1px 4px; font-variant-numeric: tabular-nums; background: var(--surface-3); color: var(--text-2); font-weight: 600; }
 .level-table .score.searched { background: color-mix(in srgb, var(--level) 22%, transparent); color: #dcc4ff; font-weight: 700; }
 .level-table tr.level-top .score { outline: 1px solid var(--level); }
-.level-table .sf-tag { display: inline-grid; place-items: center; width: 18px; height: 18px; margin-left: 6px; vertical-align: middle; color: #fff; background: var(--engine); border-radius: 4px; }
+.level-table .sf-tag { display: inline-grid; place-items: center; width: 18px; height: 18px; margin-left: 6px; vertical-align: middle; color: #fff; background: var(--engine); border: 1px solid var(--muted); border-radius: 4px; }
 .level-table td.unfold-col { width: 1%; padding: 0 2px; }
 .level-table .unfold { min-height: 0; width: 26px; height: 26px; padding: 0; background: none; border: none; color: var(--muted); }
 .level-table .unfold svg { transition: transform 0.15s; }
@@ -665,8 +663,12 @@ button.badge:focus-visible { outline: 2px solid currentColor; outline-offset: 1p
 .level-table tr.level-detail .pv { font-size: 0.85rem; margin-bottom: 4px; }
 .level-table tr.level-detail .pv button.link, .level-table .suggestion-replies button.link { padding: 0 2px; }
 .level-table .suggestion-replies { margin: 0; }
-.level-footer .level-depth input[type='range'] { width: 72px; height: 14px; accent-color: var(--level); }
-.level-footer .level-depth input[type='range']:disabled { opacity: 0.4; }
+/* Footer of the level table on a single line: the middle text gives way (…), the range stays. */
+.level-table .level-footer { flex-wrap: nowrap; white-space: nowrap; }
+.level-table .level-footer .level-depth { min-width: 0; flex: 0 1 auto; gap: 4px; }
+.level-table .level-footer .level-info { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.level-table .level-footer .level-range { flex: none; }
+.level-table .level-footer input[type='checkbox'] { width: 13px; height: 13px; min-height: 0; margin: 0; flex: none; accent-color: var(--level); }
 .level-table .level-origin { margin: 2px 0 0; font-size: 0.75rem; }
 .level-table > .explorer { font-size: 0.88rem; }
 .level-table > .explorer td { padding: 5px 6px; }
@@ -685,3 +687,39 @@ button.badge:focus-visible { outline: 2px solid currentColor; outline-offset: 1p
 .swipe-passed { position: absolute; left: 0; top: 50%; transform: translateY(-50%); display: flex; align-items: center; gap: 4px; pointer-events: none; }
 .swipe-passed .dot-passed { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
 .swipe-passed .more { font-size: 0.68rem; color: var(--muted); margin-left: 2px; }
+
+/* Move annotations (components/Nag.tsx), usual colours. */
+.nag { font-weight: 700; }
+.nag-brilliant { color: #26c2a3; }
+.nag-good { color: #22ac38; }
+.nag-interesting { color: #ea45d8; }
+.nag-dubious { color: #56b4e9; }
+.nag-mistake { color: #e69f00; }
+.nag-blunder { color: #df5353; }
+/* Explorer "Dans vos répertoires": one line per move, its repertoires in a strip scrolled
+   sideways (the edge fades when there are more). */
+.rep-moves li.rep-here { display: flex; flex-wrap: nowrap; align-items: center; gap: 10px; min-height: 40px; padding: 2px 0 2px 8px; }
+.rep-moves li.rep-here .san { flex: none; min-width: 3.2em; text-align: left; }
+.rep-tags { display: flex; gap: 6px; flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; padding-right: 24px; mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); }
+.rep-tags::-webkit-scrollbar { display: none; }
+.rep-tags .rep-tag { flex: none; margin: 0; white-space: nowrap; }
+/* Explorer: a pencil at the end of the moves path turns it into a field to type or paste a line. */
+.moves-path .line-edit { min-height: 0; width: 26px; height: 26px; padding: 0; margin-left: 4px; vertical-align: middle; background: none; border: none; color: var(--muted); }
+.moves-path .line-edit:hover { color: var(--text); background: var(--surface-2); }
+.line-input { display: flex; flex-direction: column; gap: 4px; }
+.line-input input { min-height: 36px; font-size: 0.95rem; }
+/* Explorer: the line, then the moves of my repertoires right under it (one card). */
+.moves-path + .rep-moves, .moves-path + .rep-none, .line-input + .rep-moves, .line-input + .rep-none { margin-top: 8px; }
+.rep-moves li.rep-here .move-num { color: var(--muted); font-weight: 400; margin-right: 3px; }
+.rep-moves li.rep-here .san { min-width: 4.2em; }
+.rep-moves + .keys, .rep-none + .keys { margin-top: 10px; }
+/* Explorer, my games: a move unfolds into its games (chevron at the end of the row). */
+table.explorer td.unfold-col { width: 1%; padding: 0 2px; }
+table.explorer .unfold { min-height: 0; width: 26px; height: 26px; padding: 0; background: none; border: none; color: var(--muted); }
+table.explorer .unfold svg { transition: transform 0.15s; }
+table.explorer .unfold.open svg { transform: rotate(90deg); }
+table.explorer .unfold:hover { color: var(--text); background: var(--surface-2); }
+table.explorer tr.move-detail { cursor: default; }
+table.explorer tr.move-detail:hover td { background: none; }
+table.explorer tr.move-detail > td { border-top: none; padding: 0 0 8px 12px; }
+table.explorer tr.move-detail table.games { font-size: 0.85rem; }
