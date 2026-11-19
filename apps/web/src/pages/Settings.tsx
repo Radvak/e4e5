@@ -33,7 +33,7 @@ export function Settings({ me }: { me: Me }) {
         <div className="setting">
           <div className="what">
             <strong>Période</strong>
-            <div className="hint">Les parties prises en compte dans l’accueil et le bilan.</div>
+            <div className="hint">Les parties prises en compte dans Mes parties et les Lacunes.</div>
           </div>
           <select value={settings.gamesDays} onChange={(e) => settings.setGamesDays(Number(e.target.value))}>
             {PERIODS.map((p) => (

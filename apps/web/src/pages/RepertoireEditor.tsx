@@ -4,7 +4,7 @@ import type { DrawShape } from 'chessground/draw';
 import type { Key } from 'chessground/types';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { api, type ImportResult, type Me, type StoredMove } from '../api';
+import { api, type Gap, type ImportResult, type Me, type StoredMove } from '../api';
 import { isPopular, OUTLINE_EXTRA, type ArrowKind } from '../components/arrows';
 import { EngineLines, EngineToggle } from '../components/EnginePanel';
 import { useEngine } from '../engine/useEngine';
@@ -78,7 +78,14 @@ export function RepertoireEditor({ me }: { me: Me }) {
     retry: false,
   });
 
-  const refresh = () => qc.invalidateQueries({ queryKey: ['repertoire', id] });
+  // The moves changed: the repertoire, and what depends on it (missing moves, lines to train, list).
+  const refresh = () =>
+    Promise.all([
+      qc.invalidateQueries({ queryKey: ['repertoire', id] }),
+      qc.invalidateQueries({ queryKey: ['gaps'] }),
+      qc.invalidateQueries({ queryKey: ['training-summary'] }),
+      qc.invalidateQueries({ queryKey: ['repertoires'] }),
+    ]);
   const saveLine = useMutation({
     mutationFn: () => api.saveLine(id, shown.map((m) => m.uci)),
     onSuccess: async (r) => {
@@ -272,7 +279,14 @@ export function RepertoireEditor({ me }: { me: Me }) {
 
   if (isLoading) return <p className="muted">Chargement…</p>;
   const colorReport = data ? gapReport.data?.[data.color] : undefined;
-  const holes = colorReport?.gaps.filter((g) => g.repertoireId === id);
+  // Without the holes the repertoire covers now (saved since the report: hidden at once, until the
+  // report is computed again): the opponent move added (or a transposition), or my answer.
+  const covered = (g: Gap) => {
+    if (!g.move) return rep.movesAt(g.fen).length > 0;
+    const after = playUci(g.fen, g.move.uci)?.toFen;
+    return rep.has(g.fen, g.move.uci) || (!!after && rep.movesAt(after).length > 0);
+  };
+  const holes = colorReport?.gaps.filter((g) => g.repertoireId === id && !covered(g));
   if (error || !data) return <p className="error">Impossible de charger le répertoire.</p>;
 
   const last = line[ply - 1];

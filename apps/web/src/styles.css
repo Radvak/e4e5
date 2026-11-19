@@ -99,7 +99,7 @@ button.link:hover { background: var(--surface-3); }
 .page { width: 100%; max-width: 1180px; margin: 0 auto; padding: 16px var(--page-pad) calc(var(--tabbar-h) + 28px + env(safe-area-inset-bottom)); flex: 1; }
 .page.narrow { max-width: 760px; }
 .tabbar {
-  position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; display: grid; grid-template-columns: repeat(4, 1fr);
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; display: grid; grid-template-columns: repeat(5, 1fr);
   height: calc(var(--tabbar-h) + env(safe-area-inset-bottom)); padding-bottom: env(safe-area-inset-bottom);
   background: rgba(31, 29, 26, 0.96); backdrop-filter: blur(8px); border-top: 1px solid var(--border);
 }
@@ -207,13 +207,6 @@ kbd { display: inline-block; min-width: 18px; padding: 0 4px; margin: 0 1px; bor
 .notice.error { background: var(--danger-soft); border-color: transparent; color: #f3a29d; }
 .offline-banner { margin: 8px 16px 0; }
 
-/* Stat tiles. */
-.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-top: 12px; }
-.tile { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; }
-.tile-value { font-size: 1.7rem; font-weight: 700; line-height: 1.1; }
-.tile-unit { font-size: 0.55em; font-weight: 500; color: var(--muted); }
-.tile-label { margin-top: 2px; color: var(--text-2); }
-.tile-note { font-size: 0.8rem; margin-top: 4px; }
 .big-number { font-size: 2rem; font-weight: 800; line-height: 1; }
 
 /* Tables. */
@@ -368,10 +361,6 @@ button.badge:focus-visible { outline: 2px solid currentColor; outline-offset: 1p
 .drill-actions { display: flex; justify-content: center; gap: 6px; margin-top: 8px; padding: 0 var(--page-pad); }
 .drill-actions button { flex: 1; max-width: 140px; }
 .legend { display: flex; justify-content: center; gap: 14px; flex-wrap: wrap; font-size: 0.8rem; margin: 8px 0 0; padding: 0 var(--page-pad); }
-.legend-item { display: inline-flex; align-items: center; gap: 6px; }
-.swatch { display: inline-block; width: 20px; height: 6px; border-radius: 3px; }
-.swatch.square { width: 10px; height: 10px; border-radius: 2px; }
-.swatch.outlined { box-shadow: 0 0 0 1px #fff; }
 .editor-side .panel:first-child { margin-top: 0; }
 .editor-side .page-header { margin-bottom: 4px; }
 .moves-path { line-height: 2; }
@@ -428,20 +417,7 @@ button.badge:focus-visible { outline: 2px solid currentColor; outline-offset: 1p
 .leeches ul { margin: 0; padding-left: 18px; }
 
 /* --- Statistics, gaps, games ------------------------------------------------------------------ */
-.chart { margin: 0; }
-.chart figcaption { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 6px; }
-.chart-title { font-weight: 700; }
-.chart-legend { display: inline-flex; gap: 12px; flex-wrap: wrap; font-size: 0.82rem; color: var(--muted); }
-.chart-area { position: relative; }
-.chart svg { width: 100%; height: auto; display: block; }
-.chart .grid { stroke: var(--surface-3); stroke-width: 1; }
-.chart .axis { fill: var(--muted); font-size: 10px; }
-.chart-tooltip { position: absolute; top: 4px; background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); padding: 6px 10px; font-size: 0.85rem; min-width: 170px; pointer-events: none; z-index: 2; }
 .row.tight { gap: 6px; flex-wrap: nowrap; }
-.chart-table summary { cursor: pointer; font-size: 0.8rem; color: var(--muted); margin-top: 4px; }
-.chart-table table { font-size: 0.8rem; border-collapse: collapse; }
-.chart-table td, .chart-table th { padding: 1px 8px; text-align: right; }
-.weakest { margin: 0; padding-left: 18px; }
 .prob { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .hole-move { color: var(--warn); font-weight: 700; }
 .lines td.indent { padding-left: 24px; }
@@ -468,7 +444,6 @@ button.badge:focus-visible { outline: 2px solid currentColor; outline-offset: 1p
 .narrow-page { max-width: 760px; margin: 0 auto; width: 100%; }
 .card.clickable { cursor: pointer; transition: border-color 0.12s, background 0.12s; }
 .card.clickable:hover { border-color: var(--border-strong); background: #23211e; }
-.bilan { max-width: 1000px; margin: 0 auto; }
 /* chessground puts the file letters 24px to the right (for boards with a margin): keep them inside. */
 .cg-wrap coords.files { left: 0; }
 .cg-wrap coords.files coord { text-indent: 3px; }
@@ -690,9 +665,17 @@ button.badge:focus-visible { outline: 2px solid currentColor; outline-offset: 1p
 .level-table tr.level-detail .pv { font-size: 0.85rem; margin-bottom: 4px; }
 .level-table tr.level-detail .pv button.link, .level-table .suggestion-replies button.link { padding: 0 2px; }
 .level-table .suggestion-replies { margin: 0; }
-.level-table .suggestion-replies { margin: 0; }
 .level-footer .level-depth input[type='range'] { width: 72px; height: 14px; accent-color: var(--level); }
 .level-footer .level-depth input[type='range']:disabled { opacity: 0.4; }
 .level-table .level-origin { margin: 2px 0 0; font-size: 0.75rem; }
 .level-table > .explorer { font-size: 0.88rem; }
 .level-table > .explorer td { padding: 5px 6px; }
+/* Tick, move and engine tag always on one line: the win/draw/loss bar gives way instead. */
+.level-table td.san { white-space: nowrap; }
+.level-table .explorer .wdl { width: 34%; min-width: 40px; }
+.level-table .explorer .wdl .bar { min-width: 40px; }
+@media (max-width: 480px) { .level-table td.count .share { display: none; } }
+.rep-row .meta .known { color: var(--text); font-weight: 600; }
+/* Review: swipe to the right on the board for the next question (touch screens only). */
+.swipe-tip { display: none; text-align: center; margin: 6px var(--page-pad) 0; }
+@media (hover: none) and (pointer: coarse) { .swipe-tip { display: block; } }

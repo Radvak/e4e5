@@ -141,6 +141,8 @@ export interface MoveCardTimes {
   due: number;
   /** First learnt (ms). */
   createdAt: number;
+  /** Estimated probability (0-1) of finding the move now (FSRS retrievability), when known. */
+  recall?: number;
 }
 
 /**

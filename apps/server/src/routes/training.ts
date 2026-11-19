@@ -7,7 +7,7 @@
  * given, so the server computes the same card.
  */
 import { GRADES, recallOf, Repertoire, scheduleReview } from '@tabiya/core';
-import { and, eq, gte } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireUser } from '../auth.js';
@@ -103,17 +103,5 @@ export async function trainingRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: 'Cette position n’est pas encore apprise : entraînez-la d’abord' });
     }
     return { ok: true };
-  });
-
-  /** Answers of the last `days` days, all repertoires (for activity statistics). */
-  app.get('/api/stats/history', async (req) => {
-    const { days } = z.object({ days: z.coerce.number().int().min(1).max(365).default(90) }).parse(req.query);
-    const since = new Date(Date.now() - days * 86_400_000);
-    return db
-      .select({ repertoireId: reviewLog.repertoireId, grade: reviewLog.grade, isNew: reviewLog.isNew, reviewedAt: reviewLog.reviewedAt })
-      .from(reviewLog)
-      .innerJoin(repertoires, eq(reviewLog.repertoireId, repertoires.id))
-      .where(and(eq(repertoires.userId, req.user!.id), gte(reviewLog.reviewedAt, since)))
-      .orderBy(reviewLog.reviewedAt);
   });
 }

@@ -1,4 +1,4 @@
-import { countSummary, type PreparedSummary, type RepertoireSummaryCounts } from '@tabiya/core';
+import { countSummary, recallOf, type PreparedSummary, type RepertoireSummaryCounts } from '@tabiya/core';
 import { useQueries, useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { api, type Me } from './api';
@@ -60,7 +60,13 @@ export function useTrainingSummary(me: Me | undefined): { data: RepertoireSummar
     if (last && last.cards === cards.data && last.key === key && last.prepared.length === prepared.length && last.prepared.every((p, i) => p === prepared[i])) {
       return last.value;
     }
-    const cardMap = new Map(cards.data.map((c) => [`${c.fen} ${c.uci}`, { due: Date.parse(c.due), createdAt: Date.parse(c.createdAt) }]));
+    const at = new Date(now);
+    const cardMap = new Map(
+      cards.data.map((c) => [
+        `${c.fen} ${c.uci}`,
+        { due: Date.parse(c.due), createdAt: Date.parse(c.createdAt), recall: c.fsrs ? recallOf(c.fsrs, c.reps, at) : c.recall },
+      ]),
+    );
     const value = countSummary(prepared, (fen, uci) => cardMap.get(`${fen} ${uci}`), { dayStart: dayStart(new Date(now)), newPerDay, now });
     last = { prepared, cards: cards.data, key, value };
     return value;

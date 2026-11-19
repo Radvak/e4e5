@@ -90,7 +90,6 @@ export interface ReviewCard {
   /** The FSRS card itself (answers are scheduled on the device, see core fsrs.ts). */
   fsrs: FsrsCard;
 }
-export interface ReviewLogEntry { repertoireId: string; grade: Grade; isNew: boolean; reviewedAt: string }
 /** Training summary of a repertoire, computed on the device (core trainingSummary). */
 export type TrainingSummary = RepertoireSummaryCounts;
 export interface ImportResult {
@@ -279,7 +278,6 @@ export const api = {
   /** An answer, possibly sent later (offline): `id` makes it count once, `reviewedAt` is when it was given. */
   review: (id: string, answer: { fen: string; uci: string; grade: Grade; id: string; reviewedAt: number }) =>
     request<ReviewCard>('POST', `/api/repertoires/${id}/review`, answer),
-  statsHistory: (days: number) => request<ReviewLogEntry[]>('GET', `/api/stats/history?days=${days}`),
   gaps: (speeds: string[], ratings: number[], cutoff: number) =>
     request<GapsResponse>('GET', `/api/gaps?${new URLSearchParams({ speeds: speeds.join(','), ratings: ratings.join(','), cutoff: String(cutoff) })}`),
   explorerGames: (fen: string, speeds: string[], ratings: number[]) =>

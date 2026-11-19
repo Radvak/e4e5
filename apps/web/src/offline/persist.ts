@@ -2,7 +2,7 @@
  * Offline data: the query cache is kept in IndexedDB, so the app opens and trains without network
  * (the service worker keeps the app itself). Only what the offline pages need is kept: account,
  * repertoires, move cards, gap report (reach probabilities: depth of the lines), position
- * statistics already seen (opponent's replies in "Jouer les lignes") and training history.
+ * statistics already seen (opponent's replies in "Jouer les lignes").
  *
  * The cache is dropped by a new build (shapes of the answers may have changed: the new version
  * runs online and fills it again) and after MAX_AGE without opening the app.
@@ -28,7 +28,7 @@ export const persister = createAsyncStoragePersister({
  * (2^31 - 1 ms, 24.8 days): above it the timer fires at once and every restored query is dropped.
  */
 export const MAX_AGE = 20 * 86_400_000;
-const KEPT = ['me', 'repertoires', 'repertoire', 'cards', 'gaps', 'explorer', 'stats-history'];
+const KEPT = ['me', 'repertoires', 'repertoire', 'cards', 'gaps', 'explorer'];
 
 /** Kept queries stay in memory as long as on the device (else unused ones would not be saved). */
 export function keepOfflineQueries(qc: QueryClient) {

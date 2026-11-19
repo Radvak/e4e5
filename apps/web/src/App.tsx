@@ -9,6 +9,7 @@ import { InstallPrompt } from './components/InstallPrompt';
 import { useTrainingSummary } from './useTrainingSummary';
 import { useGaps } from './useGaps';
 import type { Me } from './api';
+import { Lacunes } from './pages/Lacunes';
 import { Explorer } from './pages/Explorer';
 import { Games, useGamesReport } from './pages/Games';
 import { Login } from './pages/Login';
@@ -19,10 +20,11 @@ import { Settings } from './pages/Settings';
 import { Training } from './pages/Training';
 import { Button, Icon, Menu, plural, type IconName } from './ui';
 
-/** The four sections: build, learn, explore, and what the games show. */
+/** The five sections: build, learn, the gaps (games and training), explore, and what the games show. */
 const SECTIONS: { to: string; label: string; icon: IconName; active: (path: string) => boolean }[] = [
   { to: '/repertoires', label: 'Répertoires', icon: 'book', active: (p) => p.startsWith('/repertoires') || (p.startsWith('/r/') && !p.endsWith('/train')) },
   { to: '/train', label: 'Entraîner', icon: 'target', active: (p) => p.endsWith('/train') },
+  { to: '/lacunes', label: 'Lacunes', icon: 'level', active: (p) => p.startsWith('/lacunes') },
   { to: '/explorer', label: 'Explorer', icon: 'compass', active: (p) => p.startsWith('/explorer') },
   { to: '/parties', label: 'Mes parties', icon: 'games', active: (p) => p.startsWith('/parties') },
 ];
@@ -83,7 +85,6 @@ function Badge({ n, label }: { n: number; label: string }) {
   );
 }
 
-/** Mes parties: the errors of my games (moves played instead of the prepared ones), not ignored. */
 /**
  * Lichess statistics being fetched in the background (gap finder, depth of the lines): how many
  * positions are left. Shown on every page, which also keeps the fetching going (the gap report
@@ -101,6 +102,7 @@ function StatsProgress({ me }: { me: Me }) {
   );
 }
 
+/** Lacunes: the errors of my games (moves played instead of the prepared ones), not ignored. */
 function GamesBadge() {
   const n = useGamesReport().data?.inbox.errorCount ?? 0;
   return <Badge n={n} label={`${plural(n, 'erreur', 'erreurs')} dans vos parties`} />;
@@ -130,7 +132,7 @@ export function App() {
   const badge = (to: string) =>
     to === '/train' ? (
       <Badge n={toTrain} label={`${toTrain} lignes à revoir aujourd’hui`} />
-    ) : to === '/parties' ? (
+    ) : to === '/lacunes' ? (
       <GamesBadge />
     ) : null;
 
@@ -197,12 +199,13 @@ export function App() {
           <Route path="/r/:id/train" element={<Training me={me.data} />} />
           <Route path="/train" element={<Training me={me.data} />} />
           <Route path="/explorer" element={<Explorer me={me.data} />} />
-          <Route path="/bilan" element={<Redirect to="/parties" />} />
-          <Route path="/bilan/parties" element={<Redirect to="/parties" />} />
-          <Route path="/bilan/progres" element={<Redirect to="/train" />} />
+          <Route path="/lacunes" element={<Lacunes />} />
+          <Route path="/bilan" element={<Redirect to="/lacunes" />} />
+          <Route path="/bilan/parties" element={<Redirect to="/lacunes" />} />
+          <Route path="/bilan/progres" element={<Redirect to="/lacunes" />} />
           <Route path="/settings" element={<Settings me={me.data} />} />
           <Route path="/compte" element={<Account me={me.data} />} />
-          <Route path="/stats" element={<Redirect to="/train" />} />
+          <Route path="/stats" element={<Redirect to="/lacunes" />} />
           <Route path="/gaps" element={<Redirect to="/repertoires" />} />
           <Route path="/games" element={<Redirect to="/parties" />} />
           <Route path="*" element={<Redirect to="/" />} />

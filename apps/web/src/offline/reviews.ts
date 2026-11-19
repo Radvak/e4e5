@@ -130,7 +130,6 @@ export async function flushReviews() {
       notify();
       await save();
     }
-    void qc.invalidateQueries({ queryKey: ['stats-history'] });
   } finally {
     flushing = false;
     notify();

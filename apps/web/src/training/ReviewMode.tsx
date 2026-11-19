@@ -1,4 +1,4 @@
-import { groupLines, lineStarts, START_FEN, type Repertoire, type RepMove, type TrainingPosition } from '@tabiya/core';
+import { groupLines, lineStarts, positionFromFen, START_FEN, type Repertoire, type RepMove, type TrainingPosition } from '@tabiya/core';
 import type { Key } from 'chessground/types';
 import type { DrawShape } from 'chessground/draw';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -291,29 +291,41 @@ export function ReviewMode({
     }));
   };
 
+  /** The question waiting for the pause between two lines (a swipe asks it at once). */
+  const pending = useRef<(() => void) | null>(null);
+  /** Asks `next` after `ms` (or at once on a swipe). */
+  const later = (next: () => Question | null, ms: number) => {
+    const go = () => {
+      clearTimeout(jumpTimer.current);
+      jumpTimer.current = undefined;
+      pending.current = null;
+      setNow(Date.now());
+      ask(next());
+    };
+    pending.current = go;
+    jumpTimer.current = setTimeout(go, ms);
+  };
+
   const onAnswered = (q: Question, played: RepMove, outcome: Outcome) => {
     record(q, outcome);
     const { next, end } = nextAfter(q, played);
     if (next?.lead) return ask(next);
     if (end) setLineDone(true);
-    jumpTimer.current = setTimeout(() => {
-      jumpTimer.current = undefined;
-      setNow(Date.now());
-      ask(next);
-    }, end ? LINE_END_MS : JUMP_MS);
+    later(() => next, end ? LINE_END_MS : JUMP_MS);
   };
 
-  /** Given up: a mistake; the rest of the line is played, then another line (not this one again). */
-  const onAbandon = (q: Question, rest: RepMove[], ms: number) => {
-    record(q, 'mistake');
-    for (const m of rest) skipped.current.add(`${q.source.id}|${m.toFen}`);
+  /**
+   * Swipe to the right: the next question now. During the pause after an answer, the one
+   * waiting; while asked, this line is passed without recording anything (asked after the others).
+   */
+  const onSkip = (q: Question) => {
+    if (pending.current) return pending.current();
+    for (const m of [{ toFen: q.target.fen }, ...restOfLine(q.source, q.expected)]) skipped.current.add(`${q.source.id}|${m.toFen}`);
     const items = queue.items.filter((p) => !same(p, q));
-    jumpTimer.current = setTimeout(() => {
-      jumpTimer.current = undefined;
-      setNow(Date.now());
-      const first = firstOf(items);
-      ask(first ? question(first) : null);
-    }, ms + LINE_END_MS);
+    const first = firstOf(items.filter((p) => !skipped.current.has(`${p.source.id}|${p.target.fen}`))) ?? firstOf(items);
+    if (first && same(first, q)) return;
+    setNow(Date.now());
+    ask(first ? question(first) : null);
   };
 
   if (!current) {
@@ -357,13 +369,10 @@ export function ReviewMode({
       lineDone={lineDone}
       question={current}
       onAnswered={(played, outcome) => onAnswered(current, played, outcome)}
-      onAbandon={(rest, ms) => onAbandon(current, rest, ms)}
+      onSkip={() => onSkip(current)}
     />
   );
 }
-
-/** Pace of the line played to its end after giving up. */
-const ABANDON_MS = 350;
 
 /**
  * The line from `move` to its end, as trained: an opponent reply only when it leads to a
@@ -389,22 +398,22 @@ function restOfLine(source: Source, move: RepMove): RepMove[] {
  * One question: one of my moves (`expected`). When the line continues, the board first shows
  * my previous move, then plays the opponent's reply. A new move is shown; two wrong tries or
  * the time running out reveal it. Another move of my repertoire (an alternative) is not a
- * mistake: try again. Hint: the piece to move, then the move played. Give up: the line is
- * played to its end.
+ * mistake: try again. One button: the piece to move (hint), then the solution (the move is
+ * played, helped, and the line goes on). Swipe to the right on the board: the next question.
  */
 function Drill({
   round,
   lineDone,
   question,
   onAnswered,
-  onAbandon,
+  onSkip,
 }: {
   /** Changes with each question. Not used as a React key: the board must stay mounted. */
   round: number;
   question: Question;
   onAnswered: (played: RepMove, outcome: Outcome) => void;
-  /** Given up: the rest of the line is played, for `ms`. */
-  onAbandon: (rest: RepMove[], ms: number) => void;
+  /** Swipe to the right on the board: the next question. */
+  onSkip: () => void;
   /** The line ends with the move just played (shown until the next line). */
   lineDone: boolean;
 }) {
@@ -427,15 +436,12 @@ function Drill({
     /** 1: the piece to move is shown. */
     hinted: false,
     played: null as RepMove | null,
-    /** Given up: the rest of the line, and how much of it is on the board. */
-    rest: null as RepMove[] | null,
-    restShown: 0,
   });
   const [state, setState] = useState(fresh);
   // New question: reset the state during render (keeps the board mounted, no flash).
   const current = state.round === round ? state : fresh();
   if (state.round !== round) setState(current);
-  const { replied, shown, mistakes, revealed, retries, alternative, hinted, played, rest, restShown } = current;
+  const { replied, shown, mistakes, revealed, retries, alternative, hinted, played } = current;
   const update = (patch: Partial<typeof current>) => setState((s) => ({ ...s, ...patch }));
   const answers = source.rep.movesAt(target.fen);
 
@@ -451,13 +457,7 @@ function Drill({
     return () => clearTimeout(t);
   }, [shown, plies, round]);
 
-  useEffect(() => {
-    if (!rest || restShown >= rest.length) return;
-    const t = setTimeout(() => update({ restShown: restShown + 1 }), restShown === 0 ? 0 : ABANDON_MS);
-    return () => clearTimeout(t);
-  }, [rest, restShown]);
-
-  const asking = replied && shown >= plies && !played && !rest;
+  const asking = replied && shown >= plies && !played;
   /** The clock runs on a learnt move until it is answered, revealed or hinted. */
   const timing = asking && answerSeconds > 0 && !revealed && !hinted;
 
@@ -497,23 +497,41 @@ function Drill({
     onAnswered(expected, outcome(hinted));
   };
 
-  /** First the piece to move, then the move itself. */
+  /** One button: first the piece to move, then the solution (the move is played, helped). */
   const hint = () => {
     if (!hinted && !revealed) return update({ hinted: true });
     update({ played: expected });
     onAnswered(expected, outcome(true));
   };
 
-  const abandon = () => {
-    const line = restOfLine(source, expected);
-    update({ rest: line, restShown: 0 });
-    onAbandon(line, line.length * ABANDON_MS);
+  /** Swipe to the right started on an empty square (on a piece: a move being dragged). */
+  const swipe = useRef<{ x: number; y: number; at: number } | null>(null);
+  const onTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    swipe.current = null;
+    const t = e.touches[0];
+    const board = e.currentTarget.querySelector('cg-board')?.getBoundingClientRect();
+    if (!t || e.touches.length > 1 || !board) return;
+    const file = Math.floor(((t.clientX - board.left) / board.width) * 8);
+    const row = Math.floor(((t.clientY - board.top) / board.height) * 8);
+    if (file < 0 || file > 7 || row < 0 || row > 7) return;
+    const square = source.color === 'white' ? (7 - row) * 8 + file : row * 8 + (7 - file);
+    if (positionFromFen(last?.toFen ?? START_FEN).board.get(square)) return;
+    swipe.current = { x: t.clientX, y: t.clientY, at: Date.now() };
+  };
+  const onTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
+    const s = swipe.current;
+    swipe.current = null;
+    const t = e.changedTouches[0];
+    if (!s || !t || paused) return;
+    const dx = t.clientX - s.x;
+    const dy = Math.abs(t.clientY - s.y);
+    const width = e.currentTarget.getBoundingClientRect().width;
+    if (dx > Math.max(60, width * 0.3) && dy < dx / 2 && Date.now() - s.at < 800) onSkip();
   };
 
   /** The moves on the board, from the start. */
   let moves: RepMove[];
-  if (rest) moves = [...target.path, ...rest.slice(0, restShown)];
-  else if (played) moves = [...target.path, played];
+  if (played) moves = [...target.path, played];
   else if (!replied && lead) moves = target.path.slice(0, -1);
   else moves = target.path.slice(0, shown);
   const last = moves.at(-1);
@@ -532,13 +550,15 @@ function Drill({
     <div className="editor">
       <div className={`editor-board${paused ? ' paused' : ''}`}>
         <OpeningName ucis={moves.map((m) => m.uci)} />
-        <Board
-          fen={last?.toFen ?? START_FEN}
-          orientation={source.color}
-          lastMove={last?.uci}
-          shapes={shapes}
-          onMove={asking && !paused ? play : undefined}
-        />
+        <div className="swipe-area" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+          <Board
+            fen={last?.toFen ?? START_FEN}
+            orientation={source.color}
+            lastMove={last?.uci}
+            shapes={shapes}
+            onMove={asking && !paused ? play : undefined}
+          />
+        </div>
         {paused && (
           <button className="pause-overlay" onClick={() => setPaused(false)}>
             ▶ Reprendre
@@ -574,16 +594,14 @@ function Drill({
           </button>
         </div>
         <div className="drill-actions">
-          <button onClick={hint} disabled={!asking || paused} title={hinted || revealed ? 'Jouer le coup' : 'Montrer la pièce à jouer'}>
-            💡 Indice
-          </button>
-          <button onClick={abandon} disabled={!asking || paused} title="Voir la ligne jusqu’à la fin">
-            🏳 Abandon
+          <button onClick={hint} disabled={!asking || paused} title={hinted || revealed ? 'Jouer le coup attendu (compté comme aidé), puis la ligne continue' : 'Montrer la pièce à jouer'}>
+            {hinted || revealed ? '🏳 Solution' : '💡 Indice'}
           </button>
           <button onClick={toExplorer} title="Ouvrir cette position dans l’Explorer">
             🧭 Explorer
           </button>
         </div>
+        <p className="swipe-tip muted small-text">Balayez l’échiquier vers la droite pour passer à la suite.</p>
       </div>
     </div>
   );

@@ -310,15 +310,16 @@ function RepertoireRow({ rep, counts, missing, firstGap }: {
       </div>
       <div className="info">
         <Link className="name" to={`/r/${rep.id}`} onClick={stop}>{rep.name}</Link>
-        <div className="meta">
-          {counts ? plural(counts.totalLines, 'ligne', 'lignes') : '…'}
-          {/* Depth of the lines (Paramètres): the positions trained out of all of them. */}
-          {counts && counts.total < counts.positions && (
-            <span title="Positions entraînées à la profondeur des lignes choisie (Paramètres), sur toutes celles du répertoire">
-              {' · '}{counts.total} / {plural(counts.positions, 'position', 'positions')}
-            </span>
-          )}
-        </div>
+        <div className="meta">{counts ? `${plural(counts.totalLines, 'ligne', 'lignes')} (${plural(counts.positions, 'position', 'positions')})` : '…'}</div>
+        {/* Memorized share of the positions trained (at the depth of the lines, Paramètres). */}
+        {counts && counts.total > 0 && (
+          <div
+            className="meta"
+            title="Chance estimée de trouver votre coup aujourd’hui, en moyenne sur les positions entraînées (0 pour celles pas encore apprises). Positions entraînées : selon la profondeur des lignes choisie dans les Paramètres."
+          >
+            Mémorisé à <strong className="known">{Math.round(100 * counts.known)} %</strong> sur {plural(counts.total, 'position', 'positions')}
+          </div>
+        )}
         {/* Clickable: review this repertoire, or open the editor on its most frequent missing move. */}
         <div className="badges">
           {rep.active && counts && counts.dueLines > 0 && (

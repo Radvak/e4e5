@@ -27,8 +27,9 @@ export function useLevelSort() {
 /**
  * The Lichess moves of the position merged with the search at my level: one row per move with
  * its score, number of games (absolute: how reliable the score is) and win/draw/loss bar. The score is the move's own one
- * (wins + draws / 2, from my side) at depth 0, else the expected score over the likely lines up
- * to the depth chosen with the slider of the footer (my turn only). Sorted by score or by
+ * (wins + draws / 2, from my side) at 0, else the expected score over the lines followed while
+ * they come up in at least the share of the games chosen with the slider of the footer (my turn
+ * only; the number of moves follows from it). Sorted by score or by
  * frequency (arrows of the headers); the first rows, "N autres coups" for the others. A row
  * unfolds into the expected line and the opponent's replies.
  */
@@ -117,22 +118,27 @@ export function LevelTable({
   };
   const numbered = (i: number, san: string) => moveText(Array(firstMoveNumber + i).fill(''), san, true);
 
-  // Depth reached, like an engine's: step n of the search, and whether it is still computing.
+  // The slider sets how likely a line must stay to be followed (thresholds of the search steps),
+  // not a number of moves: how far the lines go follows from it, and varies with the position.
   const steps = level?.steps ?? [0.5, 0.25, 0.12, 0.06];
+  const threshold = (d: number) => (d > 0 ? `lignes ≥ ${pct(steps[d - 1]!)}` : 'coup seul');
   const reached = reach === null ? 0 : steps.indexOf(reach) + 1;
   const computing = searching && !!level && level.pending > 0;
+  // How far ahead the expected lines go at the threshold reached (half-moves).
+  const plies = searching && reached > 0 ? Math.max(0, ...(level?.moves ?? []).filter((m) => m.minReach === reach).map((m) => m.line.length)) : 0;
   /** Short state for the footer; `why`: the full explanation (tooltip). */
   let short: string;
   let why: string;
-  if (!canSearch) [short, why] = ['tour adverse', 'Au tour de l’adversaire : score des parties pour vous, sans calcul plus loin.'];
-  else if (depth === 0) [short, why] = ['coup seul', 'Profondeur 0 : score de chaque coup seul (victoires + nulles / 2, pour vous).'];
+  if (!canSearch) [short, why] = ['tour adverse', 'Au tour de l’adversaire : score des parties pour vous, sans suivre les lignes.'];
+  else if (depth === 0) [short, why] = ['', 'Score de chaque coup seul : victoires + nulles / 2, pour vous, dans les parties Lichess.'];
   else if (levelLoading) [short, why] = ['calcul…', 'Calcul à votre niveau…'];
   else if (levelError) [short, why] = ['erreur', levelError.message];
-  else if (computing) [short, why] = ['calcul…', `Calcul : ${plural(level!.pending, 'position', 'positions')} à récupérer sur Lichess (${range}) pour aller plus loin.`];
+  else if (computing) [short, why] = ['calcul…', `Calcul : ${plural(level!.pending, 'position', 'positions')} à récupérer sur Lichess (${range}) pour suivre les lignes plus loin.`];
   // Nothing explored: the next positions are not stored (and cannot be fetched now).
   else if (reached === 0) [short, why] = ['positions manquantes', 'Positions suivantes pas encore récupérées sur Lichess : score de chaque coup seul, pas de ligne à dérouler.'];
-  else if (reached < depth) [short, why] = [`${reached}/${depth} atteinte`, `Profondeur ${reached} atteinte : aller plus loin demanderait trop de positions.`];
-  else [short, why] = ['', `Lignes suivies tant qu’elles arrivent dans au moins ${pct(steps[depth - 1]!)} des parties (vos meilleurs coups, les réponses adverses pondérées par leur fréquence).`];
+  else if (reached < depth) [short, why] = [`${threshold(reached)} atteint`, `Lignes suivies jusqu’à ${pct(steps[reached - 1]!)} des parties seulement : descendre à ${pct(steps[depth - 1]!)} demanderait trop de positions.`];
+  else [short, why] = ['', ''];
+  why ||= `Les lignes sont suivies tant qu’elles arrivent dans au moins ${pct(steps[(reached || depth) - 1]!)} des parties à votre niveau (vos meilleurs coups, les réponses adverses pondérées par leur fréquence)${plies > 1 ? ` : ici jusqu’à ${plies} demi-coups plus loin` : ''}. Plus le seuil est bas, plus les lignes vont loin ; le nombre de coups dépend de la position.`;
 
   const header = (key: LevelSort, label: string, title: string, className: string) => (
     <th className={className}>
@@ -262,7 +268,6 @@ export function LevelTable({
         <span className="spacer" />
         <label className="level-depth" title={why}>
           {computing && <span className="pulse" aria-hidden="true" />}
-          profondeur
           <input
             type="range"
             min={0}
@@ -271,9 +276,11 @@ export function LevelTable({
             value={canSearch ? depth : 0}
             disabled={!canSearch}
             onChange={(e) => onDepth(Number(e.target.value))}
-            aria-label="Profondeur du calcul à votre niveau (0 : score de chaque coup seul)"
+            aria-label="Lignes suivies : jusqu’à quelle part des parties (à gauche : score de chaque coup seul)"
+            aria-valuetext={threshold(canSearch ? depth : 0)}
           />
-          {canSearch ? depth : 0}/{maxDepth}
+          {threshold(canSearch ? depth : 0)}
+          {plies > 1 && ` · ${plies} demi-coups`}
           {short && ` · ${short}`} · Lichess {range}
         </label>
       </div>

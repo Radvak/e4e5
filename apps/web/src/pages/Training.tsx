@@ -10,7 +10,6 @@ import { Button, PageHeader, Tabs, plural } from '../ui';
 import { lineText } from '../training/common';
 import { PlayMode } from '../training/PlayMode';
 import { Progress } from '../training/Progress';
-import { Stats } from './Stats';
 import { ReviewMode } from '../training/ReviewMode';
 import { useTrainingSources, type Source } from '../training/useTrainingSources';
 
@@ -75,7 +74,6 @@ export function Training({ me }: { me: Me }) {
     setModeState(m);
   };
   const [counts, setCounts] = useState({ dueLines: 0, freshLines: 0, reviewed: 0, asked: 0, firstTry: 0 });
-  const [progressOpen, setProgressOpen] = useState(false);
   const onCounts = useCallback((c: typeof counts) => setCounts(c), []);
   const onReview = (source: Source, fen: string, uci: string, grade: Grade) => review.mutate({ source, fen, uci, grade });
 
@@ -151,14 +149,6 @@ export function Training({ me }: { me: Me }) {
       )}
       {mode === 'play' && <Progress sources={sources} />}
 
-      {/* Progress of every repertoire (was the Bilan page): activity, forecast, weak positions. */}
-      {!id && (
-        <details className="panel progress-all" onToggle={(e) => setProgressOpen(e.currentTarget.open)}>
-          <summary>Progrès</summary>
-          {/* Mounted when open: it reads every repertoire, no need to keep it up to date after each answer. */}
-          {progressOpen && <Stats />}
-        </details>
-      )}
     </div>
   );
 }

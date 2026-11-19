@@ -1,13 +1,9 @@
-import { playSanOn, positionFromFen, type Color } from '@tabiya/core';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useRef, useState } from 'react';
+import type { Color } from '@tabiya/core';
+import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { api, ApiError, type GamesReport, type InboxItem, type RepertoireSummary, type Results } from '../api';
-import { lineText, moveText } from '../chessText';
+import { api, type GamesReport, type RepertoireSummary, type Results } from '../api';
 import { GameSyncInline, useGameSync } from '../components/GameSync';
 import { SPEED_NAMES, useSettings } from '../settings';
-import { MiniBoard, type MiniArrow } from '../components/MiniBoard';
-import { SwipeRow } from '../components/SwipeRow';
 import { Button, EmptyState, PageHeader, plural } from '../ui';
 
 const PERIOD: Record<number, string> = { 30: '30 derniers jours', 90: '3 derniers mois', 365: '12 derniers mois', 0: 'toutes les parties' };
@@ -16,13 +12,10 @@ const score = (r: Results) => {
   const n = r.win + r.draw + r.loss;
   return n ? (r.win + r.draw / 2) / n : 0;
 };
-const date = (iso: string) => new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
-
-const PAGE = 20;
 
 /**
- * The games compared with the repertoires (period and speeds of the settings). Shared by the page
- * and the badge of the Mes parties tab (same query, computed once).
+ * The games compared with the repertoires (period and speeds of the settings). Shared by this
+ * page, the Lacunes page (my errors) and its badge (same query, computed once).
  */
 export function useGamesReport() {
   const { gamesDays, gamesSpeeds } = useSettings();
@@ -35,18 +28,13 @@ export function useGamesReport() {
   });
 }
 
-/** Mes parties: my errors (cards with a thumbnail), score per opening and per repertoire, recent games. */
+/** Mes parties: score per repertoire, and the first moves outside the repertoires (my errors are in Lacunes). */
 export function Games() {
   const { gamesDays, gamesSpeeds } = useSettings();
-  const [shown, setShown] = useState(PAGE);
-  const [notice, setNotice] = useState<string | null>(null);
   const reps = useQuery({ queryKey: ['repertoires'], queryFn: api.repertoires });
   const report = useGamesReport();
-  const qc = useQueryClient();
-  const restore = useMutation({ mutationFn: api.restoreInbox, onSuccess: () => qc.invalidateQueries({ queryKey: ['games-report'] }) });
   const byId = new Map((reps.data ?? []).map((r) => [r.id, r]));
   const r = report.data;
-  const items = r?.inbox.errors ?? [];
 
   return (
     <div className="games-page stack">
@@ -58,7 +46,6 @@ export function Games() {
             {PERIOD[gamesDays] ?? `${gamesDays} jours`} · {gamesSpeeds.map((s) => SPEED_NAMES[s] ?? s).join(', ')}
           </Link>
         }
-        menu={[{ label: 'Réafficher les éléments ignorés', onClick: () => restore.mutate() }]}
       />
       <GameSyncInline />
 
@@ -72,24 +59,17 @@ export function Games() {
 
       {r && r.games > 0 && (
         <>
-          <h3 style={{ margin: 0 }}>Erreurs</h3>
-          <p className="muted small-text" style={{ margin: 0 }}>Vous avez joué autre chose que votre coup préparé. Du plus fréquent au moins fréquent.</p>
-          {notice && (
-            <p className="notice success">
-              {notice} <Link to="/train">Entraîner</Link>
-            </p>
-          )}
-          {items.length === 0 && <p className="muted">Aucune erreur.</p>}
-          {items.slice(0, shown).map((item) => (
-            <InboxRow key={item.key} item={item} rep={byId.get(item.repertoireId)} onDone={setNotice} />
-          ))}
-          {items.length > shown && (
-            <Button variant="ghost" onClick={() => setShown(shown + PAGE)}>Voir plus ({items.length - shown})</Button>
-          )}
-
-          <OpeningStats report={r} />
+          <p className="muted small-text" style={{ margin: 0 }}>
+            {r.inbox.errorCount > 0 ? (
+              <>
+                Vos écarts au répertoire ({r.inbox.errorCount}) sont dans les <Link to="/lacunes">Lacunes</Link>, avec les positions fragiles de
+                l’entraînement.
+              </>
+            ) : (
+              <>Aucun écart à votre répertoire dans ces parties.</>
+            )}
+          </p>
           <RepertoireStats report={r} reps={byId} />
-          <RecentGames report={r} reps={byId} />
         </>
       )}
     </div>
@@ -110,80 +90,6 @@ function ResultBar({ results }: { results: Results }) {
 const OPENINGS_SHOWN = 8;
 
 /** Score per named opening and colour; a click shows its variations. */
-function OpeningStats({ report }: { report: GamesReport }) {
-  const [open, setOpen] = useState<Set<string>>(new Set());
-  const [all, setAll] = useState(false);
-  const toggle = (key: string) => {
-    const next = new Set(open);
-    if (!next.delete(key)) next.add(key);
-    setOpen(next);
-  };
-  const colors: Color[] = ['white', 'black'];
-  const more = colors.some((c) => report.openings.filter((o) => o.color === c).length > OPENINGS_SHOWN);
-  const explorer = (ucis: string[], color: Color) =>
-    `/explorer?${new URLSearchParams({ line: ucis.join(','), ...(color === 'black' ? { color: 'black' } : {}) })}`;
-  return (
-    <section className="card">
-      <h3>Par ouverture</h3>
-      <div className="table-wrap">
-        <table className="lines">
-          <thead>
-            <tr>
-              <th />
-              <th>Parties</th>
-              <th>Score</th>
-            </tr>
-          </thead>
-          {colors.map((color) => {
-            const rows = report.openings.filter((o) => o.color === color);
-            if (!rows.length) return null;
-            return (
-              <tbody key={color}>
-                {(all ? rows : rows.slice(0, OPENINGS_SHOWN)).map((o) => {
-                  const key = `${color}|${o.family}`;
-                  const expandable = o.variations.length > 1 || o.variations[0]?.name !== o.family;
-                  const isOpen = open.has(key);
-                  return [
-                    <tr key={key} className={expandable ? 'clickable' : undefined} onClick={expandable ? () => toggle(key) : undefined}>
-                      <td>
-                        <span className={`dot ${color}`} /> {o.family}
-                        {expandable && <span className="muted small-text"> {isOpen ? '▾' : '▸'}</span>}
-                      </td>
-                      <td>{o.games}</td>
-                      <td className="meter-cell">
-                        {pct(score(o.results))} <ResultBar results={o.results} />
-                      </td>
-                    </tr>,
-                    ...(isOpen
-                      ? o.variations.map((v) => (
-                          <tr key={`${key}|${v.name}`} className="small-text">
-                            <td style={{ paddingLeft: 28 }}>
-                              <Link to={explorer(v.ucis, color)} title={`${v.eco} · ouvrir dans l’Explorer`}>
-                                {v.name === o.family ? 'Ligne principale' : v.name.slice(o.family.length + 1).trim()}
-                              </Link>
-                            </td>
-                            <td>{v.games}</td>
-                            <td className="meter-cell">
-                              {pct(score(v.results))} <ResultBar results={v.results} />
-                            </td>
-                          </tr>
-                        ))
-                      : []),
-                  ];
-                })}
-              </tbody>
-            );
-          })}
-        </table>
-      </div>
-      {more && (
-        <Button variant="ghost" onClick={() => setAll(!all)}>
-          {all ? 'Moins d’ouvertures' : 'Toutes les ouvertures'}
-        </Button>
-      )}
-    </section>
-  );
-}
 
 function RepertoireStats({ report, reps }: { report: GamesReport; reps: Map<string, RepertoireSummary> }) {
   const rows = report.repertoires.filter((x) => x.games > 0).sort((a, b) => b.games - a.games);
@@ -240,209 +146,4 @@ function RepertoireStats({ report, reps }: { report: GamesReport; reps: Map<stri
   );
 }
 
-/** The report without one inbox item (shown at once, before the server's new report). */
-function withoutItem(r: GamesReport, item: InboxItem): GamesReport {
-  const errors = r.inbox.errors.filter((i) => i.key !== item.key);
-  return {
-    ...r,
-    inbox: {
-      errors,
-      errorCount: Math.max(0, r.inbox.errorCount - (r.inbox.errors.length - errors.length)),
-    },
-  };
-}
 
-function InboxRow({ item, rep, onDone }: { item: InboxItem; rep: RepertoireSummary | undefined; onDone: (message: string) => void }) {
-  const qc = useQueryClient();
-  // Dealt with: off the list (and the badge of Mes parties) at once, then the new report; the
-  // Entraîner badge counts a position sent to review.
-  const hide = () => {
-    qc.setQueriesData<GamesReport>({ queryKey: ['games-report'] }, (r) => r && withoutItem(r, item));
-    void qc.invalidateQueries({ queryKey: ['games-report'] });
-    void qc.invalidateQueries({ queryKey: ['training-summary'] });
-    void qc.invalidateQueries({ queryKey: ['cards'] });
-  };
-  /**
-   * An error sent to review: the position is due now (if learnt: else it comes with the new
-   * lines), and the error is dismissed (it comes back if played again in a later game).
-   * Returns whether the position was learnt.
-   */
-  const sendToReview = async () => {
-    let learnt = true;
-    try {
-      await api.reviewNow(item.repertoireId, item.fen);
-    } catch (e) {
-      if (!(e instanceof ApiError && e.status === 404)) throw e;
-      learnt = false;
-    }
-    await api.dismissInbox(item.key);
-    return learnt;
-  };
-  const position = lineText(item.line.sans) || 'la position initiale';
-  const later = useMutation({
-    mutationFn: sendToReview,
-    onSuccess: (learnt) => {
-      hide();
-      onDone(
-        learnt
-          ? `Ajoutée à vos révisions du jour : après ${position}.`
-          : `Après ${position} : position pas encore apprise, elle viendra avec vos nouvelles lignes.`,
-      );
-    },
-  });
-  const dismiss = useMutation({ mutationFn: () => api.dismissInbox(item.key), onSuccess: hide });
-  const busy = later.isPending || dismiss.isPending;
-
-  const line = item.line.sans;
-  // The position in the Explorer (statistics, engine, every repertoire), from my side.
-  const explorer = `/explorer?${new URLSearchParams({ ...(item.line.ucis.length ? { line: item.line.ucis.join(',') } : {}), ...(rep?.color === 'black' ? { color: 'black' } : {}) })}`;
-  const error = later.error ?? dismiss.error;
-
-  // Thumbnail: the position, with my move (red) and the prepared ones (green).
-  const arrows: MiniArrow[] = [
-    ...item.expected.flatMap((san) => {
-      const m = playSanOn(positionFromFen(item.fen), san);
-      return m ? [{ uci: m.uci, kind: 'repertoire' as const }] : [];
-    }),
-    { uci: item.move.uci, kind: 'mistake' },
-  ];
-
-  const color = rep?.color ?? 'white';
-  const dialog = useRef<HTMLDialogElement>(null);
-  // The detail is only rendered while open (the board is measured when it is created).
-  const [detail, setDetail] = useState(false);
-  const open = () => {
-    setDetail(true);
-    dialog.current?.showModal();
-  };
-
-  const head = (
-    <div className="inbox-head">
-      <span className="muted inbox-line">{lineText(line) || 'Position initiale'} </span>
-      <span className="hole-move">{moveText(line, item.move.san)}</span>
-    </div>
-  );
-  const actions = (
-    <div className="row inbox-actions">
-      <Button size="sm" variant="primary" disabled={busy} onClick={() => later.mutate()} title="Ajouter cette position à vos révisions du jour">
-        À réviser
-      </Button>
-      <Button size="sm" disabled={busy} onClick={() => dismiss.mutate()} title="Masquer cet élément">Ignorer</Button>
-      <Button size="sm" variant="ghost" icon="compass" to={explorer} title="Voir cette position dans l’Explorer (statistiques, moteur, vos répertoires)">
-        Explorer
-      </Button>
-    </div>
-  );
-  const errorText = error && <p className="error small-text">{error.message}</p>;
-
-  return (
-    // On touch screens: swipe left to ignore, right to review later.
-    <SwipeRow right={{ label: 'À réviser', action: () => later.mutateAsync() }} left={{ label: 'Ignorer', action: () => dismiss.mutateAsync() }}>
-      {/* The whole card opens the detail, except its buttons and links. */}
-      <article className="card game-card clickable" onClick={(e) => !(e.target as HTMLElement).closest('button, a') && open()}>
-        <button type="button" className="thumb-button" onClick={open} aria-label="Voir le détail et les parties">
-          <MiniBoard fen={item.fen} orientation={color} arrows={arrows} />
-        </button>
-        <div className="game-card-body">
-          {head}
-          <div className="row small-text game-card-meta">
-            <span className="rep-tag"><span className={`dot ${color}`} /> {rep?.name ?? '?'}</span>
-            <span className="muted">{plural(item.games, 'partie', 'parties')} · {pct(score(item.results))}</span>
-          </div>
-          {actions}
-          {errorText}
-        </div>
-
-        <dialog
-          ref={dialog}
-          className="game-detail"
-          onClose={() => setDetail(false)}
-          // Not to the card (which would open it again); a click on the backdrop closes it.
-          onClick={(e) => {
-            e.stopPropagation();
-            if (e.target === dialog.current) dialog.current.close();
-          }}
-        >
-          {detail && (
-            <div className="game-detail-content stack">
-              <div className="game-detail-top">
-                <span className="rep-tag"><span className={`dot ${color}`} /> {rep?.name ?? '?'}</span>
-                <Button size="sm" variant="ghost" onClick={() => dialog.current?.close()} title="Fermer">✕</Button>
-              </div>
-              <MiniBoard fen={item.fen} orientation={color} arrows={arrows} className="mini-board-large" />
-              {head}
-              <p className="inbox-body">
-                Vous avez joué <strong>{moveText(line, item.move.san, true)}</strong> au lieu de{' '}
-                <strong>{item.expected.map((s) => moveText(line, s, true)).join(' ou ')}</strong>.{' '}
-                {plural(item.games, 'partie', 'parties')}, score {pct(score(item.results))}.
-              </p>
-              {actions}
-              {errorText}
-              <div className="table-wrap">
-                <table className="lines">
-                  <tbody>
-                    {item.gameList.map((g) => (
-                      <tr key={g.url}>
-                        <td className="muted">{date(g.playedAt)}</td>
-                        <td>
-                          {g.opponent} <span className="muted">{g.opponentRating ?? ''}</span>
-                        </td>
-                        <td className={`result ${g.result}`}>{RESULT[g.result]}</td>
-                        <td>
-                          <a className="small-text" href={g.url} target="_blank" rel="noreferrer">partie ↗</a>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-        </dialog>
-      </article>
-    </SwipeRow>
-  );
-}
-
-const KIND_TEXT = {
-  'in-book': 'restée dans la théorie',
-  'my-deviation': 'écart de votre part',
-  'opponent-novelty': 'nouveauté adverse',
-  'end-of-prep': 'après la fin de votre ligne',
-  outside: 'hors de vos répertoires',
-} as const;
-const RESULT = { win: 'gagnée', draw: 'nulle', loss: 'perdue' } as const;
-
-function RecentGames({ report, reps }: { report: GamesReport; reps: Map<string, RepertoireSummary> }) {
-  return (
-    <details className="panel">
-      <summary>Dernières parties</summary>
-      <div className="table-wrap">
-        <table className="lines">
-          <tbody>
-            {report.recent.map((g) => (
-              <tr key={g.id}>
-                <td className="muted">{date(g.playedAt)}</td>
-                <td>
-                  <span className={`dot ${g.color}`} /> {g.opponent} <span className="muted">{g.opponentRating}</span>
-                </td>
-                <td className={`result ${g.result}`}>{RESULT[g.result]}</td>
-                <td>{g.repertoireId ? reps.get(g.repertoireId)?.name : '—'}</td>
-                <td className="small-text">
-                  {g.move ? `${moveText(new Array(g.ply).fill(''), g.move.san, true)} : ` : ''}
-                  {KIND_TEXT[g.kind]}
-                </td>
-                <td>
-                  <Link className="small-text" to={`/explorer?${new URLSearchParams({ line: g.ucis.join(','), ...(g.color === 'black' ? { color: 'black' } : {}) })}`}>
-                    explorer
-                  </Link>{' '}
-                  <a className="small-text" href={g.url} target="_blank" rel="noreferrer">partie ↗</a>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </details>
-  );
-}
