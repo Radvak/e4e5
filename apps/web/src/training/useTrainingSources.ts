@@ -1,17 +1,9 @@
-import {
-  keptPositions,
-  positionReview,
-  Repertoire,
-  START_FEN,
-  trainingPositions,
-  trainingPositionsFrom,
-  type Color,
-  type TrainingPosition,
-} from '@tabiya/core';
+import { positionReview, START_FEN, type Color, type Repertoire, type TrainingPosition } from '@tabiya/core';
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { api, type Grade, type ReviewCard } from '../api';
 import { cardsQuery, recordReview } from '../offline/reviews';
+import { graphOf, keptOf, positionsFrom, positionsOf } from './graphCache';
 
 /** Summary of the cards of my moves in a position (several moves: the weakest). */
 export interface PositionCard {
@@ -45,10 +37,10 @@ export interface Source {
 
 const cardKey = (fen: string, uci: string) => `${fen} ${uci}`;
 
-/** Lines stopped at the positions coming up in at least `minReach` of the games (`reach`). */
+/** Lines stopped at the positions coming up in at least `minReach` of the games (`probs`: per colour). */
 export interface Shorten {
   minReach: number;
-  reach: (color: Color, fen: string) => number | undefined;
+  probs: (color: Color) => Record<string, number> | undefined;
 }
 
 /**
@@ -66,25 +58,37 @@ export function useTrainingSources(ids: string[], from: string | null, shorten?:
 
   const cards = useMemo(() => new Map((cardQuery.data ?? []).map((c) => [cardKey(c.fen, c.uci), c])), [cardQuery.data]);
 
-  const sources = useMemo<Source[]>(
+  // The graphs and positions: only when a repertoire changes, not after an answer (graphCache).
+  const trained = useMemo(
     () =>
       ids.flatMap((id, i) => {
         const data = repQueries[i]?.data;
         if (!data) return [];
-        const rep = new Repertoire(data.color, data.moves);
-        const kept = shorten && shorten.minReach > 0 ? keptPositions(trainingPositions(rep), (f) => shorten.reach(data.color, f), shorten.minReach) : null;
-        const positions = trainingPositionsFrom(rep, from ?? START_FEN);
+        const rep = graphOf(data);
+        const probs = shorten && shorten.minReach > 0 ? shorten.probs(data.color) : undefined;
+        const kept = probs ? keptOf(positionsOf(rep), probs, shorten!.minReach) : null;
+        const positions = positionsFrom(rep, from ?? START_FEN);
+        return [{ id, data, rep, positions: kept ? positions.filter((p) => kept.has(p.fen)) : positions }];
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [ids.join(), version, from, shorten],
+  );
+
+  // The review state, after every answer: only small functions reading the cards.
+  const sources = useMemo<Source[]>(
+    () =>
+      trained.map(({ id, data, rep, positions }) => {
         const cardOf = (fen: string, uci: string) => cards.get(cardKey(fen, uci));
         const times = (fen: string) => (uci: string) => {
           const c = cardOf(fen, uci);
           return c && { due: Date.parse(c.due), createdAt: Date.parse(c.createdAt) };
         };
-        return [{
+        return {
           id,
           name: data.name,
           color: data.color,
           rep,
-          positions: kept ? positions.filter((p) => kept.has(p.fen)) : positions,
+          positions,
           cardOf,
           stateOf: (fen, now) => positionReview(rep.movesAt(fen), times(fen), now),
           positionCard: (fen) => {
@@ -99,10 +103,9 @@ export function useTrainingSources(ids: string[], from: string | null, shorten?:
               complete: known.length === moves.length,
             };
           },
-        } satisfies Source];
+        } satisfies Source;
       }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [ids.join(), version, from, cards, shorten],
+    [trained, cards],
   );
 
   /** Records an answer: scheduled on the device at once, sent to the server now or when it can be reached. */

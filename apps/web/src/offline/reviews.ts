@@ -116,8 +116,11 @@ export async function flushReviews() {
       try {
         const card = await api.review(item.repertoireId, { fen: item.fen, uci: item.uci, grade: item.grade, id: item.id, reviewedAt: item.reviewedAt });
         q.splice(q.indexOf(item), 1);
-        // The server's card, unless the move was answered again since (that answer is still queued).
-        if (!mine(q).some((r) => r.fen === card.fen && r.uci === card.uci)) putCard(qc, card);
+        // The server's card, unless the move was answered again since (that answer is still queued),
+        // or it is the one computed on the device (the usual case: no new render while training).
+        const local = qc.getQueryData<ReviewCard[]>(['cards'])?.find((c) => c.fen === card.fen && c.uci === card.uci);
+        const same = local && local.due === card.due && local.reps === card.reps && local.lapses === card.lapses;
+        if (!same && !mine(q).some((r) => r.fen === card.fen && r.uci === card.uci)) putCard(qc, card);
       } catch (e) {
         const keep = !(e instanceof ApiError) || e.status === UNREACHABLE || e.status === 401 || e.status === 429 || e.status >= 500;
         if (keep) break;

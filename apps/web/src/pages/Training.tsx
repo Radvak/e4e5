@@ -45,7 +45,7 @@ export function Training({ me }: { me: Me }) {
   // without statistics.
   const shortening = lineDepth > 0;
   const shorten = useMemo(
-    () => (shortening && gaps.data ? { minReach: lineDepth, reach: (color: Color, fen: string) => gaps.data?.[color]?.reach[fen] } : null),
+    () => (shortening && gaps.data ? { minReach: lineDepth, probs: (color: Color) => gaps.data?.[color]?.reach } : null),
     [shortening, lineDepth, gaps.data],
   );
   const { sources, loading, review } = useTrainingSources(ids, from, shorten);
@@ -75,6 +75,7 @@ export function Training({ me }: { me: Me }) {
     setModeState(m);
   };
   const [counts, setCounts] = useState({ dueLines: 0, freshLines: 0, reviewed: 0, asked: 0, firstTry: 0 });
+  const [progressOpen, setProgressOpen] = useState(false);
   const onCounts = useCallback((c: typeof counts) => setCounts(c), []);
   const onReview = (source: Source, fen: string, uci: string, grade: Grade) => review.mutate({ source, fen, uci, grade });
 
@@ -152,9 +153,10 @@ export function Training({ me }: { me: Me }) {
 
       {/* Progress of every repertoire (was the Bilan page): activity, forecast, weak positions. */}
       {!id && (
-        <details className="panel progress-all">
+        <details className="panel progress-all" onToggle={(e) => setProgressOpen(e.currentTarget.open)}>
           <summary>Progrès</summary>
-          <Stats />
+          {/* Mounted when open: it reads every repertoire, no need to keep it up to date after each answer. */}
+          {progressOpen && <Stats />}
         </details>
       )}
     </div>

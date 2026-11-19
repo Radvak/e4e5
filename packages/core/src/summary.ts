@@ -5,7 +5,7 @@
  */
 import type { Color } from './position.js';
 import { Repertoire, type RepMove } from './repertoire.js';
-import { groupLines, keptPositions, LINE_DEPTHS, lineStarts, positionReview, trainingPositions, type MoveCardTimes } from './training.js';
+import { groupLines, keptPositions, LINE_DEPTHS, lineStarts, positionReview, trainingPositions, type MoveCardTimes, type TrainingPosition } from './training.js';
 
 export interface SummaryRepertoire {
   id: string;
@@ -50,24 +50,54 @@ export interface RepertoireSummaryCounts {
 }
 
 /**
- * `cardOf`: times of my card for a move (shared by every repertoire). `reach`: probability of
- * reaching each position at my level, per colour (null or missing colour: whole lines).
+ * The part of a repertoire's summary that does not depend on the cards (graph, positions trained
+ * at the depth of the lines, totals): computed once per repertoire, reused after every answer.
  */
-export function trainingSummary(
-  reps: SummaryRepertoire[],
+export interface PreparedSummary {
+  id: string;
+  active: boolean;
+  graph: Repertoire;
+  /** Positions trained (at the depth of the lines). */
+  list: TrainingPosition[];
+  positions: number;
+  byDepth: Record<string, number> | null;
+  totalLines: number;
+}
+
+/**
+ * `graph` and `all` (its training positions) may be given when already built. `probs`:
+ * probability of reaching each position at my level (undefined: whole lines).
+ */
+export function prepareSummary(
+  r: { id: string; active: boolean; graph: Repertoire; all?: TrainingPosition[] },
+  probs: Record<string, number> | undefined,
+  depth: number,
+): PreparedSummary {
+  const { graph } = r;
+  const all = r.all ?? trainingPositions(graph);
+  const reachOf = (f: string) => probs?.[f];
+  const kept = probs && depth > 0 ? keptPositions(all, reachOf, depth) : null;
+  return {
+    id: r.id,
+    active: r.active,
+    graph,
+    list: kept ? all.filter((p) => kept.has(p.fen)) : all,
+    positions: all.length,
+    byDepth: probs ? Object.fromEntries(LINE_DEPTHS.map((d) => [String(d), keptPositions(all, reachOf, d).size])) : null,
+    totalLines: [...graph.reachable()].filter((f) => graph.movesAt(f).length === 0).length,
+  };
+}
+
+/** The counts of the summary from the prepared repertoires and the move cards (cheap: after every answer). */
+export function countSummary(
+  prepared: PreparedSummary[],
   cardOf: (fen: string, uci: string) => MoveCardTimes | undefined,
-  reach: ((color: Color) => Record<string, number> | undefined) | null,
-  { dayStart, newPerDay, depth, now }: SummaryOptions,
+  { dayStart, newPerDay, now }: Omit<SummaryOptions, 'depth'>,
 ): RepertoireSummaryCounts[] {
   // A line learnt today that is in several repertoires (shared moves) counts once, in the first one.
   const countedToday = new Set<string>();
-  const rows = reps.map((r) => {
-    const graph = new Repertoire(r.color, r.moves);
-    const probs = reach?.(r.color);
-    const all = trainingPositions(graph);
-    const reachOf = (f: string) => probs?.[f];
-    const kept = probs && depth > 0 ? keptPositions(all, reachOf, depth) : null;
-    const list = kept ? all.filter((p) => kept.has(p.fen)) : all;
+  const rows = prepared.map((r) => {
+    const { graph, list } = r;
     const state = new Map(list.map((p) => [p.fen, positionReview(graph.movesAt(p.fen), (uci) => cardOf(p.fen, uci), now)]));
     const fresh = list.filter((p) => state.get(p.fen)!.status === 'new');
     const today = new Set(list.filter((p) => (state.get(p.fen)!.learntAt ?? 0) >= dayStart).map((p) => p.fen));
@@ -75,9 +105,9 @@ export function trainingSummary(
     return {
       r,
       total: list.length,
-      positions: all.length,
-      byDepth: probs ? Object.fromEntries(LINE_DEPTHS.map((d) => [String(d), keptPositions(all, reachOf, d).size])) : null,
-      totalLines: [...graph.reachable()].filter((f) => graph.movesAt(f).length === 0).length,
+      positions: r.positions,
+      byDepth: r.byDepth,
+      totalLines: r.totalLines,
       due: dueSet.size,
       dueLines: lineStarts(list.filter((p) => dueSet.has(p.fen)), (f) => dueSet.has(f)).length,
       learntTodayLines: lineStarts(list.filter((p) => today.has(p.fen)), (f) => today.has(f)).filter((p) => {
@@ -93,4 +123,18 @@ export function trainingSummary(
     const newLines = r.active ? Math.min(remaining, x.availableLines) : 0;
     return { repertoireId: r.id, active: r.active, ...x, remainingNewLines: remaining, newLines, lines: x.dueLines + newLines };
   });
+}
+
+/**
+ * `cardOf`: times of my card for a move (shared by every repertoire). `reach`: probability of
+ * reaching each position at my level, per colour (null or missing colour: whole lines).
+ */
+export function trainingSummary(
+  reps: SummaryRepertoire[],
+  cardOf: (fen: string, uci: string) => MoveCardTimes | undefined,
+  reach: ((color: Color) => Record<string, number> | undefined) | null,
+  { dayStart, newPerDay, depth, now }: SummaryOptions,
+): RepertoireSummaryCounts[] {
+  const prepared = reps.map((r) => prepareSummary({ id: r.id, active: r.active, graph: new Repertoire(r.color, r.moves) }, reach?.(r.color), depth));
+  return countSummary(prepared, cardOf, { dayStart, newPerDay, now });
 }
