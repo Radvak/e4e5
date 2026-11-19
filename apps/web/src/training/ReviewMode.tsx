@@ -1,4 +1,4 @@
-import { groupLines, lineStarts, positionFromFen, START_FEN, type Repertoire, type RepMove, type TrainingPosition } from '@tabiya/core';
+import { groupLines, lineStarts, START_FEN, type Repertoire, type RepMove, type TrainingPosition } from '@tabiya/core';
 import type { Key } from 'chessground/types';
 import type { DrawShape } from 'chessground/draw';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -315,7 +315,7 @@ export function ReviewMode({
   };
 
   /**
-   * Swipe to the right: the next question now. During the pause after an answer, the one
+   * Swipe to the right (bar under the board): the next question now. During the pause after an answer, the one
    * waiting; while asked, this line is passed without recording anything (asked after the others).
    */
   const onSkip = (q: Question) => {
@@ -399,7 +399,8 @@ function restOfLine(source: Source, move: RepMove): RepMove[] {
  * my previous move, then plays the opponent's reply. A new move is shown; two wrong tries or
  * the time running out reveal it. Another move of my repertoire (an alternative) is not a
  * mistake: try again. One button: the piece to move (hint), then the solution (the move is
- * played, helped, and the line goes on). Swipe to the right on the board: the next question.
+ * played, helped, and the line goes on). Swipe to the right on the bar under the board: the
+ * next question.
  */
 function Drill({
   round,
@@ -412,7 +413,7 @@ function Drill({
   round: number;
   question: Question;
   onAnswered: (played: RepMove, outcome: Outcome) => void;
-  /** Swipe to the right on the board: the next question. */
+  /** Swipe to the right on the bar under the board: the next question. */
   onSkip: () => void;
   /** The line ends with the move just played (shown until the next line). */
   lineDone: boolean;
@@ -504,29 +505,43 @@ function Drill({
     onAnswered(expected, outcome(true));
   };
 
-  /** Swipe to the right started on an empty square (on a piece: a move being dragged). */
-  const swipe = useRef<{ x: number; y: number; at: number } | null>(null);
-  const onTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
-    swipe.current = null;
-    const t = e.touches[0];
-    const board = e.currentTarget.querySelector('cg-board')?.getBoundingClientRect();
-    if (!t || e.touches.length > 1 || !board) return;
-    const file = Math.floor(((t.clientX - board.left) / board.width) * 8);
-    const row = Math.floor(((t.clientY - board.top) / board.height) * 8);
-    if (file < 0 || file > 7 || row < 0 || row > 7) return;
-    const square = source.color === 'white' ? (7 - row) * 8 + file : row * 8 + (7 - file);
-    if (positionFromFen(last?.toFen ?? START_FEN).board.get(square)) return;
-    swipe.current = { x: t.clientX, y: t.clientY, at: Date.now() };
+  /**
+   * Swipe to the right on the bar under the board (like Android's gesture bar): its handle follows
+   * the finger, and past a threshold the next question comes. The board keeps its gestures.
+   */
+  const handle = useRef<HTMLSpanElement>(null);
+  const swipe = useRef<{ x: number; y: number; axis: 'x' | 'y' | null } | null>(null);
+  const slide = (dx: number) => {
+    const el = handle.current;
+    if (!el) return;
+    el.style.transition = dx ? 'none' : 'transform 0.15s';
+    el.style.transform = dx ? `translateX(${dx}px)` : '';
   };
-  const onTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
+  const onTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    const t = e.touches[0];
+    swipe.current = t && e.touches.length === 1 && !paused ? { x: t.clientX, y: t.clientY, axis: null } : null;
+  };
+  const onTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    const s = swipe.current;
+    const t = e.touches[0];
+    if (!s || !t) return;
+    const dx = t.clientX - s.x;
+    const dy = t.clientY - s.y;
+    if (!s.axis) {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      s.axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+    }
+    // Only to the right (the left gives a little, nothing happens).
+    if (s.axis === 'x') slide(dx > 0 ? dx : dx / 6);
+  };
+  const endSwipe = (e: React.TouchEvent<HTMLDivElement>) => {
     const s = swipe.current;
     swipe.current = null;
+    slide(0);
     const t = e.changedTouches[0];
-    if (!s || !t || paused) return;
+    if (!s || !t || s.axis !== 'x' || e.type === 'touchcancel') return;
     const dx = t.clientX - s.x;
-    const dy = Math.abs(t.clientY - s.y);
-    const width = e.currentTarget.getBoundingClientRect().width;
-    if (dx > Math.max(60, width * 0.3) && dy < dx / 2 && Date.now() - s.at < 800) onSkip();
+    if (dx > Math.max(50, e.currentTarget.getBoundingClientRect().width * 0.25)) onSkip();
   };
 
   /** The moves on the board, from the start. */
@@ -550,15 +565,13 @@ function Drill({
     <div className="editor">
       <div className={`editor-board${paused ? ' paused' : ''}`}>
         <OpeningName ucis={moves.map((m) => m.uci)} />
-        <div className="swipe-area" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
-          <Board
-            fen={last?.toFen ?? START_FEN}
-            orientation={source.color}
-            lastMove={last?.uci}
-            shapes={shapes}
-            onMove={asking && !paused ? play : undefined}
-          />
-        </div>
+        <Board
+          fen={last?.toFen ?? START_FEN}
+          orientation={source.color}
+          lastMove={last?.uci}
+          shapes={shapes}
+          onMove={asking && !paused ? play : undefined}
+        />
         {paused && (
           <button className="pause-overlay" onClick={() => setPaused(false)}>
             ▶ Reprendre
@@ -601,7 +614,17 @@ function Drill({
             🧭 Explorer
           </button>
         </div>
-        <p className="swipe-tip muted small-text">Balayez l’échiquier vers la droite pour passer à la suite.</p>
+        <div
+          className="swipe-bar"
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onTouchEnd={endSwipe}
+          onTouchCancel={endSwipe}
+          title="Balayez vers la droite pour passer à la suite"
+        >
+          <span ref={handle} className="swipe-handle" aria-hidden="true" />
+          <span className="swipe-label muted">balayez → pour passer</span>
+        </div>
       </div>
     </div>
   );

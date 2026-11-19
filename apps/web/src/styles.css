@@ -676,6 +676,9 @@ button.badge:focus-visible { outline: 2px solid currentColor; outline-offset: 1p
 .level-table .explorer .wdl .bar { min-width: 40px; }
 @media (max-width: 480px) { .level-table td.count .share { display: none; } }
 .rep-row .meta .known { color: var(--text); font-weight: 600; }
-/* Review: swipe to the right on the board for the next question (touch screens only). */
-.swipe-tip { display: none; text-align: center; margin: 6px var(--page-pad) 0; }
-@media (hover: none) and (pointer: coarse) { .swipe-tip { display: block; } }
+/* Review: a bar under the board to swipe to the right for the next question, like Android's
+   gesture bar (touch screens only). Sideways moves stay with the script, vertical ones scroll. */
+.swipe-bar { display: none; position: relative; align-items: center; justify-content: center; height: 36px; margin: 8px var(--page-pad) 0; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+.swipe-handle { width: 72px; height: 5px; border-radius: 3px; background: var(--border-strong); }
+.swipe-label { position: absolute; bottom: -6px; font-size: 0.68rem; pointer-events: none; }
+@media (hover: none) and (pointer: coarse) { .swipe-bar { display: flex; } }
