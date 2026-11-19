@@ -1,12 +1,12 @@
-import type { TrainingPosition } from '@tabiya/core';
+import { recallOf, type RepMove, type TrainingPosition } from '@tabiya/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api, type InboxItem, type RepertoireSummary } from '../api';
+import { api, type InboxItem, type RepertoireSummary, type ReviewCard } from '../api';
 import { GameErrorCard } from '../components/GameErrorCard';
 import { MiniBoard, type MiniArrow } from '../components/MiniBoard';
 import { lineText } from '../training/common';
-import { useTrainingSources, type PositionCard, type Source } from '../training/useTrainingSources';
+import { useTrainingSources, type Source } from '../training/useTrainingSources';
 import { Button, PageHeader, plural, Tabs } from '../ui';
 import { useGamesReport } from './Games';
 
@@ -15,11 +15,35 @@ const pct = (x: number) => `${Math.round(100 * x)} %`;
 
 type Filter = 'games' | 'training';
 
-/** A position of my training I struggle with: estimated recall under 90 %, or forgotten at least once. */
+/** One of my learnt moves I struggle with: estimated recall under 90 %, or forgotten at least once. */
+interface WeakMove {
+  move: RepMove;
+  recall: number;
+  lapses: number;
+}
+
+/**
+ * A position of my training with weak moves. Only the learnt moves count: another move of the
+ * position not learnt yet (an alternative) is to learn, not a gap, and playing an alternative in
+ * training is never a mistake.
+ */
 interface Fragile {
   source: Source;
   position: TrainingPosition;
-  card: PositionCard;
+  weak: WeakMove[];
+  /** The weakest of them. */
+  recall: number;
+  lapses: number;
+}
+
+/** The weak learnt moves of a position (recall computed now from the FSRS card). */
+function weakMoves(source: Source, fen: string, now: Date): WeakMove[] {
+  return source.rep.movesAt(fen).flatMap((move) => {
+    const card: ReviewCard | undefined = source.cardOf(fen, move.uci);
+    if (!card) return [];
+    const recall = card.fsrs ? recallOf(card.fsrs, card.reps, now) : card.recall;
+    return recall < 0.9 || card.lapses > 0 ? [{ move, recall, lapses: card.lapses }] : [];
+  });
 }
 
 type Difficult = { kind: 'game'; item: InboxItem } | { kind: 'training'; fragile: Fragile };
@@ -41,15 +65,23 @@ export function Lacunes() {
   const [shown, setShown] = useState(PAGE);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const fragile = useMemo<Fragile[]>(
-    () =>
-      sources
-        .flatMap((source) => source.positions.map((position) => ({ source, position, card: source.positionCard(position.fen) })))
-        .filter((x): x is Fragile => !!x.card && (x.card.recall < 0.9 || x.card.lapses > 0))
-        // The weakest first: lowest recall, then the most forgotten.
-        .sort((a, b) => a.card.recall - b.card.recall || b.card.lapses - a.card.lapses),
-    [sources],
-  );
+  const fragile = useMemo<Fragile[]>(() => {
+    const now = new Date();
+    // Cards belong to the user: a position in several repertoires is listed once.
+    const seen = new Set<string>();
+    const out: Fragile[] = [];
+    for (const source of sources) {
+      for (const position of source.positions) {
+        if (seen.has(position.fen)) continue;
+        const weak = weakMoves(source, position.fen, now);
+        if (!weak.length) continue;
+        seen.add(position.fen);
+        out.push({ source, position, weak, recall: Math.min(...weak.map((w) => w.recall)), lapses: Math.max(...weak.map((w) => w.lapses)) });
+      }
+    }
+    // The weakest first: lowest recall, then the most forgotten.
+    return out.sort((a, b) => a.recall - b.recall || b.lapses - a.lapses);
+  }, [sources]);
   const errors = report.data?.inbox.errors ?? [];
   const filter: Filter = chosen ?? (report.data && errors.length === 0 && fragile.length > 0 ? 'training' : 'games');
 
@@ -67,6 +99,7 @@ export function Lacunes() {
 
       <section className="stack">
         <Tabs<Filter>
+          block
           value={filter}
           onChange={(f) => {
             setFilter(f);
@@ -80,7 +113,7 @@ export function Lacunes() {
         <p className="muted small-text" style={{ margin: 0 }}>
           {filter === 'games'
             ? 'Vous avez joué autre chose que votre coup préparé, du plus fréquent au moins fréquent.'
-            : 'Les positions que vous risquez d’oublier (mémorisation estimée sous 90 %) ou déjà oubliées, les plus fragiles d’abord.'}
+            : 'Vos coups appris que vous risquez d’oublier (mémorisation estimée sous 90 %) ou déjà oubliés, les plus fragiles d’abord. Les autres coups d’une position pas encore appris n’en font pas partie.'}
         </p>
         {notice && (
           <p className="notice success">
@@ -92,7 +125,7 @@ export function Lacunes() {
           <p className="muted">
             {filter === 'games'
               ? 'Aucun écart à votre répertoire dans vos parties.'
-              : 'Aucune : chaque position apprise a une mémorisation estimée d’au moins 90 %.'}
+              : 'Aucune : chaque coup appris a une mémorisation estimée d’au moins 90 %.'}
           </p>
         )}
         {items.slice(0, shown).map((d) =>
@@ -113,13 +146,13 @@ export function Lacunes() {
   );
 }
 
-/** A fragile position of my training: thumbnail with my moves, recall, and where to work on it. */
+/** A fragile position of my training: thumbnail with its weak moves, recall, and where to work on it. */
 function FragileCard({ fragile, rep }: { fragile: Fragile; rep: RepertoireSummary | undefined }) {
-  const { source, position, card } = fragile;
-  const moves = source.rep.movesAt(position.fen);
-  const arrows: MiniArrow[] = moves.map((m) => ({ uci: m.uci, kind: 'repertoire' }));
+  const { source, position, weak } = fragile;
+  const arrows: MiniArrow[] = weak.map((w) => ({ uci: w.move.uci, kind: 'repertoire' }));
   const fen = encodeURIComponent(position.fen);
   const explorer = `/explorer?${new URLSearchParams({ ...(position.path.length ? { line: position.path.map((m) => m.uci).join(',') } : {}), ...(source.color === 'black' ? { color: 'black' } : {}) })}`;
+  const memo = (w: WeakMove) => `${pct(w.recall)} de mémorisation${w.lapses > 0 ? ` · oublié ${plural(w.lapses, 'fois', 'fois')}` : ''}`;
   return (
     <article className="card game-card">
       <Link to={`/r/${source.id}?fen=${fen}`} className="thumb-button" aria-label="Voir dans le répertoire">
@@ -128,15 +161,14 @@ function FragileCard({ fragile, rep }: { fragile: Fragile; rep: RepertoireSummar
       <div className="game-card-body">
         <div className="inbox-head">
           <span className="muted inbox-line">{lineText(position.path) || 'Position initiale'} </span>
-          <span className="hole-move">{moves.map((m) => m.san).join(' ou ')}</span>
+          <span className="hole-move">{weak.map((w) => w.move.san).join(' et ')}</span>
         </div>
         <div className="row small-text game-card-meta">
           <span className="rep-tag">
             <span className={`dot ${source.color}`} /> {rep?.name ?? source.name}
           </span>
           <span className="muted">
-            {pct(card.recall)} de mémorisation
-            {card.lapses > 0 && ` · oubliée ${plural(card.lapses, 'fois', 'fois')}`}
+            {weak.length === 1 ? memo(weak[0]!) : weak.map((w) => `${w.move.san} : ${memo(w)}`).join(' · ')}
           </span>
         </div>
         <div className="row inbox-actions">
