@@ -29,12 +29,17 @@ export interface Suggestions {
   approximate: string[];
 }
 
+/**
+ * `depth`: how many of the steps to go through (0: each move's own win rate; default: all).
+ */
 export async function suggestMoves(
   root: string,
   rootStats: { data: ExplorerResponse; exact: boolean },
   speeds: string[],
   ratings: number[],
+  depth = REACH_STEPS.length,
 ): Promise<Suggestions> {
+  const steps = REACH_STEPS.slice(0, depth);
   const known = new Map([[root, rootStats]]);
   const run = (minReach: number, only?: string[]) => bestMoves(root, (f) => known.get(f)?.data, { minReach, only });
 
@@ -43,7 +48,7 @@ export async function suggestMoves(
   let moves = run(2).moves;
   let reach: number | null = null;
   let missing: string[] = [];
-  for (const [i, step] of REACH_STEPS.entries()) {
+  for (const [i, step] of steps.entries()) {
     const only = i >= 2 ? moves.filter((m) => m.minReach === reach).slice(0, KEEP_DEEP).map((m) => m.uci) : undefined;
     let next = run(step, only);
     for (let pass = 0; pass < 16 && next.missing.length; pass++) {
@@ -64,7 +69,7 @@ export async function suggestMoves(
     // minReach over 1: the move's own win rate (nothing explored).
     moves: moves.map((m) => ({ ...m, minReach: m.minReach > 1 ? null : m.minReach })),
     reach,
-    target: REACH_STEPS.at(-1)!,
+    target: steps.at(-1) ?? REACH_STEPS[0]!,
     missing,
     approximate: [...known].filter(([, s]) => !s.exact).map(([f]) => f),
   };

@@ -12,6 +12,7 @@ import { JumpBox } from '../components/JumpBox';
 import { useEngine } from '../engine/useEngine';
 import { LevelLines, LevelToggle, topLevelMove, useBestMoves, useLevelToggle } from '../components/BestMoves';
 import { MoveTable } from '../components/MoveTable';
+import { OpeningName } from '../components/OpeningName';
 import { StatsSource } from '../components/StatsSource';
 import { explorerParams, rangeLabel, speedsLabel, useSettings } from '../settings';
 import { PageHeader, Tabs } from '../ui';
@@ -224,6 +225,7 @@ export function Explorer({ me }: { me: Me }) {
     />
     <div className="editor">
       <div className="editor-board">
+        <OpeningName ucis={shown.map((m) => m.uci)} />
         <Board fen={fen} orientation={orientation} lastMove={last?.uci} shapes={shapes} onMove={play} />
         <div className="nav">
           <button onClick={() => goTo(0)} title="Début (Origine)">⏮</button>

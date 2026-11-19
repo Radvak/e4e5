@@ -1,21 +1,32 @@
-import type { Repertoire } from '@tabiya/core';
-import { ApiError, type Me, type Stats, type StatsMeta } from '../api';
+import type { PlayedMove, Repertoire } from '@tabiya/core';
+import { ApiError, type BestMovesResponse, type Stats, type StatsMeta } from '../api';
 import { rangeLabel, speedsLabel } from '../settings';
-import { MoveTable } from './MoveTable';
-import { StatsSource } from './StatsSource';
+import { LevelTable } from './LevelTable';
 
 interface Props {
-  me: Me;
   fen: string;
   rep: Repertoire;
   stats: Stats | undefined;
   error: unknown;
   loading: boolean;
   onPick: (uci: string) => void;
-  /** Hide the heading (when the panel sits under a tab named after it). */
-  bare?: boolean;
   /** Show popular moves missing from the repertoire in orange (default: yes). */
   markPopular?: boolean;
+  /** Ply count of the position (for move numbers). */
+  firstMoveNumber: number;
+  onPlay: (moves: PlayedMove[]) => void;
+  /** The search at my level merged into the table (see LevelTable). */
+  level: {
+    data: BestMovesResponse | undefined;
+    loading: boolean;
+    error: Error | null;
+    depth: number;
+    maxDepth: number;
+    onDepth: (d: number) => void;
+    canSearch: boolean;
+    range: string;
+    engineBest?: string;
+  };
 }
 
 export const REASONS: Record<NonNullable<StatsMeta['reason']>, string> = {
@@ -35,30 +46,43 @@ function provenance(meta: StatsMeta): string | null {
   return null;
 }
 
-/** Moves played at the user's level in this position, marked when in the repertoire. */
-export function ExplorerPanel({ me, fen, rep, stats, error, loading, onPick, bare, markPopular = true }: Props) {
+/**
+ * Moves played at the user's level in this position, merged with the search at my level (see
+ * LevelTable), marked when in the repertoire. Under the board, like the engine lines.
+ */
+export function ExplorerPanel({ fen, rep, stats, error, loading, onPick, markPopular = true, firstMoveNumber, onPlay, level }: Props) {
   const data = stats?.data;
   const origin = stats ? provenance(stats.meta) : null;
   const missing = error instanceof ApiError && error.status === 404;
   const missingReason = missing ? (error.body.reason as StatsMeta['reason']) : undefined;
-  const body = (
-    <>
-      <div className="row" style={{ marginBottom: 8 }}>
-        <StatsSource me={me} />
-        {data?.opening && <span className="muted small-text" style={{ margin: 0 }}>{data.opening.eco} · {data.opening.name}</span>}
-      </div>
-      {loading && <p className="muted">Chargement…</p>}
-      {origin && <p className="warning small-text">{origin}</p>}
-      {missing && <p className="muted">Aucune statistique pour cette position{missingReason ? ` : ${REASONS[missingReason]}` : ''}.</p>}
-      {Boolean(error) && !missing && <p className="error">{String(error)}</p>}
-      {data && <MoveTable data={data} inRep={(uci) => rep.has(fen, uci)} onPick={onPick} limit={10} markPopular={markPopular} />}
-    </>
-  );
-  if (bare) return body;
+  // Under the board like the engine lines: no heading, the notes in small.
   return (
-    <section className="panel">
-      <h3>Statistiques Lichess</h3>
-      {body}
-    </section>
+    <div className="level-lines level-table">
+      {loading && <div className="level-status muted">Chargement…</div>}
+      {missing && <div className="level-status muted">Aucune statistique pour cette position{missingReason ? ` : ${REASONS[missingReason]}` : ''}.</div>}
+      {Boolean(error) && !missing && <div className="level-status error">{String(error)}</div>}
+      {data && (
+        <LevelTable
+          data={data}
+          fen={fen}
+          color={rep.color}
+          firstMoveNumber={firstMoveNumber}
+          inRep={(uci) => rep.has(fen, uci)}
+          onPick={onPick}
+          onPlay={onPlay}
+          markPopular={markPopular}
+          level={level.data}
+          depth={level.depth}
+          maxDepth={level.maxDepth}
+          onDepth={level.onDepth}
+          canSearch={level.canSearch}
+          levelLoading={level.loading}
+          levelError={level.error}
+          range={level.range}
+          engineBest={level.engineBest}
+        />
+      )}
+      {origin && <p className="warning small-text level-origin">{origin}</p>}
+    </div>
   );
 }

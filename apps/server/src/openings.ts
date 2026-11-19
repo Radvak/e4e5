@@ -4,7 +4,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { fenKey, playSanOn, positionFromFen, START_FEN } from '@tabiya/core';
+import { fenKey, playSanOn, playUciOn, positionFromFen, START_FEN } from '@tabiya/core';
 import { SEED_DIR } from './paths.js';
 
 export interface Opening {
@@ -50,14 +50,20 @@ function load(): Map<string, Opening> {
   return map;
 }
 
-/** The opening of a game (SAN moves), null if not even its first move is named. */
-export function openingOf(sans: string[]): Opening | null {
+/** The last named position along `moves` (played by `play`), null if none. */
+function lastNamed(moves: string[], play: (pos: ReturnType<typeof positionFromFen>, move: string) => unknown): Opening | null {
   byFen ??= load();
   const pos = positionFromFen(START_FEN);
   let found: Opening | null = null;
-  for (const san of sans.slice(0, maxPlies)) {
-    if (!playSanOn(pos, san)) break;
+  for (const move of moves.slice(0, maxPlies)) {
+    if (!play(pos, move)) break;
     found = byFen.get(fenKey(pos)) ?? found;
   }
   return found;
 }
+
+/** The opening of a game (SAN moves), null if not even its first move is named. */
+export const openingOf = (sans: string[]) => lastNamed(sans, playSanOn);
+
+/** The opening of a line (UCI moves from the initial position), null if none is named. */
+export const openingOfUcis = (ucis: string[]) => lastNamed(ucis, playUciOn);

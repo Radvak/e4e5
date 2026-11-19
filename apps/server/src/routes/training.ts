@@ -1,38 +1,28 @@
 /**
  * Training: spaced-repetition reviews (FSRS) of my moves, in the positions where it is my turn.
  * A move card belongs to the user, not to a repertoire: a move learnt once is known everywhere.
+ *
+ * The app schedules each answer on the device at once (core fsrs.ts, offline too) and sends it
+ * here, possibly later: with its own id (an answer sent twice counts once) and the time it was
+ * given, so the server computes the same card.
  */
-import { gapCutoffFor, groupLines, keptPositions, LINE_DEPTHS, lineStarts, positionReview, Repertoire, trainingPositions } from '@tabiya/core';
-import { and, eq, gte, inArray } from 'drizzle-orm';
+import { GRADES, recallOf, Repertoire, scheduleReview } from '@tabiya/core';
+import { and, eq, gte } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
-import { createEmptyCard, fsrs, Rating, type CardInput } from 'ts-fsrs';
 import { z } from 'zod';
 import { requireUser } from '../auth.js';
 import { db } from '../db/client.js';
-import { graphColumns, moveCards, repertoires, repMoves, reviewLog } from '../db/schema.js';
+import { moveCards, repertoires, repMoves, reviewLog } from '../db/schema.js';
 import { makeDue } from '../moveCards.js';
-import { gapsQuery, gapsReport } from './gaps.js';
-
-const scheduler = fsrs({ enable_fuzz: true });
-const GRADES = { again: Rating.Again, hard: Rating.Hard, good: Rating.Good, easy: Rating.Easy } as const;
 
 const reviewBody = z.object({
   fen: z.string().min(10).max(120),
   uci: z.string().min(4).max(5),
-  grade: z.enum(['again', 'hard', 'good', 'easy']),
-});
-const summaryQuery = z.object({
-  /** Start of the user's day (ms), for the daily limit of new positions. */
-  dayStart: z.coerce.number().int().nonnegative(),
-  /** New lines to learn per day, all repertoires together (1000: no limit). */
-  newPerDay: z.coerce.number().int().min(0).max(1000).default(5),
-  /**
-   * Depth of the lines: positions trained from this probability of coming up at the user's level
-   * (see core keptPositions), with the statistics settings below. 0: whole lines.
-   */
-  depth: z.coerce.number().min(0).max(0.2).default(0),
-  speeds: z.string().optional(),
-  ratings: z.string().optional(),
+  grade: z.enum(GRADES),
+  /** Id given by the device to this answer (sent again after a lost connection: recorded once). */
+  id: z.string().min(8).max(64).optional(),
+  /** When the answer was given (ms), for answers sent later (offline). Default: now. */
+  reviewedAt: z.number().int().positive().optional(),
 });
 
 type CardRow = typeof moveCards.$inferSelect;
@@ -40,13 +30,15 @@ const publicCard = (c: CardRow, now = new Date()) => ({
   fen: c.fen,
   uci: c.uci,
   /** Estimated probability (0-1) of finding the move now (FSRS retrievability). */
-  recall: c.reps > 0 ? scheduler.retrievability(c.card as unknown as CardInput, now) : 0,
+  recall: recallOf(c.card, c.reps, now),
   due: c.due.toISOString(),
   reps: c.reps,
   lapses: c.lapses,
   /** Current interval in days (0 while learning). */
   interval: Number(c.card.scheduled_days ?? 0),
   createdAt: c.createdAt.toISOString(),
+  /** The FSRS card itself, to schedule the next answers on the device. */
+  fsrs: c.card,
 });
 
 export async function trainingRoutes(app: FastifyInstance) {
@@ -67,7 +59,7 @@ export async function trainingRoutes(app: FastifyInstance) {
       .from(repertoires)
       .where(and(eq(repertoires.id, req.params.id), eq(repertoires.userId, userId)));
     if (!rep) return reply.code(404).send({ error: 'Répertoire introuvable' });
-    const { fen, uci, grade } = reviewBody.parse(req.body);
+    const { fen, uci, grade, id, reviewedAt } = reviewBody.parse(req.body);
 
     const graph = new Repertoire(rep.color, await db.select().from(repMoves).where(eq(repMoves.repertoireId, rep.id)));
     if (!graph.isMyTurn(fen) || !graph.movesAt(fen).some((m) => m.uci === uci)) {
@@ -76,21 +68,21 @@ export async function trainingRoutes(app: FastifyInstance) {
     const key = and(eq(moveCards.userId, userId), eq(moveCards.fen, fen), eq(moveCards.uci, uci));
     const [existing] = await db.select().from(moveCards).where(key);
     const now = new Date();
-    const { card } = scheduler.next((existing?.card as CardInput | undefined) ?? createEmptyCard(now), now, GRADES[grade]);
-    const row = {
-      userId,
-      fen,
-      uci,
-      card: JSON.parse(JSON.stringify(card)) as Record<string, unknown>,
-      due: card.due,
-      reps: card.reps,
-      lapses: card.lapses,
-      lastReview: now,
-    };
-    await db.insert(reviewLog).values({ repertoireId: rep.id, fen, uci, grade, isNew: !existing, reviewedAt: now });
+    // The time of the answer, not before the card's last review (answers are sent in order) nor
+    // in the future (device clock ahead).
+    const at = new Date(Math.min(now.getTime(), Math.max(reviewedAt ?? now.getTime(), existing?.lastReview?.getTime() ?? 0)));
+    // Recorded once per id: the same answer sent again leaves the card as it is.
+    const logged = await db
+      .insert(reviewLog)
+      .values({ repertoireId: rep.id, fen, uci, grade, isNew: !existing, reviewedAt: at, clientId: id ?? null })
+      .onConflictDoNothing({ target: reviewLog.clientId })
+      .returning({ id: reviewLog.id });
+    if (!logged.length && existing) return publicCard(existing, now);
+    const next = scheduleReview(existing?.card, grade, at);
+    const row = { userId, fen, uci, card: next.card, due: next.due, reps: next.reps, lapses: next.lapses, lastReview: at };
     const [saved] = await db
       .insert(moveCards)
-      .values(row)
+      .values({ ...row, createdAt: at })
       .onConflictDoUpdate({
         target: [moveCards.userId, moveCards.fen, moveCards.uci],
         set: { card: row.card, due: row.due, reps: row.reps, lapses: row.lapses, lastReview: row.lastReview },
@@ -123,83 +115,5 @@ export async function trainingRoutes(app: FastifyInstance) {
       .innerJoin(repertoires, eq(reviewLog.repertoireId, repertoires.id))
       .where(and(eq(repertoires.userId, req.user!.id), gte(reviewLog.reviewedAt, since)))
       .orderBy(reviewLog.reviewedAt);
-  });
-
-  /**
-   * Per repertoire: positions due now (a move of mine there is due), new positions available
-   * today (a move not learnt yet), lines to go through, and total.
-   */
-  app.get('/api/training/summary', async (req) => {
-    const { dayStart, newPerDay, depth, speeds, ratings } = summaryQuery.parse(req.query);
-    const reps = await db.select().from(repertoires).where(eq(repertoires.userId, req.user!.id));
-    if (!reps.length) return [];
-    // Reach probabilities (the gap finder's, as the training page uses, same cutoff so the same
-    // cached report): the lines' depth, and the positions trained at each depth.
-    const stats = speeds && ratings ? gapsQuery.safeParse({ speeds, ratings, cutoff: gapCutoffFor(depth) }) : null;
-    // Statistics unavailable (error): whole lines, like the training page.
-    const gaps =
-      stats?.success && stats.data.speeds.length && stats.data.ratings.length
-        ? await gapsReport(req.user!, stats.data, req.log).catch((e: unknown) => {
-            req.log.warn({ err: e }, 'Shortened lines: statistics unavailable');
-            return null;
-          })
-        : null;
-    const ids = reps.map((r) => r.id);
-    const [moves, cards] = await Promise.all([
-      db.select(graphColumns).from(repMoves).where(inArray(repMoves.repertoireId, ids)),
-      db.select().from(moveCards).where(eq(moveCards.userId, req.user!.id)),
-    ]);
-    const now = Date.now();
-    const cardMap = new Map(cards.map((c) => [`${c.fen} ${c.uci}`, { due: c.due.getTime(), createdAt: c.createdAt.getTime() }]));
-    // New lines: one daily limit for all repertoires (lines learnt today anywhere count). A line
-    // learnt today that is in several repertoires (shared moves) counts once, in the first one.
-    const countedToday = new Set<string>();
-    const rows = reps.map((r) => {
-      const graph = new Repertoire(r.color, moves.filter((m) => m.repertoireId === r.id));
-      const reach = gaps?.[r.color]?.reach;
-      const all = trainingPositions(graph);
-      const reachOf = (f: string) => reach?.[f];
-      const kept = reach ? keptPositions(all, reachOf, depth) : null;
-      const list = kept ? all.filter((p) => kept.has(p.fen)) : all;
-      const state = new Map(list.map((p) => [p.fen, positionReview(graph.movesAt(p.fen), (uci) => cardMap.get(`${p.fen} ${uci}`), now)]));
-      const fresh = list.filter((p) => state.get(p.fen)!.status === 'new');
-      const today = new Set(list.filter((p) => (state.get(p.fen)!.learntAt ?? 0) >= dayStart).map((p) => p.fen));
-      const dueSet = new Set(list.filter((p) => state.get(p.fen)!.status === 'due').map((p) => p.fen));
-      return {
-        r,
-        total: list.length,
-        /** Every position of mine in the repertoire (whole lines). */
-        positions: all.length,
-        /** Positions trained at each depth of the lines (null: statistics unavailable). */
-        byDepth: reach ? Object.fromEntries(LINE_DEPTHS.map((d) => [String(d), keptPositions(all, reachOf, d).size])) : null,
-        /** Lines of the repertoire: its distinct line ends. */
-        totalLines: [...graph.reachable()].filter((f) => graph.movesAt(f).length === 0).length,
-        due: dueSet.size,
-        /** Lines formed by the due positions. */
-        dueLines: lineStarts(list.filter((p) => dueSet.has(p.fen)), (f) => dueSet.has(f)).length,
-        learntTodayLines: lineStarts(list.filter((p) => today.has(p.fen)), (f) => today.has(f)).filter((p) => {
-          if (countedToday.has(p.fen)) return false;
-          countedToday.add(p.fen);
-          return true;
-        }).length,
-        /** Whole lines not learnt yet. */
-        availableLines: groupLines(fresh).length,
-      };
-    });
-    const remaining = Math.max(0, newPerDay - rows.reduce((n, x) => n + x.learntTodayLines, 0));
-    return rows.map(({ r, ...x }) => {
-      // New lines this repertoire can take today (the daily limit is shared by all of them).
-      const newLines = r.active ? Math.min(remaining, x.availableLines) : 0;
-      return {
-        repertoireId: r.id,
-        active: r.active,
-        ...x,
-        /** Lines still to learn today, all repertoires together (same for every item). */
-        remainingNewLines: remaining,
-        newLines,
-        /** Lines to go through today in this repertoire: to review + new. */
-        lines: x.dueLines + newLines,
-      };
-    });
   });
 }

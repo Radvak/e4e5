@@ -42,9 +42,15 @@ Application explains it to users (with an install button where the browser offer
 
 - `apps/web/public/manifest.webmanifest`: name, colours, icons.
 - `apps/web/public/sw.js`: service worker (production builds only). The app shell and the
-  hashed `/assets/` are cached, so the app opens offline; `/api/` is never cached (without
-  network the app says so and reloads when the connection is back). Bump `VERSION` in it to
-  drop every cache.
+  hashed `/assets/` are cached, so the app opens offline; `/api/` is never cached by it. Bump
+  `VERSION` in it to drop every cache.
+- Offline mode (`apps/web/src/offline/`): the data the app needs (account, repertoires, move
+  cards, gap report, position statistics already seen) is kept in IndexedDB, for 20 days and
+  until the next build. Training works offline: each answer is scheduled on the device (FSRS in
+  `packages/core/src/fsrs.ts`) and queued, then sent in order when the server can be reached,
+  with its own id (counted once) and its time (the server computes the same card). The training
+  summary is computed on the device (`core/src/summary.ts`). Changes to repertoires need the
+  network.
 - Icons: `apps/web/scripts/icons/*.svg` → `apps/web/scripts/make-icons.sh` (rsvg-convert) →
   `apps/web/public/icons/` (committed).
 

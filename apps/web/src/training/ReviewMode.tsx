@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Grade } from '../api';
 import { Board } from '../components/Board';
+import { OpeningName } from '../components/OpeningName';
 import { dayStart, useSettings } from '../settings';
 import { answerArrows, inTime, JUMP_MS, REPLAY_MS, REPLAYED_PLIES, REPLY_MS } from './common';
 import { outcomeOf, type Outcome } from './Feedback';
@@ -29,7 +30,19 @@ type LineEnd = 'end' | 'cut' | 'done';
 /** Pause on the end of a line before the next one. */
 const LINE_END_MS = 1100;
 
-const same = (a: Item, b: Item) => a.source.id === b.source.id && a.target.fen === b.target.fen;
+/** Same position (cards belong to the user: the same position in two repertoires is one question). */
+const same = (a: Item, b: Item) => a.target.fen === b.target.fen;
+/**
+ * A position answered less than this ago waits behind the others (FSRS learning steps make it due
+ * again after a minute): it is not asked twice in a row while something else is to do.
+ */
+const RECENT_MS = 5 * 60_000;
+/**
+ * A position due within this delay is reviewed with the line it continues (and the answer
+ * recorded): positions answered one after the other become due again seconds apart (learning
+ * steps of 1 and 10 min), and the line would otherwise stop just before the next one.
+ */
+const SOON_MS = 10 * 60_000;
 
 /** Plies from `from` to the nearest position of `targets` in the repertoire (Infinity: none). */
 function distanceTo(rep: Repertoire, from: string, targets: Set<string>): number {
@@ -109,8 +122,8 @@ export function ReviewMode({
 }) {
   const [extraNew, setExtraNew] = useState(0);
   const [ahead, setAhead] = useState(false);
-  /** Positions answered in this session (not asked again when reviewing ahead). */
-  const answered = useRef(new Set<string>());
+  /** Positions (fen) answered in this session, and when last (not asked again when reviewing ahead). */
+  const answered = useRef(new Map<string, number>());
   /** Positions of the lines given up in this session (asked after the others). */
   const skipped = useRef(new Set<string>());
   const firstOf = (items: Item[]) => items.find((p) => !skipped.current.has(`${p.source.id}|${p.target.fen}`)) ?? items[0];
@@ -178,8 +191,11 @@ export function ReviewMode({
     due.sort((a, b) => a.at - b.at);
     upcoming.sort((a, b) => a.at - b.at);
     const nextDue = upcoming[0] ? new Date(upcoming[0].at) : undefined;
-    const early = upcoming.filter((p) => !answered.current.has(`${p.source.id}|${p.target.fen}`));
-    const items: Item[] = [...due, ...fresh, ...(ahead ? early : [])];
+    const early = upcoming.filter((p) => !answered.current.has(p.target.fen));
+    const all: Item[] = [...due, ...fresh, ...(ahead ? early : [])];
+    // Answered a moment ago: after the others (still asked when nothing else is left).
+    const recent = (p: Item) => now - (answered.current.get(p.target.fen) ?? -Infinity) < RECENT_MS;
+    const items = [...all.filter((p) => !recent(p)), ...all.filter(recent)];
     // To review: the lines formed by the due positions (per repertoire). New: the lines picked.
     const dueLines = sources.reduce((n, source) => {
       const set = new Set(due.filter((i) => i.source === source).map((i) => i.target.fen));
@@ -202,9 +218,11 @@ export function ReviewMode({
   const question = (item: Item, lead?: Question['lead']): Question => {
     const source = latest(item.source);
     const { fen } = item.target;
-    // The moves to review (or to learn); none when finishing a line: any of them.
-    const pending = source.stateOf(fen, Date.now()).pending;
-    const pool = pending.length ? pending : source.rep.movesAt(fen);
+    // The moves to review (or to learn), else those due soon; none when finishing a line: any of them.
+    const now = Date.now();
+    const pending = source.stateOf(fen, now).pending;
+    const soon = pending.length ? pending : source.stateOf(fen, now + SOON_MS).pending;
+    const pool = soon.length ? soon : source.rep.movesAt(fen);
     const expected = pool[Math.floor(Math.random() * pool.length)]!;
     return { source, target: item.target, expected, isNew: !source.cardOf(fen, expected.uci), lead };
   };
@@ -224,13 +242,18 @@ export function ReviewMode({
     const items = queue.items.filter((p) => !same(p, done));
     const { source } = done;
     const pending = new Set(items.filter((p) => p.source.id === source.id).map((p) => p.target.fen));
+    // Due soon (learning steps): reviewed with this line rather than alone a moment later.
+    const horizon = Date.now() + SOON_MS;
+    for (const t of source.positions) {
+      if (t.fen !== done.target.fen && source.stateOf(t.fen, horizon).status === 'due') pending.add(t.fen);
+    }
     const byFen = new Map(source.positions.map((t) => [t.fen, t]));
     // Opponent replies leading to a position to train, not already answered in this session
     // (unless it is waiting again in the queue).
     const options = source.rep.movesAt(played.toFen).flatMap((reply) => {
       const target = byFen.get(reply.toFen);
       if (!target || target.fen === done.target.fen) return [];
-      if (!pending.has(target.fen) && answered.current.has(`${source.id}|${target.fen}`)) return [];
+      if (!pending.has(target.fen) && answered.current.has(target.fen)) return [];
       return [{ reply, target, dist: distanceTo(source.rep, target.fen, pending) }];
     });
     if (options.length) {
@@ -255,11 +278,11 @@ export function ReviewMode({
 
   const record = (q: Question, outcome: Outcome) => {
     const grade: Grade = outcome === 'correct' ? 'good' : 'again';
-    answered.current.add(`${q.source.id}|${q.target.fen}`);
-    // Bonus position (asked to finish the line, not due yet): only a mistake is recorded, so a
-    // right answer leaves its schedule unchanged.
+    answered.current.set(q.target.fen, Date.now());
+    // Bonus position (asked to finish the line, not due soon): only a mistake is recorded, so a
+    // right answer leaves its schedule unchanged. Due soon: recorded, so it does not come back alone.
     const card = latest(q.source).cardOf(q.target.fen, q.expected.uci);
-    const bonus = card !== undefined && Date.parse(card.due) > Date.now();
+    const bonus = card !== undefined && Date.parse(card.due) > Date.now() + SOON_MS;
     if (!(bonus && outcome === 'correct')) onReview(q.source, q.target.fen, q.expected.uci, grade);
     setStats((s) => ({
       reviewed: s.reviewed + 1,
@@ -508,6 +531,7 @@ function Drill({
   return (
     <div className="editor">
       <div className={`editor-board${paused ? ' paused' : ''}`}>
+        <OpeningName ucis={moves.map((m) => m.uci)} />
         <Board
           fen={last?.toFen ?? START_FEN}
           orientation={source.color}

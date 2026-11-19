@@ -112,8 +112,10 @@ export const reviewLog = sqliteTable(
     /** First review of the position (it was new). */
     isNew: integer('is_new', { mode: 'boolean' }).notNull(),
     reviewedAt: integer('reviewed_at', { mode: 'timestamp_ms' }).notNull(),
+    /** Id given by the device to the answer (answers sent again after a lost connection count once). */
+    clientId: text('client_id'),
   },
-  (t) => [index('review_log_repertoire_time').on(t.repertoireId, t.reviewedAt)],
+  (t) => [index('review_log_repertoire_time').on(t.repertoireId, t.reviewedAt), uniqueIndex('review_log_client_id').on(t.clientId)],
 );
 
 /**

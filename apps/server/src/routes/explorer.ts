@@ -8,6 +8,7 @@ import { repertoires, repMoves } from '../db/schema.js';
 import { env } from '../env.js';
 import { exportGame, explorerFetch, RateLimited } from '../lichess.js';
 import { myGameMoves, myGamesAt } from '../myGames.js';
+import { openingOfUcis } from '../openings.js';
 import { getStats, prefetchStats } from '../stats.js';
 import { REACH_STEPS, suggestMoves } from '../suggest.js';
 
@@ -49,14 +50,14 @@ export async function explorerRoutes(app: FastifyInstance) {
    * one once the search is complete.
    */
   app.get('/api/explorer/best', { preHandler: requireUser }, async (req, reply) => {
-    const q = query.parse(req.query);
+    const q = query.extend({ depth: z.coerce.number().int().min(0).max(REACH_STEPS.length).default(REACH_STEPS.length) }).parse(req.query);
     const root = parseFen(q.fen);
     if (!root) return reply.code(400).send({ error: 'FEN invalide' });
     if (!q.speeds.length || !q.ratings.length) return reply.code(400).send({ error: 'speeds and ratings required' });
     const token = req.user!.lichessToken ?? env.lichessAppToken;
     const first = await getStats(root, q.speeds, q.ratings, token, req.log);
     if (!first.data) return { moves: [], reach: null, target: REACH_STEPS.at(-1)!, steps: REACH_STEPS, pending: 0 };
-    const { missing, approximate, ...found } = await suggestMoves(root, { data: first.data, exact: first.meta.exact }, q.speeds, q.ratings);
+    const { missing, approximate, ...found } = await suggestMoves(root, { data: first.data, exact: first.meta.exact }, q.speeds, q.ratings, q.depth);
     const toFetch = missing.length ? missing : found.reach === found.target ? approximate : [];
     const pending = token && toFetch.length ? prefetchStats(toFetch, q.speeds, q.ratings, token, req.log) : 0;
     return { ...found, steps: REACH_STEPS, pending };
@@ -109,6 +110,13 @@ export async function explorerRoutes(app: FastifyInstance) {
   app.get<{ Params: { id: string } }>('/api/my-games/:id', { preHandler: requireUser }, async (req, reply) => {
     const moves = await myGameMoves(req.user!.id, req.params.id);
     return moves ? { moves } : reply.code(404).send({ error: 'Partie introuvable' });
+  });
+
+  /** Name of the opening of a line (?line=e2e4,e7e5): its last named position; null if none. */
+  app.get('/api/explorer/opening', { preHandler: requireUser }, async (req) => {
+    const { line } = z.object({ line: z.string().max(2000).default('') }).parse(req.query);
+    const opening = openingOfUcis(line ? line.split(',') : []);
+    return opening && { eco: opening.eco, name: opening.name };
   });
 
   /** Moves prepared in this position in any of the user's repertoires (both colours). */

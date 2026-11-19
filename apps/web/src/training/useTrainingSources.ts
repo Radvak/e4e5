@@ -8,9 +8,10 @@ import {
   type Color,
   type TrainingPosition,
 } from '@tabiya/core';
-import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { api, type Grade, type ReviewCard } from '../api';
+import { cardsQuery, recordReview } from '../offline/reviews';
 
 /** Summary of the cards of my moves in a position (several moves: the weakest). */
 export interface PositionCard {
@@ -59,7 +60,7 @@ export function useTrainingSources(ids: string[], from: string | null, shorten?:
   const repQueries = useQueries({
     queries: ids.map((id) => ({ queryKey: ['repertoire', id], queryFn: () => api.repertoire(id) })),
   });
-  const cardQuery = useQuery({ queryKey: ['cards'], queryFn: api.cards });
+  const cardQuery = useQuery(cardsQuery);
   const loading = repQueries.some((q) => q.isLoading) || cardQuery.isLoading;
   const version = repQueries.map((q) => q.dataUpdatedAt).join();
 
@@ -104,33 +105,11 @@ export function useTrainingSources(ids: string[], from: string | null, shorten?:
     [ids.join(), version, from, cards, shorten],
   );
 
-  const putCard = (card: ReviewCard) =>
-    qc.setQueryData<ReviewCard[]>(['cards'], (old = []) => [...old.filter((c) => c.fen !== card.fen || c.uci !== card.uci), card]);
-
-  const review = useMutation({
-    mutationFn: ({ source, fen, uci, grade }: { source: Source; fen: string; uci: string; grade: Grade }) =>
-      api.review(source.id, fen, uci, grade),
-    onMutate: ({ source, fen, uci }) => {
-      // Optimistic: not due any more until the server answers with the real schedule.
-      const old = source.cardOf(fen, uci);
-      putCard({
-        fen,
-        uci,
-        recall: 1,
-        due: new Date(Date.now() + 60_000).toISOString(),
-        reps: (old?.reps ?? 0) + 1,
-        lapses: old?.lapses ?? 0,
-        interval: old?.interval ?? 0,
-        createdAt: old?.createdAt ?? new Date().toISOString(),
-      });
-    },
-    onSuccess: (card) => {
-      putCard(card);
-      qc.invalidateQueries({ queryKey: ['training-summary'] });
-      qc.invalidateQueries({ queryKey: ['stats-history'] });
-    },
-    onError: () => qc.invalidateQueries({ queryKey: ['cards'] }),
-  });
+  /** Records an answer: scheduled on the device at once, sent to the server now or when it can be reached. */
+  const review = {
+    mutate: ({ source, fen, uci, grade }: { source: Source; fen: string; uci: string; grade: Grade }) =>
+      recordReview(qc, source.cardOf(fen, uci), { repertoireId: source.id, fen, uci, grade }),
+  };
 
   return { sources, loading, review };
 }

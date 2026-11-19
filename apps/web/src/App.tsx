@@ -1,7 +1,10 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useIsRestoring, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { api, ApiError } from './api';
+import { clearOfflineData } from './offline/persist';
+import { dropPendingReviews, pendingReviews, startReviewSync } from './offline/reviews';
+import { useOnline, usePendingReviews } from './offline/useOffline';
 import { InstallPrompt } from './components/InstallPrompt';
 import { useTrainingSummary } from './useTrainingSummary';
 import { useGaps } from './useGaps';
@@ -42,7 +45,9 @@ function Unreachable({ retry, retrying }: { retry: () => void; retrying: boolean
   return (
     <div className="page narrow stack">
       <p className="notice error">
-        {navigator.onLine ? 'Le serveur ne répond pas.' : 'Pas de connexion Internet : Tabiya a besoin du réseau pour charger vos répertoires.'}
+        {navigator.onLine
+          ? 'Le serveur ne répond pas.'
+          : 'Pas de connexion Internet. Ouvrez Tabiya une fois en ligne : vos répertoires sont alors gardés sur l’appareil pour vous entraîner hors ligne.'}
       </p>
       <div>
         <Button onClick={retry} disabled={retrying}>
@@ -50,6 +55,22 @@ function Unreachable({ retry, retrying }: { retry: () => void; retrying: boolean
         </Button>
       </div>
     </div>
+  );
+}
+
+/**
+ * Offline (no network, or the server does not answer): the app runs on the data kept on the
+ * device. Training works and the answers are sent later; changes and live statistics wait.
+ */
+function OfflineBanner({ serverDown }: { serverDown: boolean }) {
+  const online = useOnline();
+  const pending = usePendingReviews();
+  if (online && !serverDown) return null;
+  return (
+    <p className="notice offline-banner" role="status">
+      {online ? 'Le serveur ne répond pas' : 'Hors ligne'} : vous pouvez vous entraîner, vos réponses seront envoyées au retour de la connexion
+      {pending > 0 && ` (${plural(pending, 'réponse', 'réponses')} en attente)`}. Modifier un répertoire et les statistiques Lichess demandent le réseau.
+    </p>
   );
 }
 
@@ -88,10 +109,20 @@ function GamesBadge() {
 export function App() {
   const qc = useQueryClient();
   const { pathname } = useLocation();
-  const me = useQuery({ queryKey: ['me'], queryFn: api.me, retry: false });
+  const restoring = useIsRestoring();
+  // Kept on the device: offline (or server down) the app opens on it, and asks again now and then.
+  const me = useQuery({ queryKey: ['me'], queryFn: api.me, retry: false, refetchInterval: (q) => (q.state.error ? 30_000 : false) });
+  const userId = me.data?.id;
+  const unauthorized = me.error instanceof ApiError && me.error.status === 401;
+  // Training answers given offline are sent from here, for the signed-in user.
+  useEffect(() => (userId ? startReviewSync(qc, userId) : undefined), [qc, userId]);
+  // Signed out (session expired): forget the previous account's data kept on the device.
+  useEffect(() => {
+    if (unauthorized) qc.removeQueries({ predicate: (q) => q.queryKey[0] !== 'me' });
+  }, [qc, unauthorized]);
   // Badge of the Entraîner tab: lines to review today, plus the new lines still allowed today
   // (one daily limit for all repertoires).
-  const summary = useTrainingSummary(me.data, { staleTime: 30_000 });
+  const summary = useTrainingSummary(me.data);
   const active = (summary.data ?? []).filter((s) => s.active);
   const toTrain =
     active.reduce((n, s) => n + s.dueLines, 0) +
@@ -103,13 +134,21 @@ export function App() {
       <GamesBadge />
     ) : null;
 
-  if (me.isLoading) return null;
-  if (me.error instanceof ApiError && me.error.status === 401) return <Login />;
+  if (restoring || me.isLoading) return null;
+  if (unauthorized) return <Login />;
   if (!me.data) return <Unreachable retry={() => void me.refetch()} retrying={me.isFetching} />;
 
   const logout = async () => {
-    await api.logout();
-    qc.clear();
+    const pending = pendingReviews();
+    if (pending && !confirm(`${plural(pending, 'réponse d’entraînement n’est', 'réponses d’entraînement ne sont')} pas encore envoyée${pending > 1 ? 's' : ''} (hors ligne) : se déconnecter maintenant les perd. Continuer ?`)) return;
+    try {
+      await api.logout();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Déconnexion impossible');
+      return;
+    }
+    await dropPendingReviews();
+    await clearOfflineData(qc);
     location.href = '/';
   };
 
@@ -146,6 +185,8 @@ export function App() {
           ]}
         />
       </header>
+
+      <OfflineBanner serverDown={!!me.error} />
 
       <main className="page">
         <Routes>

@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, type Grade } from '../api';
 import { Board } from '../components/Board';
+import { OpeningName } from '../components/OpeningName';
 import { answerArrows, lineText, OpponentComment, REPLY_MS } from './common';
 import { outcomeOf } from './Feedback';
 import type { Source } from './useTrainingSources';
@@ -181,6 +182,7 @@ export function PlayMode({
   return (
     <div className="editor">
       <div className="editor-board">
+        <OpeningName ucis={line?.history.map((m) => m.uci) ?? []} />
         <Board
           fen={line?.fen ?? root ?? START_FEN}
           orientation={line?.source.color ?? playable[0]!.s.color}

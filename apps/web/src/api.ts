@@ -1,4 +1,4 @@
-import type { Color, ExplorerResponse, RepMove, SuggestedMove } from '@tabiya/core';
+import type { Color, ExplorerResponse, FsrsCard, Grade, RepertoireSummaryCounts, RepMove, SuggestedMove } from '@tabiya/core';
 
 export interface StatsMeta {
   speeds: string[];
@@ -24,13 +24,21 @@ export class ApiError extends Error {
   }
 }
 
+/** Status of an ApiError when the server could not be reached (offline, server down). */
+export const UNREACHABLE = 0;
+
 async function request<T>(method: string, url: string, body?: unknown): Promise<T> {
-  const res = await fetch(url, {
-    method,
-    headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-    credentials: 'same-origin',
-  });
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method,
+      headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+      credentials: 'same-origin',
+    });
+  } catch {
+    throw new ApiError(UNREACHABLE, navigator.onLine ? 'Le serveur ne répond pas' : 'Pas de connexion Internet : réessayez une fois en ligne');
+  }
   if (!res.ok) {
     const err = (await res.json().catch(() => ({}))) as { error?: string };
     throw new ApiError(res.status, err.error ?? res.statusText, err);
@@ -67,7 +75,7 @@ export interface RepertoireSummary {
 }
 export interface StoredMove extends RepMove { id: number; source: string }
 export interface RepertoireDetail extends RepertoireSummary { moves: StoredMove[] }
-export type Grade = 'again' | 'hard' | 'good' | 'easy';
+export type { Grade };
 /** Review state of one of my moves (shared by every repertoire playing it). */
 export interface ReviewCard {
   fen: string;
@@ -79,30 +87,12 @@ export interface ReviewCard {
   lapses: number;
   interval: number;
   createdAt: string;
+  /** The FSRS card itself (answers are scheduled on the device, see core fsrs.ts). */
+  fsrs: FsrsCard;
 }
 export interface ReviewLogEntry { repertoireId: string; grade: Grade; isNew: boolean; reviewedAt: string }
-export interface TrainingSummary {
-  repertoireId: string;
-  active: boolean;
-  /** Positions to train (at the depth of the lines), and lines of the repertoire. */
-  total: number;
-  /** Every position of mine in the repertoire (whole lines). */
-  positions: number;
-  /** Positions trained at each depth of the lines (key: core LINE_DEPTHS value; null: no statistics). */
-  byDepth: Record<string, number> | null;
-  totalLines: number;
-  /** Positions due, and the lines they form. */
-  due: number;
-  dueLines: number;
-  /** Lines learnt today, and whole lines not learnt yet. */
-  learntTodayLines: number;
-  availableLines: number;
-  /** New lines still allowed today, all repertoires together. */
-  remainingNewLines: number;
-  /** New lines this repertoire can take today, and lines to go through today (to review + new). */
-  newLines: number;
-  lines: number;
-}
+/** Training summary of a repertoire, computed on the device (core trainingSummary). */
+export type TrainingSummary = RepertoireSummaryCounts;
 export interface ImportResult {
   games: number; added: number; duplicates: number; unreachable: number; errors: string[];
 }
@@ -286,17 +276,9 @@ export const api = {
   deleteMove: (id: string, moveId: number) => request<{ ok: true; pruned: number }>('DELETE', `/api/repertoires/${id}/moves/${moveId}`),
   importPgn: (id: string, pgn: string) => request<ImportResult>('POST', `/api/repertoires/${id}/import-pgn`, { pgn }),
   cards: () => request<ReviewCard[]>('GET', '/api/cards'),
-  review: (id: string, fen: string, uci: string, grade: Grade) => request<ReviewCard>('POST', `/api/repertoires/${id}/review`, { fen, uci, grade }),
-  /** `lines`: depth of the lines (0: whole lines) with the statistics settings giving the probabilities. */
-  trainingSummary: (dayStart: number, newPerDay: number, lines?: { depth: number; speeds: string[]; ratings: number[] }) =>
-    request<TrainingSummary[]>(
-      'GET',
-      `/api/training/summary?${new URLSearchParams({
-        dayStart: String(dayStart),
-        newPerDay: String(newPerDay),
-        ...(lines ? { depth: String(lines.depth), speeds: lines.speeds.join(','), ratings: lines.ratings.join(',') } : {}),
-      })}`,
-    ),
+  /** An answer, possibly sent later (offline): `id` makes it count once, `reviewedAt` is when it was given. */
+  review: (id: string, answer: { fen: string; uci: string; grade: Grade; id: string; reviewedAt: number }) =>
+    request<ReviewCard>('POST', `/api/repertoires/${id}/review`, answer),
   statsHistory: (days: number) => request<ReviewLogEntry[]>('GET', `/api/stats/history?days=${days}`),
   gaps: (speeds: string[], ratings: number[], cutoff: number) =>
     request<GapsResponse>('GET', `/api/gaps?${new URLSearchParams({ speeds: speeds.join(','), ratings: ratings.join(','), cutoff: String(cutoff) })}`),
@@ -308,6 +290,9 @@ export const api = {
   myGames: (fen: string, color: Color, speeds: string[], days: number) =>
     request<MyGames>('GET', `/api/explorer/mine?${new URLSearchParams({ fen, color, speeds: speeds.join(','), days: String(days) })}`),
   myGameMoves: (id: string) => request<{ moves: string[] }>('GET', `/api/my-games/${encodeURIComponent(id)}`),
+  /** Opening of a line (UCI moves, comma separated), null if none is named. */
+  opening: (line: string) =>
+    request<{ eco: string; name: string } | null>('GET', `/api/explorer/opening?${new URLSearchParams({ line })}`),
   repertoireMovesAt: (fen: string) => request<RepertoireMoveHere[]>('GET', `/api/explorer/repertoires?${new URLSearchParams({ fen })}`),
   lichessGame: (id: string) => request<LichessGame>('GET', `/api/lichess-games/${id}`),
   syncState: () => request<SyncState>('GET', '/api/games/sync'),
@@ -317,8 +302,12 @@ export const api = {
   dismissInbox: (key: string) => request<{ ok: true }>('POST', '/api/games/inbox/dismiss', { key }),
   restoreInbox: () => request<{ ok: true }>('DELETE', '/api/games/inbox/dismiss'),
   reviewNow: (id: string, fen: string) => request<{ ok: true }>('POST', `/api/repertoires/${id}/cards/due`, { fen }),
-  bestMoves: (fen: string, speeds: string[], ratings: number[]) =>
-    request<BestMovesResponse>('GET', `/api/explorer/best?${new URLSearchParams({ fen, speeds: speeds.join(','), ratings: ratings.join(',') })}`),
+  /** `depth`: steps of the search to go through (0: each move's own win rate; default: all). */
+  bestMoves: (fen: string, speeds: string[], ratings: number[], depth?: number) =>
+    request<BestMovesResponse>(
+      'GET',
+      `/api/explorer/best?${new URLSearchParams({ fen, speeds: speeds.join(','), ratings: ratings.join(','), ...(depth !== undefined ? { depth: String(depth) } : {}) })}`,
+    ),
   explorer: (fen: string, speeds: string[], ratings: number[]) =>
     request<Stats>(
       'GET',

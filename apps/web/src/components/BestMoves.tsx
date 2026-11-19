@@ -28,10 +28,10 @@ export function useLevelToggle() {
  * The deeper positions are fetched in the background by the server, so it asks again meanwhile.
  * Only asked while `enabled`.
  */
-export function useBestMoves(fen: string, speeds: string[], ratings: number[], enabled: boolean) {
+export function useBestMoves(fen: string, speeds: string[], ratings: number[], enabled: boolean, depth?: number) {
   return useQuery({
-    queryKey: ['best-moves', fen, speeds, ratings],
-    queryFn: () => api.bestMoves(fen, speeds, ratings),
+    queryKey: ['best-moves', fen, speeds, ratings, depth ?? 'max'],
+    queryFn: () => api.bestMoves(fen, speeds, ratings, depth),
     enabled,
     staleTime: 10 * 60_000,
     retry: false,

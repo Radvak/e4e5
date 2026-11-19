@@ -7,3 +7,5 @@ export * from './training.js';
 export * from './engine.js';
 export * from './gaps.js';
 export * from './bestMoves.js';
+export * from './fsrs.js';
+export * from './summary.js';

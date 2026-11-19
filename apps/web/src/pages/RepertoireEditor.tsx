@@ -11,10 +11,13 @@ import { useEngine } from '../engine/useEngine';
 import { Board } from '../components/Board';
 import { ExplorerPanel } from '../components/ExplorerPanel';
 import { explorerParams, rangeLabel, useSettings } from '../settings';
-import { LevelLines, LevelToggle, topLevelMove, useBestMoves, useLevelToggle } from '../components/BestMoves';
+import { LevelToggle, topLevelMove, useBestMoves, useLevelToggle } from '../components/BestMoves';
 import { Suggestions } from '../components/Suggestions';
 import { Button, Menu, PageHeader, plural } from '../ui';
 import { useGaps } from '../useGaps';
+
+/** Steps of the search at my level (server REACH_STEPS): the slider's maximum depth. */
+const LEVEL_STEPS = 4;
 
 /** A move of the line on the board; saved or not is derived from the repertoire. */
 type LineMove = PlayedMove;
@@ -182,10 +185,23 @@ export function RepertoireEditor({ me }: { me: Me }) {
   };
   const engine = useEngine(fen, engineOn);
   // Moves at my level (Lichess explorer): only on my turn, and only when asked (many requests).
+  // The toggle (on for the browser session only) shows the statistics card under the board, like
+  // the engine's; the depth is chosen with its slider (kept on this device; 0: the moves' own win
+  // rates, no search).
   const [levelOn, toggleLevel] = useLevelToggle();
+  const [levelDepth, setLevelDepth] = useState(() => {
+    const saved = localStorage.getItem('levelDepth');
+    const d = Number(saved);
+    return saved !== null && d >= 0 && d <= LEVEL_STEPS ? d : LEVEL_STEPS;
+  });
+  const depth = levelOn ? levelDepth : 0;
+  const onDepth = (d: number) => {
+    localStorage.setItem('levelDepth', String(d));
+    setLevelDepth(d);
+  };
   const myTurn = rep.isMyTurn(fen);
-  const level = useBestMoves(fen, ex.speeds, ex.ratings, levelOn && myTurn);
-  const levelBest = levelOn && myTurn ? topLevelMove(level.data) : undefined;
+  const level = useBestMoves(fen, ex.speeds, ex.ratings, depth > 0 && myTurn, depth);
+  const levelBest = depth > 0 && myTurn ? topLevelMove(level.data) : undefined;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -310,17 +326,30 @@ export function RepertoireEditor({ me }: { me: Me }) {
           firstMoveNumber={ply}
           onPlay={playMoves}
         />
-        <LevelLines
-          enabled={levelOn}
-          fen={fen}
-          firstMoveNumber={ply}
-          speeds={ex.speeds}
-          ratings={ex.ratings}
-          range={rangeLabel(ex.ratings)}
-          blocked={myTurn ? undefined : 'Au tour de l’adversaire : jouez sa réponse pour voir vos coups à votre niveau.'}
-          engineBest={engineOn ? engine.lines[0]?.pv[0]?.uci : undefined}
-          onPlay={playMoves}
-        />
+        {levelOn && (
+          <ExplorerPanel
+            fen={fen}
+            rep={rep}
+            stats={explorer.data}
+            error={explorer.error}
+            loading={explorer.isLoading}
+            onPick={play}
+            markPopular={!rep.isMyTurn(fen)}
+            firstMoveNumber={ply}
+            onPlay={playMoves}
+            level={{
+              data: level.data,
+              loading: level.isLoading,
+              error: level.error,
+              depth,
+              maxDepth: LEVEL_STEPS,
+              onDepth,
+              canSearch: myTurn,
+              range: rangeLabel(ex.ratings),
+              engineBest: engineOn ? engine.lines[0]?.pv[0]?.uci : undefined,
+            }}
+          />
+        )}
       </div>
 
       <div className="editor-side">
@@ -460,16 +489,6 @@ export function RepertoireEditor({ me }: { me: Me }) {
         />
 
 
-        <ExplorerPanel
-          fen={fen}
-          rep={rep}
-          stats={explorer.data}
-          error={explorer.error}
-          loading={explorer.isLoading}
-          me={me}
-          onPick={play}
-          markPopular={!rep.isMyTurn(fen)}
-        />
 
       </div>
     </div>

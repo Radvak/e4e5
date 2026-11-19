@@ -117,7 +117,6 @@ export function Training({ me }: { me: Me }) {
         </p>
       )}
       {shortening && <ShortenNotice gaps={gaps} colors={[...new Set(sources.map((s) => s.color))]} />}
-      {review.error && <p className="error">{review.error.message}</p>}
 
       <p className="muted small-text mode-hint">
         {mode === 'review'

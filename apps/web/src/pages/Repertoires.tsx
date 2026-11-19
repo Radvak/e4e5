@@ -1,6 +1,6 @@
 import { START_FEN, type Color } from '@tabiya/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api, type Me, type RepertoireSummary, type TrainingSummary } from '../api';
 import { useTrainingSummary } from '../useTrainingSummary';
@@ -45,9 +45,13 @@ export function Repertoires({ me }: { me: Me }) {
   const counts = new Map((summary.data ?? []).map((s) => [s.repertoireId, s]));
   const gaps = useGaps(me, (reps.data?.length ?? 0) > 0);
   // Missing moves of each repertoire: frequent opponent moves it does not answer (gap finder).
+  // The gaps come most frequent first: the first one of a repertoire is the one its badge opens.
   const missing = new Map<string, number>();
+  const firstGap = new Map<string, string[]>();
   for (const g of [...(gaps.data?.white?.gaps ?? []), ...(gaps.data?.black?.gaps ?? [])]) {
-    if (g.repertoireId) missing.set(g.repertoireId, (missing.get(g.repertoireId) ?? 0) + 1);
+    if (!g.repertoireId) continue;
+    missing.set(g.repertoireId, (missing.get(g.repertoireId) ?? 0) + 1);
+    if (!firstGap.has(g.repertoireId)) firstGap.set(g.repertoireId, g.move ? [...g.ucis, g.move.uci] : g.ucis);
   }
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState('');
@@ -207,7 +211,13 @@ export function Repertoires({ me }: { me: Me }) {
             {colorFilter === 'all' && <h4 className="section-title">{label} <span className="count">{own.length}</span></h4>}
             <div className="rep-list">
               {own.map((r) => (
-                <RepertoireRow key={r.id} rep={r} counts={counts.get(r.id)} missing={gaps.data ? missing.get(r.id) ?? 0 : undefined} />
+                <RepertoireRow
+                  key={r.id}
+                  rep={r}
+                  counts={counts.get(r.id)}
+                  missing={gaps.data ? missing.get(r.id) ?? 0 : undefined}
+                  firstGap={firstGap.get(r.id)}
+                />
               ))}
             </div>
           </section>
@@ -217,18 +227,84 @@ export function Repertoires({ me }: { me: Me }) {
   );
 }
 
-function RepertoireRow({ rep, counts, missing }: { rep: RepertoireSummary; counts?: TrainingSummary; missing?: number }) {
+function RepertoireRow({ rep, counts, missing, firstGap }: {
+  rep: RepertoireSummary;
+  counts?: TrainingSummary;
+  missing?: number;
+  /** Line (UCI) of the most frequent missing move, the move included. */
+  firstGap?: string[];
+}) {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const toggle = useMutation({
     mutationFn: () => api.setRepertoireActive(rep.id, !rep.active),
     onSuccess: () => Promise.all([qc.invalidateQueries({ queryKey: ['repertoires'] }), qc.invalidateQueries({ queryKey: ['training-summary'] }), qc.invalidateQueries({ queryKey: ['games-report'] })]),
   });
+  const remove = useMutation({
+    mutationFn: () => api.deleteRepertoire(rep.id),
+    onSuccess: () => Promise.all([qc.invalidateQueries({ queryKey: ['repertoires'] }), qc.invalidateQueries({ queryKey: ['training-summary'] }), qc.invalidateQueries({ queryKey: ['games-report'] })]),
+  });
+  const askDelete = () => {
+    if (confirm(`Supprimer le répertoire « ${rep.name} » et tous ses coups ?`)) remove.mutate();
+  };
+  // Long press (touch) or right click (mouse) offers to delete the repertoire.
+  // The click that ends a long press is swallowed so the row does not open.
+  const press = useRef<{ timer: number; x: number; y: number } | null>(null);
+  const fired = useRef(false);
+  const cancelPress = () => {
+    if (press.current) clearTimeout(press.current.timer);
+    press.current = null;
+  };
+  const onTouchStart = (e: React.TouchEvent) => {
+    fired.current = false;
+    const t = e.touches[0];
+    cancelPress();
+    if (!t || e.touches.length > 1) return;
+    press.current = {
+      x: t.clientX,
+      y: t.clientY,
+      timer: window.setTimeout(() => {
+        press.current = null;
+        fired.current = true;
+        navigator.vibrate?.(15);
+        askDelete();
+      }, 550),
+    };
+  };
+  const onTouchMove = (e: React.TouchEvent) => {
+    const t = e.touches[0];
+    if (t && press.current && Math.hypot(t.clientX - press.current.x, t.clientY - press.current.y) > 10) cancelPress();
+  };
+  const onClickCapture = (e: React.MouseEvent) => {
+    if (!fired.current) return;
+    fired.current = false;
+    e.preventDefault();
+    e.stopPropagation();
+  };
+  const onContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    // On touch screens the long press timer already asked (Android also fires contextmenu).
+    if (fired.current || press.current) return;
+    askDelete();
+  };
   const arrows = (rep.branches ?? []).map((uci) => ({ uci, kind: 'repertoire' as const }));
   // The whole row opens the repertoire; the switch stops the click.
   const stop = (e: React.MouseEvent) => e.stopPropagation();
+  const go = (to: string) => (e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigate(to);
+  };
   return (
-    <div className={`rep-row ${rep.active ? '' : 'paused'}`} onClick={() => navigate(`/r/${rep.id}`)}>
+    <div
+      className={`rep-row ${rep.active ? '' : 'paused'}`}
+      onClick={() => navigate(`/r/${rep.id}`)}
+      onClickCapture={onClickCapture}
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={cancelPress}
+      onTouchCancel={cancelPress}
+      onContextMenu={onContextMenu}
+    >
       <div className="rep-thumb" title={rep.trunk?.length ? lineText(rep.trunk) : 'Position initiale'}>
         <MiniBoard fen={rep.trunkFen ?? START_FEN} orientation={rep.color} arrows={arrows} />
       </div>
@@ -243,17 +319,27 @@ function RepertoireRow({ rep, counts, missing }: { rep: RepertoireSummary; count
             </span>
           )}
         </div>
+        {/* Clickable: review this repertoire, or open the editor on its most frequent missing move. */}
         <div className="badges">
           {rep.active && counts && counts.dueLines > 0 && (
-            <span className="badge warn" title="Lignes à revoir aujourd’hui">{counts.dueLines} à revoir</span>
+            <button type="button" className="badge warn" title="Réviser les lignes à revoir aujourd’hui" onClick={go(`/r/${rep.id}/train?mode=review`)}>
+              {counts.dueLines} à revoir
+            </button>
           )}
           {rep.active && counts && counts.newLines > 0 && (
-            <span className="badge" title="Lignes pas encore apprises">{plural(counts.newLines, 'nouvelle', 'nouvelles')}</span>
+            <button type="button" className="badge" title="Apprendre les lignes pas encore apprises" onClick={go(`/r/${rep.id}/train?mode=review`)}>
+              {plural(counts.newLines, 'nouvelle', 'nouvelles')}
+            </button>
           )}
           {!!missing && (
-            <span className="badge hole" title="Coups adverses fréquents que ce répertoire ne prévoit pas encore">
+            <button
+              type="button"
+              className="badge hole"
+              title="Coups adverses fréquents que ce répertoire ne prévoit pas encore : ouvrir le plus fréquent"
+              onClick={go(firstGap ? `/r/${rep.id}?${new URLSearchParams({ line: firstGap.join(',') })}` : `/r/${rep.id}`)}
+            >
               {plural(missing, 'coup manquant', 'coups manquants')}
-            </span>
+            </button>
           )}
         </div>
         <div className="toggle" onClick={stop}>
