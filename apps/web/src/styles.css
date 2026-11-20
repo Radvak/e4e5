@@ -367,10 +367,13 @@ button.badge:focus-visible { outline: 2px solid currentColor; outline-offset: 1p
 .moves-path .unsaved { color: var(--warn); font-style: italic; }
 .moves-path .current { background: var(--surface-3); font-weight: 700; }
 .moves-path .ahead { opacity: 0.5; }
+.moves-path .in-paused { color: var(--muted); }
+.pause-mark { display: inline-flex; vertical-align: -2px; margin-right: 2px; color: var(--muted); }
 .draft { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
 .rep-moves { list-style: none; padding: 0; margin: 0; }
 .rep-moves li { padding: 6px 8px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; border-radius: 6px; }
 .rep-moves li.selected { background: var(--surface-2); box-shadow: inset 3px 0 0 var(--accent); }
+.rep-moves li.paused .san { opacity: 0.55; }
 .rep-moves .unsaved { color: var(--warn); font-style: italic; }
 .rep-moves .san { font-weight: 700; font-size: 1.02rem; }
 .explorer { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
@@ -680,7 +683,7 @@ button.badge:focus-visible { outline: 2px solid currentColor; outline-offset: 1p
 .rep-row .meta .known { color: var(--text); font-weight: 600; }
 /* Review: a bar under the board to swipe to the left for the next question, like Android's
    gesture bar (touch screens only). Sideways moves stay with the script, vertical ones scroll. */
-.swipe-bar { display: none; position: relative; align-items: center; justify-content: center; height: 36px; margin: 8px var(--page-pad) 0; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+.swipe-bar { display: none; position: relative; align-items: center; justify-content: center; height: 30px; margin: 4px var(--page-pad) 10px; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
 .swipe-handle { width: 72px; height: 5px; border-radius: 3px; background: var(--border-strong); }
 .swipe-label { position: absolute; bottom: -6px; font-size: 0.68rem; pointer-events: none; }
 @media (hover: none) and (pointer: coarse) { .swipe-bar { display: flex; } }
@@ -723,3 +726,20 @@ table.explorer tr.move-detail { cursor: default; }
 table.explorer tr.move-detail:hover td { background: none; }
 table.explorer tr.move-detail > td { border-top: none; padding: 0 0 8px 12px; }
 table.explorer tr.move-detail table.games { font-size: 0.85rem; }
+/* Review: the quiz's line under the timer, on one line; when too long, its beginning gives way. */
+.quiz-line { display: flex; overflow: hidden; white-space: nowrap; margin: 4px var(--page-pad) 0; min-height: 1.3em; line-height: 1.3; font-size: 0.88rem; }
+.quiz-line.cut { mask-image: linear-gradient(to right, transparent, #000 18px); -webkit-mask-image: linear-gradient(to right, transparent, #000 18px); }
+.quiz-line > span { display: flex; gap: 6px; flex: none; }
+.quiz-line .quiz-move { flex: none; }
+
+/* Moves of a position (editor): dragged from the grip; on top, the main move; below the paused zone header, paused. */
+.rep-moves li[data-zone] { grid-template-columns: auto 1fr auto; padding-left: 0; position: relative; }
+.rep-moves .grip { display: flex; align-items: center; justify-content: center; width: 28px; align-self: stretch; color: var(--muted); cursor: grab; touch-action: none; opacity: 0.6; }
+.rep-moves .grip:hover { opacity: 1; color: var(--text); }
+.rep-moves.dragging-list, .rep-moves.dragging-list * { cursor: grabbing; user-select: none; -webkit-user-select: none; }
+.rep-moves li.dragging { z-index: 2; background: var(--surface-3); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45); opacity: 0.95; }
+.rep-moves li.drop-before::before, .rep-moves li.drop-after::after { content: ''; position: absolute; left: 4px; right: 4px; height: 3px; border-radius: 2px; background: var(--rep); }
+.rep-moves li.drop-before::before { top: -4px; }
+.rep-moves li.drop-after::after { bottom: -4px; }
+.rep-moves li.paused-zone { display: flex; align-items: center; gap: 6px; min-height: 36px; margin-top: 10px; padding: 4px 10px; position: relative; border-top: 1px dashed var(--border); border-radius: 0; color: var(--muted); font-size: 0.82rem; }
+.rep-moves li.paused-zone.drop-target { background: var(--surface-2); color: var(--text); border: 1px dashed var(--muted); border-radius: 6px; }

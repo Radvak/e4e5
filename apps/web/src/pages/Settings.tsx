@@ -135,7 +135,7 @@ export function Settings({ me }: { me: Me }) {
         <div className="setting">
           <div className="what">
             <strong>Temps pour répondre</strong>
-            <div className="hint">En révision, pour un coup déjà appris. Temps écoulé : compté comme une erreur, la réponse est montrée.</div>
+            <div className="hint">En mode « Se tester », pour chaque coup à jouer (pas en révision). Temps écoulé : compté comme une erreur, la réponse est montrée.</div>
           </div>
           <select value={settings.answerSeconds} onChange={(e) => settings.setAnswerSeconds(Number(e.target.value))}>
             {[5, 10, 15, 20, 30, 0].map((n) => (

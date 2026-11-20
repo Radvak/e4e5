@@ -8,7 +8,8 @@
 import {
   keptPositions,
   prepareSummary,
-  Repertoire,
+  trainingRepertoire,
+  type Repertoire,
   trainingPositions,
   trainingPositionsFrom,
   type PreparedSummary,
@@ -22,10 +23,10 @@ const fromPositions = new WeakMap<Repertoire, Map<string, TrainingPosition[]>>()
 const kept = new WeakMap<TrainingPosition[], WeakMap<object, Map<number, Set<string>>>>();
 const prepared = new WeakMap<RepertoireDetail, Map<string, { probs: object | undefined; value: PreparedSummary }>>();
 
-/** The graph of a repertoire. */
+/** The graph of a repertoire, as trained (paused moves left out). */
 export function graphOf(detail: RepertoireDetail): Repertoire {
   let g = graphs.get(detail);
-  if (!g) graphs.set(detail, (g = new Repertoire(detail.color, detail.moves)));
+  if (!g) graphs.set(detail, (g = trainingRepertoire(detail.color, detail.moves)));
   return g;
 }
 

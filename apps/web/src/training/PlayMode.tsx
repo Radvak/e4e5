@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, type Grade } from '../api';
 import { Board } from '../components/Board';
 import { OpeningName } from '../components/OpeningName';
+import { AnswerTimer, useAnswerClock } from './AnswerTimer';
 import { answerArrows, lineText, OpponentComment, REPLY_MS } from './common';
 import { outcomeOf } from './Feedback';
 import type { Source } from './useTrainingSources';
@@ -164,6 +165,11 @@ export function PlayMode({
     setLine({ ...line, fen: answer.toFen, history: [...line.history, answer], phase: after(line.source, answer.toFen) });
   };
 
+  // The answer clock (Paramètres › Temps pour répondre): time up counts as a mistake, the answer is shown.
+  const clock = useAnswerClock(line?.phase === 'ask' && !line.revealed, `${line?.source.id}|${line?.history.length}|${score.lines}`, () =>
+    setLine((l) => (l && l.phase === 'ask' ? { ...l, revealed: true, mistakes: l.mistakes + 1 } : l)),
+  );
+
   const shapes = useMemo(
     () => (line?.phase === 'ask' && line.revealed ? answerArrows(answers) : []),
     [line?.phase, line?.revealed, line?.fen],
@@ -181,15 +187,21 @@ export function PlayMode({
 
   return (
     <div className="editor">
-      <div className="editor-board">
+      <div className={`editor-board${clock.paused ? ' paused' : ''}`}>
         <OpeningName ucis={line?.history.map((m) => m.uci) ?? []} />
         <Board
           fen={line?.fen ?? root ?? START_FEN}
           orientation={line?.source.color ?? playable[0]!.s.color}
           lastMove={line?.history.at(-1)?.uci}
           shapes={shapes}
-          onMove={line?.phase === 'ask' ? play : undefined}
+          onMove={line?.phase === 'ask' && !clock.paused ? play : undefined}
         />
+        {clock.paused && (
+          <button className="pause-overlay" onClick={() => clock.setPaused(false)}>
+            ▶ Reprendre
+          </button>
+        )}
+        <AnswerTimer clock={clock} />
       </div>
       <div className="editor-side">
         <section className="panel">

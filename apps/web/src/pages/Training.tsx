@@ -147,7 +147,6 @@ export function Training({ me }: { me: Me }) {
           onLearn={() => setMode('review')}
         />
       )}
-      {mode === 'play' && <Progress sources={sources} />}
 
     </div>
   );

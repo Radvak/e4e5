@@ -251,7 +251,7 @@ export const api = {
   repertoire: (id: string) => request<RepertoireDetail>('GET', `/api/repertoires/${id}`),
   saveLine: (id: string, ucis: string[]) =>
     request<{ added: number }>('POST', `/api/repertoires/${id}/lines`, { ucis }),
-  updateMove: (id: string, moveId: number, patch: { comment?: string | null; isMain?: boolean }) =>
+  updateMove: (id: string, moveId: number, patch: { comment?: string | null; isMain?: boolean; paused?: boolean }) =>
     request<StoredMove>('PATCH', `/api/repertoires/${id}/moves/${moveId}`, patch),
   deleteMove: (id: string, moveId: number) => request<{ ok: true; pruned: number }>('DELETE', `/api/repertoires/${id}/moves/${moveId}`),
   importPgn: (id: string, pgn: string) => request<ImportResult>('POST', `/api/repertoires/${id}/import-pgn`, { pgn }),

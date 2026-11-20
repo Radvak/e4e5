@@ -66,6 +66,8 @@ export const repMoves = sqliteTable(
     comment: text('comment'),
     nags: text('nags', { mode: 'json' }).$type<number[]>(),
     isMain: integer('is_main', { mode: 'boolean' }).notNull().default(false),
+    /** Alternative left out of the training (core trainingRepertoire). */
+    paused: integer('paused', { mode: 'boolean' }).notNull().default(false),
     source: text('source', { enum: ['manual', 'pgn', 'game', 'explorer'] }).notNull().default('manual'),
     createdAt: createdAt(),
   },

@@ -4,7 +4,7 @@
  * the move cards and the reach probabilities, so it is right offline and at once after an answer.
  */
 import type { Color } from './position.js';
-import { Repertoire, type RepMove } from './repertoire.js';
+import { trainingRepertoire, type Repertoire, type RepMove } from './repertoire.js';
 import { groupLines, keptPositions, LINE_DEPTHS, lineStarts, positionReview, trainingPositions, type MoveCardTimes, type TrainingPosition } from './training.js';
 
 export interface SummaryRepertoire {
@@ -146,6 +146,6 @@ export function trainingSummary(
   reach: ((color: Color) => Record<string, number> | undefined) | null,
   { dayStart, newPerDay, depth, now }: SummaryOptions,
 ): RepertoireSummaryCounts[] {
-  const prepared = reps.map((r) => prepareSummary({ id: r.id, active: r.active, graph: new Repertoire(r.color, r.moves) }, reach?.(r.color), depth));
+  const prepared = reps.map((r) => prepareSummary({ id: r.id, active: r.active, graph: trainingRepertoire(r.color, r.moves) }, reach?.(r.color), depth));
   return countSummary(prepared, cardOf, { dayStart, newPerDay, now });
 }

@@ -2,9 +2,10 @@ import { playUci, Repertoire, START_FEN, totalGames, pathTo, type PlayedMove } f
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { DrawShape } from 'chessground/draw';
 import type { Key } from 'chessground/types';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { api, type Gap, type ImportResult, type Me, type StoredMove } from '../api';
+import { api, type Gap, type ImportResult, type Me, type RepertoireDetail, type StoredMove } from '../api';
+import { useMoveDrag, type DropTarget } from '../components/useMoveDrag';
 import { isPopular, OUTLINE_EXTRA, type ArrowKind } from '../components/arrows';
 import { EngineLines, EngineToggle } from '../components/EnginePanel';
 import { useEngine } from '../engine/useEngine';
@@ -14,7 +15,7 @@ import { ExplorerPanel } from '../components/ExplorerPanel';
 import { explorerParams, rangeLabel, useSettings } from '../settings';
 import { LEVEL_STEPS, LevelToggle, topLevelMove, useBestMoves, useLevelDepth, useLevelToggle } from '../components/BestMoves';
 import { Suggestions } from '../components/Suggestions';
-import { Button, Menu, PageHeader, plural } from '../ui';
+import { Button, Icon, Menu, PageHeader, plural } from '../ui';
 import { useGaps } from '../useGaps';
 
 
@@ -65,7 +66,9 @@ export function RepertoireEditor({ me }: { me: Me }) {
   const stored = useMemo(() => new Map((data?.moves ?? []).map((m) => [`${m.fromFen} ${m.uci}`, m])), [data]);
   const storedMove = (m: LineMove) => stored.get(`${m.fromFen} ${m.uci}`);
   const fen = line[ply - 1]?.toFen ?? START_FEN;
-  const here = rep.movesAt(fen) as StoredMove[];
+  // The moves trained (main first), then the paused ones.
+  const atFen = rep.movesAt(fen) as StoredMove[];
+  const here = [...atFen.filter((m) => !m.paused), ...atFen.filter((m) => m.paused)];
   const shown = line.slice(0, ply);
   const unsaved = shown.filter((m) => !rep.has(m.fromFen, m.uci));
 
@@ -109,14 +112,40 @@ export function RepertoireEditor({ me }: { me: Me }) {
     },
   });
   const deleteMove = useMutation({ mutationFn: (m: StoredMove) => api.deleteMove(id, m.id), onSuccess: refresh });
-  /** Main move of its position, or not (only one main move per position, kept by the server). */
-  /** Makes the line on the board the main line: each of its moves becomes the main move of its position. */
-  const makeMainLine = useMutation({
-    mutationFn: async (moves: StoredMove[]) => {
-      for (const m of moves) if (!m.isMain) await api.updateMove(id, m.id, { isMain: true });
+  /**
+   * Main and paused moves, set by dragging the moves of a position (see dropMove). Shown at once
+   * (same rules as the server: the main move is never paused, pausing it hands the main line to
+   * the first other move still trained), then reloaded.
+   */
+  const arrange = useMutation({
+    mutationFn: async (patches: MovePatch[]) => {
+      for (const p of patches) await api.updateMove(id, p.m.id, p.patch);
     },
-    onSuccess: refresh,
+    onMutate: (patches) => {
+      qc.setQueryData<RepertoireDetail>(['repertoire', id], (d) => d && { ...d, moves: patches.reduce(applyPatch, d.moves) });
+    },
+    onSettled: refresh,
   });
+  /**
+   * A move dropped in the list of its position: at the top of the moves trained, it becomes the
+   * main move; in the paused zone, it is paused (it and what only follows it are not trained).
+   */
+  const dropMove = (moveId: number, target: DropTarget) => {
+    const m = here.find((x) => x.id === moveId);
+    if (!m) return;
+    const active = here.filter((x) => !x.paused);
+    if (target.zone === 'paused') {
+      if (!m.paused) arrange.mutate([{ m, patch: { paused: true } }]);
+    } else if (target.index === 0) {
+      if (m.paused || !m.isMain) arrange.mutate([{ m, patch: { isMain: true } }]);
+    } else if (m.paused) {
+      arrange.mutate([{ m, patch: { paused: false } }]);
+    } else if (active[0]?.id === m.id && active[1]) {
+      // The main move dropped lower: the move now on top becomes the main one.
+      arrange.mutate([{ m: active[1], patch: { isMain: true } }]);
+    }
+  };
+  const { listRef, drag, handle } = useMoveDrag(dropMove);
   const setComment = useMutation({
     mutationFn: ({ m, comment }: { m: StoredMove; comment: string }) => api.updateMove(id, m.id, { comment: comment || null }),
     onSuccess: refresh,
@@ -249,12 +278,12 @@ export function RepertoireEditor({ me }: { me: Me }) {
     const next = options[selected];
     const out = here
       .filter((m) => m.uci !== next?.uci)
-      .map((m) => arrow(m.uci, 'repertoire', width(share.get(m.uci) ?? 0, 9)));
+      .map((m) => arrow(m.uci, m.paused ? 'paused' : 'repertoire', width(share.get(m.uci) ?? 0, 9)));
     // Drawn last, so its outline stays visible over an arrow on the same line.
     if (next) {
       const w = width(share.get(next.uci) ?? 0, 9);
-      const saved = here.some((m) => m.uci === next.uci);
-      out.push(arrow(next.uci, 'outline', w + OUTLINE_EXTRA), arrow(next.uci, saved ? 'next' : 'nextDraft', w));
+      const saved = here.find((m) => m.uci === next.uci);
+      out.push(arrow(next.uci, 'outline', w + OUTLINE_EXTRA), arrow(next.uci, !saved ? 'nextDraft' : saved.paused ? 'paused' : 'next', w));
     }
     for (const [i, m] of (ed?.moves ?? []).entries()) {
       const s = share.get(m.uci) ?? 0;
@@ -365,19 +394,31 @@ export function RepertoireEditor({ me }: { me: Me }) {
           {line.length > 0 && (
           <div className="line-row">
           <div className="moves-path">
-            {line.map((m, i) => (
-              <button
-                key={i}
-                className={['link', rep.has(m.fromFen, m.uci) ? '' : 'unsaved', i === ply - 1 ? 'current' : '', i >= ply ? 'ahead' : '']
-                  .filter(Boolean)
-                  .join(' ')}
-                onClick={() => goTo(i + 1)}
-                title={rep.has(m.fromFen, m.uci) ? 'Dans votre répertoire' : 'Pas enregistré'}
-              >
-                {i % 2 === 0 ? `${i / 2 + 1}. ` : ''}
-                <San san={m.san} nags={rep.movesAt(m.fromFen).find((x) => x.uci === m.uci)?.nags} />
-              </button>
-            ))}
+            {line.map((m, i) => {
+              const stored = rep.movesAt(m.fromFen).find((x) => x.uci === m.uci);
+              // Paused: the move itself (pause icon), and what follows it on the line (greyed).
+              const pausedAt = line.findIndex((x) => rep.movesAt(x.fromFen).some((y) => y.uci === x.uci && y.paused));
+              return (
+                <button
+                  key={i}
+                  className={[
+                    'link',
+                    stored ? '' : 'unsaved',
+                    i === ply - 1 ? 'current' : '',
+                    i >= ply ? 'ahead' : '',
+                    pausedAt >= 0 && i >= pausedAt ? 'in-paused' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                  onClick={() => goTo(i + 1)}
+                  title={stored?.paused ? 'En pause : ce coup et sa suite ne sont pas entraînés' : stored ? 'Dans votre répertoire' : 'Pas enregistré'}
+                >
+                  {i % 2 === 0 ? `${i / 2 + 1}. ` : ''}
+                  {stored?.paused && <span className="pause-mark"><Icon name="pause" size={13} /></span>}
+                  <San san={m.san} nags={stored?.nags} />
+                </button>
+              );
+            })}
           </div>
           {lastStored && !lastStored.comment && commentEdit !== lastStored.id && (
             <Button size="sm" variant="ghost" icon="pencil" title={`Commenter ${lastStored.san}`} onClick={() => setCommentEdit(lastStored.id)} />
@@ -394,6 +435,11 @@ export function RepertoireEditor({ me }: { me: Me }) {
             </div>
           )}
           {notice && <p className="muted small-text">{notice}</p>}
+          {shownStored.some((m) => m.paused) && (
+            <p className="muted small-text">
+              <Icon name="pause" size={12} /> Ligne en pause : pas entraînée.
+            </p>
+          )}
           {saveLine.error && <p className="error">{saveLine.error.message}</p>}
           {lastStored && (
             <CommentNote
@@ -415,18 +461,9 @@ export function RepertoireEditor({ me }: { me: Me }) {
                   {!levelOn && <Button size="sm" icon="level" onClick={() => toggleLevel(true)}>À mon niveau</Button>}
                 </div>
               )}
-              {/* End of a saved line: it can become the main line. */}
-              {shownStored.length > 0 &&
-                (shownStored.every((m) => m.isMain) ? (
-                  <p className="muted small-text">✓ Ligne principale</p>
-                ) : (
-                  <Button size="sm" disabled={makeMainLine.isPending} onClick={() => makeMainLine.mutate(shownStored)}>
-                    Définir comme ligne principale
-                  </Button>
-                ))}
             </>
           )}
-          <ul className="rep-moves">
+          <ul className={`rep-moves ${drag ? 'dragging-list' : ''}`} ref={listRef}>
             {options[0] && !rep.has(options[0].fromFen, options[0].uci) && (
               <li
                 className={`clickable draft-move ${selected === 0 ? 'selected' : ''}`}
@@ -447,30 +484,56 @@ export function RepertoireEditor({ me }: { me: Me }) {
                 </div>
               </li>
             )}
-            {here.map((m) => (
-              <li key={m.id} className={`clickable ${options[selected]?.uci === m.uci ? 'selected' : ''}`} onClick={() => play(m.uci)}>
-                <div className="move-main">
-                  <div className="row nowrap">
-                    <button className="link san">
-                      <San san={m.san} nags={m.nags} />
-                    </button>
-                    {m.isMain && <span className="badge">principal</span>}
-                  </div>
-                  {m.comment && <div className="comment move-comment">{m.comment}</div>}
-                </div>
-                <div className="row nowrap move-actions" onClick={(e) => e.stopPropagation()}>
-                <Menu
-                  items={[
-                    {
-                      label: 'Supprimer ce coup et la suite',
-                      danger: true,
-                      onClick: () => confirm(`Supprimer ${m.san} et les lignes qui suivent ?`) && deleteMove.mutate(m),
-                    },
-                  ]}
-                />
-                </div>
-              </li>
-            ))}
+            {here.map((m, i) => {
+              const zone = m.paused ? 'paused' : 'active';
+              // Drop indicator: a line before the row the dragged move would land before.
+              const others = here.filter((x) => (x.paused ? 'paused' : 'active') === zone && x.id !== drag?.id);
+              const rank = others.indexOf(m);
+              const dropBefore = !!drag && drag.id !== m.id && drag.zone === 'active' && zone === 'active' && rank === drag.index;
+              const dropAfter = !!drag && drag.id !== m.id && drag.zone === 'active' && zone === 'active' && rank === others.length - 1 && drag.index === others.length;
+              return (
+                <Fragment key={m.id}>
+                  {/* The paused zone: always while dragging, so a move can be dropped there. */}
+                  {(i === here.findIndex((x) => x.paused)) && <PausedZoneHeader target={drag?.zone === 'paused'} dropAbove={drag?.zone === 'active' && !here.some((x) => !x.paused && x.id !== drag.id)} />}
+                  <li
+                    data-zone={zone}
+                    data-id={m.id}
+                    className={[
+                      'clickable',
+                      options[selected]?.uci === m.uci ? 'selected' : '',
+                      m.paused ? 'paused' : '',
+                      drag?.id === m.id ? 'dragging' : '',
+                      dropBefore ? 'drop-before' : '',
+                      dropAfter ? 'drop-after' : '',
+                    ].filter(Boolean).join(' ')}
+                    style={drag?.id === m.id ? { transform: `translateY(${drag.dy}px)` } : undefined}
+                    onClick={() => play(m.uci)}
+                  >
+                    <span className="grip" title="Glisser : en haut, coup principal ; en bas, en pause" {...handle(m.id)}>
+                      <Icon name="grip" size={16} />
+                    </span>
+                    <div className="move-main">
+                      <button className="link san">
+                        <San san={m.san} nags={m.nags} />
+                      </button>
+                      {m.comment && <div className="comment move-comment">{m.comment}</div>}
+                    </div>
+                    <div className="row nowrap move-actions" onClick={(e) => e.stopPropagation()}>
+                      <Menu
+                        items={[
+                          {
+                            label: 'Supprimer ce coup et la suite',
+                            danger: true,
+                            onClick: () => confirm(`Supprimer ${m.san} et les lignes qui suivent ?`) && deleteMove.mutate(m),
+                          },
+                        ]}
+                      />
+                    </div>
+                  </li>
+                </Fragment>
+              );
+            })}
+            {drag && !here.some((m) => m.paused) && <PausedZoneHeader target={drag.zone === 'paused'} dropAbove={drag.zone === 'active' && !here.some((x) => x.id !== drag.id)} />}
           </ul>
           {options.length > 0 && (
             <p className="muted small-text keys">
@@ -510,6 +573,29 @@ export function RepertoireEditor({ me }: { me: Me }) {
  * Comment of the move leading to the position: shown as text with a pencil to edit it (the
  * pencil to add one sits at the end of the line); the text area only appears while writing.
  */
+type MovePatch = { m: StoredMove; patch: { isMain?: boolean; paused?: boolean } };
+
+/** A main / paused change applied to the moves, by the rules of the server (PATCH of a move). */
+function applyPatch(moves: StoredMove[], { m, patch }: MovePatch): StoredMove[] {
+  const same = (x: StoredMove) => x.fromFen === m.fromFen;
+  if (patch.isMain) return moves.map((x) => (x.id === m.id ? { ...x, isMain: true, paused: false } : same(x) ? { ...x, isMain: false } : x));
+  if (patch.paused) {
+    const wasMain = moves.find((x) => x.id === m.id)?.isMain;
+    const heir = wasMain ? moves.find((x) => same(x) && x.id !== m.id && !x.paused) : undefined;
+    return moves.map((x) => (x.id === m.id ? { ...x, isMain: false, paused: true } : x === heir ? { ...x, isMain: true } : x));
+  }
+  return moves.map((x) => (x.id === m.id ? { ...x, ...patch } : x));
+}
+
+/** Start of the paused moves of a position: they and what only follows them are not trained. */
+function PausedZoneHeader({ target, dropAbove }: { target: boolean; dropAbove: boolean }) {
+  return (
+    <li data-paused-zone className={['paused-zone', target ? 'drop-target' : '', dropAbove ? 'drop-before' : ''].filter(Boolean).join(' ')}>
+      <Icon name="pause" size={13} /> En pause : pas entraînés
+    </li>
+  );
+}
+
 function CommentNote({ move, editing, onEdit, onSave }: { move: StoredMove; editing: boolean; onEdit: (on: boolean) => void; onSave: (comment: string) => void }) {
   const [text, setText] = useState(move.comment ?? '');
   if (!editing) {

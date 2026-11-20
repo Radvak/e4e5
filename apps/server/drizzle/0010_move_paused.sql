@@ -1,0 +1,1 @@
+ALTER TABLE `rep_moves` ADD `paused` integer DEFAULT false NOT NULL;

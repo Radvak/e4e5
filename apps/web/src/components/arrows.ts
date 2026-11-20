@@ -11,6 +11,7 @@ export const ARROWS = {
   // Dark grey: the blues are taken (?! light blue), and it stands out from every other colour.
   engine: { color: '#2b2b2b', label: 'meilleur coup du moteur' },
   level: { color: '#bc8cff', label: 'meilleur coup à votre niveau' },
+  paused: { color: '#8b949e', label: 'en pause, pas entraîné' },
   mistake: { color: '#e5534b', label: 'coup joué à la place du coup préparé' },
 } as const;
 
@@ -27,23 +28,6 @@ export const BRUSHES = {
   /** White arrow drawn just under the next move, slightly wider: a thin outline. */
   outline: { key: 'outline', color: '#ffffff', opacity: 1, lineWidth: 10 },
 };
-
-/**
- * Arrow colours of the move annotations (NAGs: !!, !, !?, ?!, ?, ??), the same as the annotated
- * moves in the text (.nag-* in styles.css): a repertoire move with one is drawn in its colour.
- */
-export const NAG_COLORS = {
-  brilliant: '#26c2a3',
-  good: '#22ac38',
-  interesting: '#ea45d8',
-  dubious: '#56b4e9',
-  mistake: '#e69f00',
-  blunder: '#df5353',
-} as const;
-Object.assign(
-  BRUSHES,
-  Object.fromEntries(Object.entries(NAG_COLORS).map(([kind, color]) => [`nag-${kind}`, { key: `nag-${kind}`, color, opacity: 0.85, lineWidth: 10 }])),
-);
 
 /** Extra width (chessground lineWidth units) of the outline around the next move. */
 export const OUTLINE_EXTRA = 1.3;

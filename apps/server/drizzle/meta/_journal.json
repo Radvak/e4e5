@@ -71,6 +71,13 @@
       "when": 1795046317794,
       "tag": "0009_review_client_id",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1795165360479,
+      "tag": "0010_move_paused",
+      "breakpoints": true
     }
   ]
 }

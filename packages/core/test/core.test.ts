@@ -6,6 +6,7 @@ import {
   lineStarts,
   pickNewLines,
   trainingPositions,
+  trainingRepertoire,
   bucketsFor,
   pgnToMoves,
   playUci,
@@ -219,5 +220,15 @@ describe('new lines to learn', () => {
     expect(all.lines).toBe(3);
     expect(all.chosen).toHaveLength(positions.length);
     expect(lineStarts(positions, (f) => positions.some((p) => p.fen === f))).toHaveLength(3);
+  });
+});
+
+describe('paused alternatives', () => {
+  it('leaves a paused move and what only follows it out of the training', () => {
+    // 1... c5 paused: my answers after it (2. Nf3, 3. d4) are not trained, 1... e5 still is.
+    const moves = pgnToMoves('1. e4 e5 (1... c5 2. Nf3 d6 3. d4) 2. Nf3 Nc6 3. Bb5 *').moves.map((m) => ({ ...m, paused: m.san === 'c5' }));
+    const sans = (rep: Repertoire) => trainingPositions(rep).map((p) => rep.movesAt(p.fen)[0]!.san);
+    expect(sans(new Repertoire('white', moves))).toEqual(['e4', 'Nf3', 'Bb5', 'Nf3', 'd4']);
+    expect(sans(trainingRepertoire('white', moves))).toEqual(['e4', 'Nf3', 'Bb5']);
   });
 });

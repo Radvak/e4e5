@@ -10,7 +10,7 @@ import {
   type Color,
   type RepMove,
 } from '@tabiya/core';
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray, ne } from 'drizzle-orm';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { requireUser } from '../auth.js';
@@ -36,6 +36,7 @@ const patchMoveBody = z.object({
   comment: z.string().max(2000).nullable().optional(),
   nags: z.array(z.number().int().min(1).max(255)).max(4).nullable().optional(),
   isMain: z.boolean().optional(),
+  paused: z.boolean().optional(),
 });
 const importBody = z.object({ pgn: z.string().min(1).max(5_000_000) });
 const lineBody = z.object({
@@ -130,6 +131,7 @@ export async function repertoireRoutes(app: FastifyInstance) {
       source: m.source,
       ...(m.comment ? { comment: m.comment } : {}),
       ...(m.nags?.length ? { nags: m.nags } : {}),
+      ...(m.paused ? { paused: true } : {}),
     }));
     return { ...rep, moves };
   });
@@ -213,12 +215,24 @@ export async function repertoireRoutes(app: FastifyInstance) {
     const where = and(eq(repMoves.id, Number(req.params.moveId)), eq(repMoves.repertoireId, rep.id));
     const [move] = await db.select().from(repMoves).where(where);
     if (!move) return reply.code(404).send({ error: 'Coup introuvable' });
+    const samePosition = and(eq(repMoves.repertoireId, rep.id), eq(repMoves.fromFen, move.fromFen));
+    // The main move is never paused: making a move main resumes it, pausing it hands the main
+    // line to the first other move still trained in the position.
     if (patch.isMain) {
+      patch.paused = false;
       // Only one main line per position.
-      await db
-        .update(repMoves)
-        .set({ isMain: false })
-        .where(and(eq(repMoves.repertoireId, rep.id), eq(repMoves.fromFen, move.fromFen)));
+      await db.update(repMoves).set({ isMain: false }).where(samePosition);
+    } else if (patch.paused) {
+      patch.isMain = false;
+      if (move.isMain) {
+        const [heir] = await db
+          .select({ id: repMoves.id })
+          .from(repMoves)
+          .where(and(samePosition, eq(repMoves.paused, false), ne(repMoves.id, move.id)))
+          .orderBy(asc(repMoves.id))
+          .limit(1);
+        if (heir) await db.update(repMoves).set({ isMain: true }).where(eq(repMoves.id, heir.id));
+      }
     }
     const [updated] = await db.update(repMoves).set(patch).where(where).returning();
     return updated;

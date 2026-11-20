@@ -14,6 +14,16 @@ export interface RepMove {
   comment?: string | null;
   nags?: number[] | null;
   isMain?: boolean | null;
+  /** Left out of the training, with everything only reachable through it (still in the repertoire). */
+  paused?: boolean;
+}
+
+/**
+ * The graph the training uses: without the paused moves, so the positions only reachable through
+ * one of them are not trained (a position also reached by another move order still is).
+ */
+export function trainingRepertoire(color: Color, moves: Iterable<RepMove>): Repertoire {
+  return new Repertoire(color, [...moves].filter((m) => !m.paused));
 }
 
 export class Repertoire {

@@ -13,7 +13,7 @@ import { useEngine } from '../engine/useEngine';
 import { LEVEL_STEPS, LevelToggle, topLevelMove, useBestMoves, useLevelDepth, useLevelToggle } from '../components/BestMoves';
 import { ExplorerPanel } from '../components/ExplorerPanel';
 import { MoveTable } from '../components/MoveTable';
-import { moveNag, San } from '../components/Nag';
+import { San } from '../components/Nag';
 import { OpeningName } from '../components/OpeningName';
 import { explorerParams, rangeLabel, speedsLabel, useSettings } from '../settings';
 import { Icon, PageHeader } from '../ui';
@@ -167,11 +167,7 @@ export function Explorer({ me }: { me: Me }) {
       brush,
       modifiers: { lineWidth },
     });
-    // Repertoire moves in green, or in the colour of their annotation (!, ?, !?…) when they have one.
-    const out = [...prepared.values()].map(({ uci, nags }) => {
-      const nag = moveNag(nags);
-      return arrow(uci, nag ? `nag-${nag.kind}` : 'repertoire', width(share.get(uci) ?? 0, 9));
-    });
+    const out = [...prepared.keys()].map((uci) => arrow(uci, 'repertoire', width(share.get(uci) ?? 0, 9)));
     for (const [i, m] of (data?.moves ?? []).entries()) {
       const s = share.get(m.uci) ?? 0;
       if (markPopular && isPopular(i, s) && !prepared.has(m.uci)) out.push(arrow(m.uci, 'popular', width(s)));

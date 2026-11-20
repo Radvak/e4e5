@@ -1,12 +1,13 @@
 import { groupLines, lineStarts, START_FEN, type Repertoire, type RepMove, type TrainingPosition } from '@tabiya/core';
 import type { Key } from 'chessground/types';
 import type { DrawShape } from 'chessground/draw';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Grade } from '../api';
 import { Board } from '../components/Board';
+import { San } from '../components/Nag';
 import { OpeningName } from '../components/OpeningName';
-import { dayStart, useSettings } from '../settings';
+import { dayStart } from '../settings';
 import { answerArrows, inTime, JUMP_MS, REPLAY_MS, REPLAYED_PLIES, REPLY_MS } from './common';
 import { outcomeOf, type Outcome } from './Feedback';
 import type { Source } from './useTrainingSources';
@@ -126,11 +127,11 @@ export function ReviewMode({
   const [ahead, setAhead] = useState(false);
   /** Positions (fen) answered in this session, and when last (not asked again when reviewing ahead). */
   const answered = useRef(new Map<string, number>());
-  /** Positions of the lines given up in this session (asked after the others). */
+  /** Positions (fen) put aside with a swipe, whatever the repertoire (the cards are the user's). */
   const skipped = useRef(new Set<string>());
   /** Questions passed with a swipe, last one last (a swipe the other way comes back to it). */
   const [passed, setPassed] = useState<Question[]>([]);
-  const firstOf = (items: Item[]) => items.find((p) => !skipped.current.has(`${p.source.id}|${p.target.fen}`)) ?? items[0];
+  const firstOf = (items: Item[]) => items.find((p) => !skipped.current.has(p.target.fen)) ?? items[0];
   /** reviewed: all answers; asked: positions already learnt; firstTry: asked and right first time. */
   const [stats, setStats] = useState({ reviewed: 0, asked: 0, firstTry: 0 });
   const [now, setNow] = useState(() => Date.now());
@@ -219,6 +220,25 @@ export function ReviewMode({
   };
   /** The latest version of a source (its cards change with each answer). */
   const latest = (source: Source) => sources.find((s) => s.id === source.id) ?? source;
+  /**
+   * Where to start the line of `item`: the highest position of the path leading to it that is to
+   * review too (due now or within SOON_MS), so that both are reviewed in one go, the moves between
+   * them asked on the way (nextAfter steers the line to `item`). Not a position put aside (swipe)
+   * nor one answered a moment ago.
+   */
+  const lineStart = (item: Item): Item => {
+    const source = latest(item.source);
+    const horizon = Date.now() + SOON_MS;
+    const now = Date.now();
+    const byFen = new Map(source.positions.map((t) => [t.fen, t]));
+    for (const m of item.target.path) {
+      const t = byFen.get(m.fromFen);
+      if (!t || t.fen === item.target.fen || skipped.current.has(t.fen)) continue;
+      if (now - (answered.current.get(t.fen) ?? -Infinity) < RECENT_MS) continue;
+      if (source.stateOf(t.fen, horizon).status === 'due') return { source, target: t };
+    }
+    return item;
+  };
   const question = (item: Item, lead?: Question['lead']): Question => {
     const source = latest(item.source);
     const { fen } = item.target;
@@ -234,7 +254,7 @@ export function ReviewMode({
   // First question, and questions becoming due while idle.
   useEffect(() => {
     const first = firstOf(queue.items);
-    if (!current && first && !jumpTimer.current) ask(question(first));
+    if (!current && first && !jumpTimer.current) ask(question(lineStart(first)));
   }, [current, queue.items]);
 
   /**
@@ -277,7 +297,7 @@ export function ReviewMode({
         ? 'done'
         : 'end';
     const first = firstOf(items);
-    return { next: first ? question(first) : null, end };
+    return { next: first ? question(lineStart(first)) : null, end };
   };
 
   const record = (q: Question, outcome: Outcome) => {
@@ -324,17 +344,17 @@ export function ReviewMode({
    * Swipe to the left (bar under the board): the next question now. During the pause after an answer, the one
    * waiting; while asked, this line is passed without recording anything (asked after the others).
    */
-  const lineKeys = (q: Item & { expected: RepMove }) =>
-    [{ toFen: q.target.fen }, ...restOfLine(q.source, q.expected)].map((m) => `${q.source.id}|${m.toFen}`);
+  /** The positions of the line of `q` from it (put aside by a swipe; by position: cards are the user's). */
+  const lineKeys = (q: Item & { expected: RepMove }) => [q.target.fen, ...restOfLine(q.source, q.expected).map((m) => m.toFen)];
   const onSkip = (q: Question) => {
     if (pending.current) return pending.current();
     for (const k of lineKeys(q)) skipped.current.add(k);
     setPassed((list) => [...list.filter((p) => !same(p, q)), q]);
     const items = queue.items.filter((p) => !same(p, q));
-    const first = firstOf(items.filter((p) => !skipped.current.has(`${p.source.id}|${p.target.fen}`))) ?? firstOf(items);
+    const first = firstOf(items.filter((p) => !skipped.current.has(p.target.fen))) ?? firstOf(items);
     if (first && same(first, q)) return;
     setNow(Date.now());
-    ask(first ? question(first) : null);
+    ask(first ? question(lineStart(first)) : null);
   };
 
   /** Swipe to the right: back to the last question passed (its line is no longer put aside). */
@@ -448,7 +468,6 @@ function Drill({
   /** The line ends with the move just played (shown until the next line). */
   lineDone: boolean;
 }) {
-  const { answerSeconds } = useSettings();
   const navigate = useNavigate();
   const { source, target, expected, isNew, lead } = question;
   const plies = target.path.length;
@@ -469,9 +488,14 @@ function Drill({
     played: null as RepMove | null,
   });
   const [state, setState] = useState(fresh);
+  /** Where the quiz's line starts (ply): set when jumping to another line, kept while following it. */
+  const lineFrom = useRef(lead ? 0 : Math.max(0, plies - REPLAYED_PLIES));
   // New question: reset the state during render (keeps the board mounted, no flash).
   const current = state.round === round ? state : fresh();
-  if (state.round !== round) setState(current);
+  if (state.round !== round) {
+    if (!lead) lineFrom.current = Math.max(0, plies - REPLAYED_PLIES);
+    setState(current);
+  }
   const { replied, shown, mistakes, revealed, retries, alternative, hinted, played } = current;
   const update = (patch: Partial<typeof current>) => setState((s) => ({ ...s, ...patch }));
   const answers = source.rep.movesAt(target.fen);
@@ -489,26 +513,6 @@ function Drill({
   }, [shown, plies, round]);
 
   const asking = replied && shown >= plies && !played;
-  /** The clock runs on a learnt move until it is answered, revealed or hinted. */
-  const timing = asking && answerSeconds > 0 && !revealed && !hinted;
-
-  /** Paused: the clock stops and the board is blurred (kept from one question to the next). */
-  const [paused, setPaused] = useState(false);
-  /** Time left on the clock of this question / retry (what remains after a pause). */
-  const clockKey = `${round}-${retries}`;
-  const left = useRef({ key: '', ms: 0 });
-  if (left.current.key !== clockKey) left.current = { key: clockKey, ms: answerSeconds * 1000 };
-
-  useEffect(() => {
-    if (!timing || paused) return;
-    const clock = left.current;
-    const start = Date.now();
-    const t = setTimeout(() => update({ revealed: true, mistakes: mistakes + 1 }), clock.ms);
-    return () => {
-      clearTimeout(t);
-      clock.ms = Math.max(0, clock.ms - (Date.now() - start));
-    };
-  }, [timing, paused, clockKey]);
 
   const outcome = (helped: boolean) => outcomeOf(isNew, mistakes, revealed || helped);
 
@@ -549,7 +553,7 @@ function Drill({
   };
   const onTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
     const t = e.touches[0];
-    swipe.current = t && e.touches.length === 1 && !paused ? { x: t.clientX, y: t.clientY, axis: null } : null;
+    swipe.current = t && e.touches.length === 1 ? { x: t.clientX, y: t.clientY, axis: null } : null;
   };
   const onTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
     const s = swipe.current;
@@ -576,6 +580,15 @@ function Drill({
     else if (dx > threshold && passed > 0) onBack();
   };
 
+  /** The quiz's line under the board: kept scrolled to its end (its beginning gives way). */
+  const quizLine = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = quizLine.current;
+    if (!el) return;
+    el.scrollLeft = el.scrollWidth;
+    el.classList.toggle('cut', el.scrollWidth > el.clientWidth);
+  });
+
   /** The moves on the board, from the start. */
   let moves: RepMove[];
   if (played) moves = [...target.path, played];
@@ -595,20 +608,15 @@ function Drill({
 
   return (
     <div className="editor">
-      <div className={`editor-board${paused ? ' paused' : ''}`}>
+      <div className="editor-board">
         <OpeningName ucis={moves.map((m) => m.uci)} />
         <Board
           fen={last?.toFen ?? START_FEN}
           orientation={source.color}
           lastMove={last?.uci}
           shapes={shapes}
-          onMove={asking && !paused ? play : undefined}
+          onMove={asking ? play : undefined}
         />
-        {paused && (
-          <button className="pause-overlay" onClick={() => setPaused(false)}>
-            ▶ Reprendre
-          </button>
-        )}
         {lineDone && played && (
           <div className="line-done" role="status">
             <svg viewBox="0 0 52 52" aria-hidden="true">
@@ -623,28 +631,20 @@ function Drill({
             ♻️ <strong>{alternative.san}</strong> est aussi dans ton répertoire — cherche l’autre !
           </div>
         )}
-        <div className="timer-row">
-          <div className="answer-timer">
-            {timing && (
-              <div key={clockKey} style={{ animationDuration: `${answerSeconds}s`, animationPlayState: paused ? 'paused' : 'running' }} />
-            )}
-          </div>
-          <button
-            className="pause-btn"
-            onClick={() => setPaused(!paused)}
-            title={paused ? 'Reprendre' : 'Pause (cache l’échiquier)'}
-            aria-label={paused ? 'Reprendre' : 'Pause'}
-          >
-            {paused ? '▶' : '❚❚'}
-          </button>
-        </div>
-        <div className="drill-actions">
-          <button onClick={hint} disabled={!asking || paused} title={hinted || revealed ? 'Jouer le coup attendu (compté comme aidé), puis la ligne continue' : 'Montrer la pièce à jouer'}>
-            {hinted || revealed ? '🏳 Solution' : '💡 Indice'}
-          </button>
-          <button onClick={toExplorer} title="Ouvrir cette position dans l’Explorer">
-            🧭 Explorer
-          </button>
+        {/* The quiz's line so far (since it started, not from the first move), annotations in colour. */}
+        <div ref={quizLine} className="quiz-line" aria-label="Ligne du quiz">
+          <span>
+            {moves.slice(lineFrom.current).map((m, k) => {
+              const ply = lineFrom.current + k;
+              const num = ply % 2 === 0 ? `${ply / 2 + 1}. ` : k === 0 ? `${(ply + 1) / 2}… ` : '';
+              return (
+                <span key={ply} className="quiz-move">
+                  {num && <span className="muted">{num}</span>}
+                  <San san={m.san} nags={m.nags} />
+                </span>
+              );
+            })}
+          </span>
         </div>
         <div
           className="swipe-bar"
@@ -662,6 +662,14 @@ function Drill({
           )}
           <span ref={handle} className="swipe-handle" aria-hidden="true" />
           <span className="swipe-label muted">{passed ? '← passer · revenir →' : '← balayez pour passer'}</span>
+        </div>
+        <div className="drill-actions">
+          <button onClick={hint} disabled={!asking} title={hinted || revealed ? 'Jouer le coup attendu (compté comme aidé), puis la ligne continue' : 'Montrer la pièce à jouer'}>
+            {hinted || revealed ? '🏳 Solution' : '💡 Indice'}
+          </button>
+          <button onClick={toExplorer} title="Ouvrir cette position dans l’Explorer">
+            🧭 Explorer
+          </button>
         </div>
       </div>
     </div>
