@@ -8,7 +8,7 @@ import { useTrainingSummary } from '../useTrainingSummary';
 import { useGaps } from '../useGaps';
 import { Button, PageHeader, Tabs, plural } from '../ui';
 import { lineText } from '../training/common';
-import { PlayMode } from '../training/PlayMode';
+import { PlayMode, type PlayScore } from '../training/PlayMode';
 import { Progress } from '../training/Progress';
 import { ReviewMode } from '../training/ReviewMode';
 import { useTrainingSources, type Source } from '../training/useTrainingSources';
@@ -75,6 +75,7 @@ export function Training({ me }: { me: Me }) {
   };
   const [counts, setCounts] = useState({ dueLines: 0, freshLines: 0, reviewed: 0, asked: 0, firstTry: 0 });
   const onCounts = useCallback((c: typeof counts) => setCounts(c), []);
+  const [playScore, setPlayScore] = useState<PlayScore>({ lines: 0, moves: 0, asked: 0, clean: 0 });
   const onReview = (source: Source, fen: string, uci: string, grade: Grade) => review.mutate({ source, fen, uci, grade });
 
   if (loading || (!id && all.isLoading) || (shortening && gaps.isLoading)) return <p className="muted">Chargement…</p>;
@@ -95,7 +96,11 @@ export function Training({ me }: { me: Me }) {
                   ? ` · ${plural(counts.reviewed, 'réponse', 'réponses')}${counts.asked > 0 ? ` (${Math.round((100 * counts.firstTry) / counts.asked)} % du premier coup)` : ''}`
                   : ''
               }`
-            : title
+            : `${title}${
+                playScore.moves > 0
+                  ? `${playScore.lines > 0 ? ` · ${plural(playScore.lines, 'ligne', 'lignes')}` : ''} · ${plural(playScore.moves, 'coup', 'coups')}${playScore.asked > 0 ? ` (${Math.round((100 * playScore.clean) / playScore.asked)} % du premier coup)` : ''}`
+                  : ''
+              }`
         }
       />
       <div style={{ marginBottom: 12 }}>
@@ -145,6 +150,7 @@ export function Training({ me }: { me: Me }) {
           ratings={ex.ratings}
           onReview={onReview}
           onLearn={() => setMode('review')}
+          onScore={setPlayScore}
         />
       )}
 

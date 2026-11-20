@@ -1,11 +1,15 @@
-import { chooseReply, START_FEN, type ExplorerResponse, type RepMove } from '@tabiya/core';
+import { chooseReply, pathTo, START_FEN, type ExplorerResponse, type RepMove } from '@tabiya/core';
+import type { Key } from 'chessground/types';
+import type { DrawShape } from 'chessground/draw';
+import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, type Grade } from '../api';
 import { Board } from '../components/Board';
 import { OpeningName } from '../components/OpeningName';
 import { AnswerTimer, useAnswerClock } from './AnswerTimer';
-import { answerArrows, lineText, OpponentComment, REPLY_MS } from './common';
+import { answerArrows, REPLY_MS } from './common';
+import { DrillActions, LineDone, QuizLine, SwipeBar } from './DrillParts';
 import { outcomeOf } from './Feedback';
 import type { Source } from './useTrainingSources';
 
@@ -23,10 +27,26 @@ interface LineState {
   phase: Phase;
   mistakes: number;
   revealed: boolean;
+  /** The pieces to move are shown (Indice). */
+  hinted: boolean;
 }
 
+/** Score of the session: lines played, my moves, asked (learnt) and right first time. */
+export interface PlayScore {
+  lines: number;
+  moves: number;
+  asked: number;
+  clean: number;
+}
+
+/** Ply of a position (from its FEN): where the line of the quiz starts. */
+const plyOf = (fen: string) => {
+  const [, turn, , , , full] = fen.split(' ');
+  return (Math.max(1, Number(full) || 1) - 1) * 2 + (turn === 'b' ? 1 : 0);
+};
+
 /**
- * "Play lines": the app plays the opponent, choosing among the repertoire replies with the
+ * "Se tester": the app plays the opponent, choosing among the repertoire replies with the
  * frequencies of Lichess players at the selected level; I answer with my repertoire moves until
  * the end of the line. Reviews are recorded only when they inform the schedule: mistakes, new
  * positions, and correct answers on due positions.
@@ -38,6 +58,7 @@ export function PlayMode({
   ratings,
   onReview,
   onLearn,
+  onScore,
 }: {
   sources: Source[];
   root: string;
@@ -46,7 +67,10 @@ export function PlayMode({
   onReview: (source: Source, fen: string, uci: string, grade: Grade) => void;
   /** Switch to "Réviser" (offered when nothing is learnt yet). */
   onLearn?: () => void;
+  /** The score of the session (shown in the page header, like the review's). */
+  onScore?: (score: PlayScore) => void;
 }) {
+  const navigate = useNavigate();
   const qc = useQueryClient();
   /**
    * "Se tester" only covers what is learnt: a position is known once one of my moves there is
@@ -64,7 +88,8 @@ export function PlayMode({
     [sources, root],
   );
   const [line, setLine] = useState<LineState | null>(null);
-  const [score, setScore] = useState({ lines: 0, moves: 0, asked: 0, clean: 0 });
+  const [score, setScore] = useState<PlayScore>({ lines: 0, moves: 0, asked: 0, clean: 0 });
+  useEffect(() => onScore?.(score), [score, onScore]);
   const token = useRef(0);
 
   const statsQuery = useCallback(
@@ -91,7 +116,7 @@ export function PlayMode({
     const total = playable.reduce((n, p) => n + p.learnt, 0);
     let r = Math.random() * total;
     const source = (playable.find((p) => (r -= p.learnt) < 0) ?? playable[0]!).s;
-    setLine({ source, fen: root, history: [], phase: after(source, root), mistakes: 0, revealed: false });
+    setLine({ source, fen: root, history: [], phase: after(source, root), mistakes: 0, revealed: false, hinted: false });
   }, [playable, root]);
 
   // Latest version (sources change after each review), without restarting timers.
@@ -121,6 +146,7 @@ export function PlayMode({
           phase,
           mistakes: 0,
           revealed: false,
+          hinted: false,
         });
       }, wait);
     });
@@ -141,7 +167,8 @@ export function PlayMode({
     for (const a of answers) void qc.prefetchQuery(statsQuery(a.toFen));
   }, [line?.fen, line?.phase]);
 
-  const play = (uci: string) => {
+  /** `helped`: played with the Solution button (counted as helped). */
+  const play = (uci: string, helped = false) => {
     if (!line || line.phase !== 'ask') return;
     const answer = answers.find((m) => m.uci === uci);
     if (!answer) {
@@ -151,7 +178,7 @@ export function PlayMode({
     // Any of my moves is accepted; its card is graded (a move not learnt yet, found without
     // help, is left to the review, where it is shown first).
     const card = line.source.cardOf(line.fen, answer.uci);
-    const outcome = outcomeOf(false, line.mistakes, line.revealed);
+    const outcome = outcomeOf(false, line.mistakes, line.revealed || line.hinted || helped);
     let grade: Grade | null = null;
     if (outcome !== 'correct') grade = 'again'; // helped or wrong
     else if (card && Date.parse(card.due) <= Date.now()) grade = 'good';
@@ -162,7 +189,22 @@ export function PlayMode({
       asked: s.asked + (outcome === 'new' ? 0 : 1),
       clean: s.clean + (outcome === 'correct' ? 1 : 0),
     }));
-    setLine({ ...line, fen: answer.toFen, history: [...line.history, answer], phase: after(line.source, answer.toFen) });
+    setLine({ ...line, fen: answer.toFen, history: [...line.history, answer], phase: after(line.source, answer.toFen), mistakes: 0, revealed: false, hinted: false });
+  };
+
+  /** One button, like the review's: the pieces to move, then the solution (my main move is played, helped). */
+  const hint = () => {
+    if (!line || line.phase !== 'ask') return;
+    if (!line.hinted && !line.revealed) return setLine({ ...line, hinted: true });
+    const main = answers.find((m) => m.isMain) ?? answers[0];
+    if (main) play(main.uci, true);
+  };
+  /** Swipe to the left: another line (nothing recorded). */
+  const skip = () => startRef.current();
+  const toExplorer = () => {
+    if (!line) return;
+    const moves = [...(root === START_FEN ? [] : (pathTo(line.source.rep, root) ?? [])), ...line.history];
+    navigate(`/explorer?${new URLSearchParams({ line: moves.map((m) => m.uci).join(','), ...(line.source.color === 'black' ? { color: 'black' } : {}) })}`);
   };
 
   // The answer clock (Paramètres › Temps pour répondre): time up counts as a mistake, the answer is shown.
@@ -170,10 +212,12 @@ export function PlayMode({
     setLine((l) => (l && l.phase === 'ask' ? { ...l, revealed: true, mistakes: l.mistakes + 1 } : l)),
   );
 
-  const shapes = useMemo(
-    () => (line?.phase === 'ask' && line.revealed ? answerArrows(answers) : []),
-    [line?.phase, line?.revealed, line?.fen],
-  );
+  const shapes = useMemo<DrawShape[]>(() => {
+    if (line?.phase !== 'ask') return [];
+    if (line.revealed) return answerArrows(answers);
+    if (line.hinted) return answers.map((m) => ({ orig: m.uci.slice(0, 2) as Key, brush: 'repertoire' }));
+    return [];
+  }, [line?.phase, line?.revealed, line?.hinted, line?.fen]);
 
   if (!playable.length) {
     return (
@@ -194,35 +238,25 @@ export function PlayMode({
           orientation={line?.source.color ?? playable[0]!.s.color}
           lastMove={line?.history.at(-1)?.uci}
           shapes={shapes}
-          onMove={line?.phase === 'ask' && !clock.paused ? play : undefined}
+          onMove={line?.phase === 'ask' && !clock.paused ? (uci) => play(uci) : undefined}
         />
         {clock.paused && (
           <button className="pause-overlay" onClick={() => clock.setPaused(false)}>
             ▶ Reprendre
           </button>
         )}
+        {line?.phase === 'end' && line.history.length > 0 && <LineDone text="Fin de ce que vous connaissez" />}
         <AnswerTimer clock={clock} />
-      </div>
-      <div className="editor-side">
-        <section className="panel">
-          {sources.length > 1 && line && <p className="muted small-text">{line.source.name}</p>}
-          <p className="muted">{line ? lineText(line.history) || 'Début de la ligne' : ''}</p>
-          {line?.phase === 'ask' && <OpponentComment move={line.history.at(-1)} />}
-          {line?.phase === 'opponent' && <p className="muted">L’adversaire joue…</p>}
-          {line?.phase === 'ask' && <p><strong>À vous de jouer.</strong></p>}
-          {line?.phase === 'ask' && line.mistakes > 0 && (
-            <p className="error">✗ Pas dans votre répertoire.{line.revealed ? ' Jouez le coup indiqué.' : ' Réessayez.'}</p>
-          )}
-          {line?.phase === 'ask' && !line.revealed && (
-            <button className="small" onClick={() => setLine({ ...line, revealed: true })}>Voir la réponse</button>
-          )}
-          {line?.phase === 'end' && <p className="success">✓ Fin de ce que vous connaissez</p>}
-          <p className="muted small-text">
-            {score.lines} ligne(s) · {score.moves} coup(s)
-            {score.asked > 0 && ` · ${Math.round((100 * score.clean) / score.asked)} % du premier coup`} · coups adverses
-            pondérés par les parties Lichess
-          </p>
-        </section>
+        {/* Same as the review under the board: the line, the swipe bar, Indice / Solution and Explorer. */}
+        <QuizLine moves={line?.history ?? []} firstPly={plyOf(root)} />
+        <SwipeBar onSkip={skip} label="changer de ligne" />
+        <DrillActions
+          hinted={!!line && (line.hinted || line.revealed)}
+          disabled={line?.phase !== 'ask' || clock.paused}
+          solutionTitle="Jouer le coup (compté comme aidé), puis la ligne continue"
+          onHint={hint}
+          onExplorer={toExplorer}
+        />
       </div>
     </div>
   );

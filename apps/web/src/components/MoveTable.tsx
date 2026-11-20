@@ -1,7 +1,6 @@
 import { totalGames, type ExplorerResponse } from '@tabiya/core';
 import { Fragment, useState, type ReactNode } from 'react';
 import { Icon } from '../ui';
-import { isPopular } from './arrows';
 import { San } from './Nag';
 
 function pct(n: number, total: number) {
@@ -13,7 +12,7 @@ function pct(n: number, total: number) {
  * `limit`: only the most played moves, plus the repertoire moves played less often. `detail`: what
  * a row unfolds into (chevron), e.g. the games with that move.
  */
-export function MoveTable({ data, inRep, nagsOf, onPick, limit, markPopular = true, detail }: { data: ExplorerResponse; inRep: (uci: string) => boolean; nagsOf?: (uci: string) => readonly number[] | null | undefined; onPick: (uci: string) => void; limit?: number; markPopular?: boolean; detail?: (uci: string) => ReactNode }) {
+export function MoveTable({ data, inRep, nagsOf, onPick, limit, missing, detail }: { data: ExplorerResponse; inRep: (uci: string) => boolean; nagsOf?: (uci: string) => readonly number[] | null | undefined; onPick: (uci: string) => void; limit?: number; missing?: (uci: string) => boolean; detail?: (uci: string) => ReactNode }) {
   const [open, setOpen] = useState<string | null>(null);
   const total = totalGames(data);
   if (total === 0) return <p className="muted">Aucune partie dans cette position.</p>;
@@ -24,18 +23,17 @@ export function MoveTable({ data, inRep, nagsOf, onPick, limit, markPopular = tr
         {moves.map((m) => {
           const n = totalGames(m);
           const prepared = inRep(m.uci);
-          // Same colours as the arrows: green in the repertoire, orange popular but missing.
-          const popular = markPopular && !prepared && isPopular(data.moves.indexOf(m), n / total);
+          // Same colours as the arrows: green in the repertoire, orange a missing move (gap finder).
+          const popular = !prepared && !!missing?.(m.uci);
           const isOpen = !!detail && open === m.uci;
           return (
             <Fragment key={m.uci}>
             <tr
               className={prepared ? 'in-rep' : popular ? 'popular' : ''}
               onClick={() => onPick(m.uci)}
-              title={prepared ? 'Dans votre répertoire' : popular ? 'Joué souvent, pas dans votre répertoire' : 'Jouer ce coup'}
+              title={prepared ? 'Dans votre répertoire' : popular ? 'Coup manquant : joué souvent, pas encore dans votre répertoire' : 'Jouer ce coup'}
             >
               <td className="san">
-                {prepared ? '✓ ' : ''}
                 <San san={m.san} nags={nagsOf?.(m.uci)} />
               </td>
               <td className="games">

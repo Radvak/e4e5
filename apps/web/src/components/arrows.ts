@@ -4,10 +4,10 @@
  * acts as the legend.
  */
 export const ARROWS = {
-  repertoire: { color: '#3fb950', label: 'dans votre répertoire' },
-  next: { color: '#3fb950', label: 'coup suivant (→)' },
+  repertoire: { color: '#3a9a62', label: 'dans votre répertoire' },
+  next: { color: '#3a9a62', label: 'coup suivant (→)' },
   nextDraft: { color: '#f0883e', label: 'coup suivant, pas encore enregistré (→)' },
-  popular: { color: '#f0883e', label: 'joué souvent, pas dans votre répertoire' },
+  popular: { color: '#f0883e', label: 'coup manquant : joué souvent, pas encore dans votre répertoire' },
   // Dark grey: the blues are taken (?! light blue), and it stands out from every other colour.
   engine: { color: '#2b2b2b', label: 'meilleur coup du moteur' },
   level: { color: '#bc8cff', label: 'meilleur coup à votre niveau' },
@@ -16,9 +16,6 @@ export const ARROWS = {
 } as const;
 
 export type ArrowKind = keyof typeof ARROWS;
-
-/** A popular move (orange arrow) among the most played ones: top 6 and 3% of the games or more. */
-export const isPopular = (rank: number, share: number) => rank < 6 && share >= 0.03;
 
 /** chessground brushes for the arrow kinds. */
 export const BRUSHES = {

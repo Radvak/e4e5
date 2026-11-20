@@ -9,14 +9,15 @@
   --surface-3: #34312c;
   --border: #3b3833;
   --border-strong: #4d4943;
-  --text: #ece9e4;
+  --text: #f2efe4;
   --text-2: #b3ada4;
   --muted: #8f8a82;
-  --accent: #6aa62c;
-  --accent-hover: #78b836;
-  --accent-soft: rgba(106, 166, 44, 0.16);
+  /* Greens and gold of the logo (forest green #1f4f3a, cream #f2efe4, gold #e4b120), lightened for the dark interface. */
+  --accent: #3e8e5e;
+  --accent-hover: #48a06b;
+  --accent-soft: rgba(62, 142, 94, 0.18);
   --info: #5b9be6;
-  --warn: #d9962a;
+  --warn: #e4b120;
   --danger: #e5534b;
   --danger-soft: rgba(229, 83, 75, 0.14);
   --radius-sm: 6px;
@@ -64,7 +65,7 @@ button, .btn {
 }
 button:hover, .btn:hover { background: #3e3a35; text-decoration: none; }
 button:disabled, .btn[aria-disabled='true'] { opacity: 0.45; cursor: default; pointer-events: none; }
-.btn-primary, button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn-primary, button.primary { background: var(--accent); border-color: var(--accent); color: var(--text); }
 .btn-primary:hover, button.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
 .btn-ghost { background: transparent; border-color: transparent; color: var(--text-2); }
 .btn-ghost:hover { background: var(--surface-2); color: var(--text); }
@@ -152,8 +153,8 @@ details.panel[open] summary { margin-bottom: 10px; }
 .success-text { color: var(--accent); }
 .small-text { font-size: 0.84rem; margin: 2px 0 8px; }
 .badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font-size: 0.78rem; font-weight: 600; background: var(--surface-3); color: var(--text-2); white-space: nowrap; }
-.badge.accent { background: var(--accent-soft); color: #9fd166; }
-.badge.warn { background: rgba(217, 150, 42, 0.16); color: #e7b660; }
+.badge.accent { background: var(--accent-soft); color: #8fcca6; }
+.badge.warn { background: rgba(228, 177, 32, 0.16); color: #ecc458; }
 .badge.danger { background: var(--danger-soft); color: #f08a84; }
 .chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 999px; font-size: 0.82rem; color: var(--text-2); background: var(--surface-2); }
 a.chip:hover { text-decoration: none; border-color: var(--border-strong); color: var(--text); }
@@ -203,7 +204,7 @@ kbd { display: inline-block; min-width: 18px; padding: 0 4px; margin: 0 1px; bor
 .setting .what { flex: 1; min-width: 200px; }
 .setting .what .hint { color: var(--muted); font-size: 0.84rem; margin-top: 2px; }
 .notice { padding: 10px 12px; border-radius: var(--radius-sm); background: var(--surface-2); border: 1px solid var(--border); font-size: 0.9rem; }
-.notice.success { background: var(--accent-soft); border-color: transparent; color: #b9e08d; font-size: 0.9rem; font-weight: 500; }
+.notice.success { background: var(--accent-soft); border-color: transparent; color: #a8d9bb; font-size: 0.9rem; font-weight: 500; }
 .notice.error { background: var(--danger-soft); border-color: transparent; color: #f3a29d; }
 .offline-banner { margin: 8px 16px 0; }
 
@@ -283,7 +284,7 @@ button.badge:focus-visible { outline: 2px solid currentColor; outline-offset: 1p
 /* A rejected move (components/Board.tsx): red square under the piece, the board shaken. */
 .cg-wrap square.rejected { background: rgba(229, 83, 75, 0.6); }
 /* Another move of the repertoire (not the one asked): dashed green square, no shake. */
-.cg-wrap square.retry { outline: 3px dashed #3fb950; outline-offset: -4px; background: rgba(63, 185, 80, 0.18); }
+.cg-wrap square.retry { outline: 3px dashed var(--rep); outline-offset: -4px; background: rgba(92, 179, 128, 0.18); }
 /* The frame clips the shake: no horizontal scroll on phones (full-width board). */
 .board-frame { overflow: clip; }
 .board-frame.rejected > .board { animation: board-shake 0.35s ease-in-out; }
@@ -302,7 +303,7 @@ button.badge:focus-visible { outline: 2px solid currentColor; outline-offset: 1p
   position: absolute; top: 10px; left: 50%; z-index: 5; max-width: calc(100% - 32px);
   padding: 8px 14px; border-radius: 999px; font-size: 0.9rem; text-align: center; pointer-events: none;
   color: #fff; background: rgba(40, 96, 168, 0.94); box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
-  animation: alt-bubble 2.4s ease forwards;
+  animation: alt-bubble 4s ease forwards;
 }
 @keyframes alt-bubble {
   0% { opacity: 0; transform: translate(-50%, -8px) scale(0.92); }
@@ -310,7 +311,7 @@ button.badge:focus-visible { outline: 2px solid currentColor; outline-offset: 1p
   80% { opacity: 1; transform: translate(-50%, 0); }
   100% { opacity: 0; transform: translate(-50%, -4px); }
 }
-@media (prefers-reduced-motion: reduce) { .alt-bubble { animation: alt-bubble-fade 2.4s linear forwards; transform: translateX(-50%); } }
+@media (prefers-reduced-motion: reduce) { .alt-bubble { animation: alt-bubble-fade 4s linear forwards; transform: translateX(-50%); } }
 @keyframes alt-bubble-fade { 0%, 80% { opacity: 1; } 100% { opacity: 0; } }
 /* End of a reviewed line, before the next one: the board glows green, a frosted pill with a
    check that draws itself. */
@@ -330,7 +331,7 @@ button.badge:focus-visible { outline: 2px solid currentColor; outline-offset: 1p
   animation: line-done-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 .line-done svg { width: 30px; height: 30px; fill: none; stroke-linecap: round; stroke-linejoin: round; }
-.line-done circle { stroke: #3fb950; stroke-width: 3; stroke-dasharray: 145; stroke-dashoffset: 145; animation: line-done-draw 0.35s ease-out 0.05s forwards; }
+.line-done circle { stroke: var(--rep); stroke-width: 3; stroke-dasharray: 145; stroke-dashoffset: 145; animation: line-done-draw 0.35s ease-out 0.05s forwards; }
 .line-done path { stroke: #fff; stroke-width: 4; stroke-dasharray: 40; stroke-dashoffset: 40; animation: line-done-draw 0.2s ease-out 0.3s forwards; }
 @keyframes line-done-in {
   from { opacity: 0; transform: translate(-50%, calc(-50% + 12px)) scale(0.96); }
@@ -379,7 +380,7 @@ button.badge:focus-visible { outline: 2px solid currentColor; outline-offset: 1p
 .explorer { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
 .explorer tr { cursor: pointer; }
 .explorer tr:hover td { background: var(--surface-2); }
-.explorer tr.in-rep .san { color: #9fd166; font-weight: 700; }
+.explorer tr.in-rep .san { color: var(--rep); font-weight: 700; }
 .explorer td { padding: 6px; border-top: 1px solid var(--border); }
 .explorer .games { text-align: right; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .explorer .games .share, .level-table td.count .share { font-size: 0.85em; opacity: 0.8; }
@@ -452,7 +453,7 @@ button.badge:focus-visible { outline: 2px solid currentColor; outline-offset: 1p
 .suggestion { width: 100%; justify-content: space-between; background: none; border: none; border-top: 1px solid var(--border); border-radius: 0; min-height: 44px; padding: 6px 2px; font-weight: 500; text-align: left; white-space: normal; gap: 10px; }
 .suggestion-list li:first-child .suggestion { border-top: none; }
 .suggestion:hover { background: var(--surface-2); }
-.suggestion.here { background: rgba(217, 150, 42, 0.08); }
+.suggestion.here { background: rgba(228, 177, 32, 0.08); }
 .suggestion .line { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .suggestion .freq { color: var(--text-2); font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 0.88rem; }
 .suggestion .badge { margin-left: 6px; }
@@ -474,7 +475,7 @@ button.badge:focus-visible { outline: 2px solid currentColor; outline-offset: 1p
 
 /* Colours shared with the board arrows (components/arrows.ts): they act as the legend. */
 /* --engine: the engine's arrow on the board (dark grey); --engine-ui: the same in the dark interface. */
-:root { --rep: #3fb950; --hole: #f0883e; --engine: #2b2b2b; --engine-ui: #d9d6d0; --level: #bc8cff; }
+:root { --rep: #5cb380; --hole: #f0883e; --engine: #2b2b2b; --engine-ui: #d9d6d0; --level: #bc8cff; }
 .rep-moves .san { color: var(--rep); }
 .rep-moves .unsaved, .rep-moves .san.unsaved { color: var(--text-2); }
 .rep-moves li.selected { box-shadow: inset 3px 0 0 var(--rep); }
@@ -590,7 +591,7 @@ button.badge:focus-visible { outline: 2px solid currentColor; outline-offset: 1p
 .game-detail-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .game-detail .mini-board-large { width: min(100%, 360px); height: auto; aspect-ratio: 1; margin: 0 auto; }
 .game-detail .inbox-body { margin: 0; }
-.tab-badge { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; margin-left: 6px; border-radius: 9px; background: var(--accent); color: #fff; font-size: 0.7rem; font-weight: 700; line-height: 1; }
+.tab-badge { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; margin-left: 6px; border-radius: 9px; background: var(--accent); color: var(--text); font-size: 0.7rem; font-weight: 700; line-height: 1; }
 .tabbar a { position: relative; }
 .tabbar .tab-badge { position: absolute; top: 6px; left: calc(50% + 6px); margin: 0; }
 @media (max-width: 480px) { .games-page .tabs.block button { padding: 0 4px; font-size: 0.84rem; } }

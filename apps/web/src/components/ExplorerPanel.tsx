@@ -7,7 +7,7 @@ interface Props {
   fen: string;
   /** Scores from this side (the repertoire's colour, or the side to move). */
   color: Color;
-  /** Marked as prepared (✓). */
+  /** Marked as prepared (green). */
   inRep: (uci: string) => boolean;
   /** PGN annotations of a move of my repertoires here (!, ?, …): the move is coloured. */
   nagsOf?: (uci: string) => readonly number[] | null | undefined;
@@ -15,8 +15,8 @@ interface Props {
   error: unknown;
   loading: boolean;
   onPick: (uci: string) => void;
-  /** Show popular moves missing from the repertoire in orange (default: yes). */
-  markPopular?: boolean;
+  /** Missing moves (gap finder): in orange. */
+  isMissing?: (uci: string) => boolean;
   /** Ply count of the position (for move numbers). */
   firstMoveNumber: number;
   onPlay: (moves: PlayedMove[]) => void;
@@ -55,7 +55,7 @@ function provenance(meta: StatsMeta): string | null {
  * Moves played at the user's level in this position, merged with the search at my level (see
  * LevelTable), marked when in the repertoire. Under the board, like the engine lines.
  */
-export function ExplorerPanel({ fen, color, inRep, nagsOf, stats, error, loading, onPick, markPopular = true, firstMoveNumber, onPlay, level }: Props) {
+export function ExplorerPanel({ fen, color, inRep, nagsOf, stats, error, loading, onPick, isMissing, firstMoveNumber, onPlay, level }: Props) {
   const data = stats?.data;
   const origin = stats ? provenance(stats.meta) : null;
   const missing = error instanceof ApiError && error.status === 404;
@@ -76,7 +76,7 @@ export function ExplorerPanel({ fen, color, inRep, nagsOf, stats, error, loading
           nagsOf={nagsOf}
           onPick={onPick}
           onPlay={onPlay}
-          markPopular={markPopular}
+          missing={isMissing}
           level={level.data}
           depth={level.depth}
           maxDepth={level.maxDepth}

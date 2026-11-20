@@ -5,11 +5,11 @@ import type { Key } from 'chessground/types';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api, ApiError, type Me, type MyGameRef, type RepertoireMoveHere } from '../api';
-import { isPopular } from '../components/arrows';
 import { Board } from '../components/Board';
 import { EngineLines, EngineToggle } from '../components/EnginePanel';
 import { lineText, parseMoves } from '../components/lineText';
 import { useEngine } from '../engine/useEngine';
+import { useGaps } from '../useGaps';
 import { LEVEL_STEPS, LevelToggle, topLevelMove, useBestMoves, useLevelDepth, useLevelToggle } from '../components/BestMoves';
 import { ExplorerPanel } from '../components/ExplorerPanel';
 import { MoveTable } from '../components/MoveTable';
@@ -153,9 +153,19 @@ export function Explorer({ me }: { me: Me }) {
   // The arrows (popular moves) follow the Lichess players of my level.
   const data = lichess.data?.data;
   const prepared = useMemo(() => groupByMove(repMoves.data ?? []), [repMoves.data]);
-  // My move already prepared in a repertoire of the side to move: no popular (orange) moves to suggest.
   const turn: Color = fen.split(' ')[1] === 'b' ? 'black' : 'white';
-  const markPopular = !(repMoves.data ?? []).some((r) => r.color === turn);
+  // Missing moves here (gap finder, any repertoire): the opponent moves not prepared yet, in orange.
+  const gaps = useGaps(me);
+  const missingHere = useMemo(
+    () =>
+      new Set(
+        [...(gaps.data?.white?.gaps ?? []), ...(gaps.data?.black?.gaps ?? [])]
+          .filter((g) => g.fen === fen && g.move && !prepared.has(g.move.uci))
+          .map((g) => g.move!.uci),
+      ),
+    [gaps.data, fen, prepared],
+  );
+  const isMissing = (uci: string) => missingHere.has(uci);
 
   const shapes = useMemo<DrawShape[]>(() => {
     const total = data ? totalGames(data) : 0;
@@ -168,14 +178,12 @@ export function Explorer({ me }: { me: Me }) {
       modifiers: { lineWidth },
     });
     const out = [...prepared.keys()].map((uci) => arrow(uci, 'repertoire', width(share.get(uci) ?? 0, 9)));
-    for (const [i, m] of (data?.moves ?? []).entries()) {
-      const s = share.get(m.uci) ?? 0;
-      if (markPopular && isPopular(i, s) && !prepared.has(m.uci)) out.push(arrow(m.uci, 'popular', width(s)));
-    }
+    // Orange: the missing moves only (those of "Coups manquants").
+    for (const uci of missingHere) out.push(arrow(uci, 'popular', width(share.get(uci) ?? 0)));
     if (levelBest) out.push(arrow(levelBest.uci, 'level', 9));
     if (best) out.push(arrow(best.uci, 'engine', 6));
     return out;
-  }, [data, prepared, markPopular, best?.uci, levelBest?.uci]);
+  }, [data, prepared, missingHere, best?.uci, levelBest?.uci]);
 
   /** The line typed instead of the moves path (pencil, or "/"). */
   const [editing, setEditing] = useState(false);
@@ -266,7 +274,7 @@ export function Explorer({ me }: { me: Me }) {
             error={lichess.error}
             loading={lichess.isLoading}
             onPick={play}
-            markPopular={markPopular}
+            isMissing={isMissing}
             firstMoveNumber={ply}
             onPlay={playMoves}
             level={{
@@ -367,7 +375,7 @@ export function Explorer({ me }: { me: Me }) {
               inRep={(uci) => prepared.has(uci)}
               nagsOf={(uci) => prepared.get(uci)?.nags}
               onPick={play}
-              markPopular={markPopular}
+              missing={isMissing}
               detail={(uci) => <GameRows games={mine.data!.recentGames.filter((g) => g.uci === uci)} onOpen={(id) => loadGame.mutate(id)} />}
             />
           )}

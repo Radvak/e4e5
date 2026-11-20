@@ -5,6 +5,10 @@
  * - Otherwise fetched from Lichess when a token is available, and stored.
  * - If Lichess cannot be used (no token, rate limit, network), the closest stored combination
  *   for that position is served instead, flagged `exact: false` so the UI can say so.
+ * - Imported statistics (source 'import': counted from a sample of Lichess games, e.g. one month
+ *   of database.lichess.org) are provisional: their counts are far smaller than the explorer's,
+ *   so next to explorer answers they look wrong (128 games here, 1 million one move later). They
+ *   are served only until Lichess answers for that position, which replaces them.
  */
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -106,7 +110,8 @@ export async function getStats(
 ): Promise<StatsResult> {
   const rows = await db.select().from(positionStats).where(eq(positionStats.fen, fen));
   const exact = rows.find((r) => r.speeds === csv(speeds) && r.ratings === csv(ratings));
-  if (exact && Date.now() - exact.fetchedAt.getTime() < REFRESH_AFTER_MS) return toResult(exact, true);
+  const settled = exact && (exact.source !== 'import' || !token);
+  if (settled && Date.now() - exact.fetchedAt.getTime() < REFRESH_AFTER_MS) return toResult(exact, true);
 
   let reason: StatsMeta['reason'] = 'no-token';
   if (token) {
@@ -143,6 +148,7 @@ export async function getStats(
 /**
  * Stored statistics of many positions, without calling Lichess: the exact combination (even if
  * old), else the closest stored one (`exact: false`). Positions with nothing stored are absent.
+ * Imported statistics count as not exact, so the callers fetch the explorer's in the background.
  */
 export async function storedStats(
   fens: string[],
@@ -158,7 +164,7 @@ export async function storedStats(
   for (const [fen, rows] of byFen) {
     const exact = rows.find((r) => r.speeds === csv(speeds) && r.ratings === csv(ratings));
     const row = exact ?? closest(rows, speeds, ratings);
-    if (row) out.set(fen, { data: row.data, exact: !!exact });
+    if (row) out.set(fen, { data: row.data, exact: !!exact && exact.source !== 'import' });
   }
   return out;
 }
@@ -283,8 +289,12 @@ export function entriesFromQueryCache(cache: Record<string, ExplorerResponse>, f
   return entries;
 }
 
-/** Upserts entries; a stored row is only replaced by a more recent one. Returns rows written. */
-export async function importEntries(entries: StatsEntry[], source: 'seed' | 'import'): Promise<number> {
+/**
+ * Upserts entries; a stored row is only replaced by a more recent one. Returns rows written.
+ * `source`: 'import' for statistics counted from a sample of games (provisional, see getStats),
+ * 'lichess' or 'seed' for answers of the Lichess explorer.
+ */
+export async function importEntries(entries: StatsEntry[], source: StatsMeta['source']): Promise<number> {
   let written = 0;
   const batch = 200;
   for (let i = 0; i < entries.length; i += batch) {

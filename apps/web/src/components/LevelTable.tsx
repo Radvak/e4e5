@@ -4,7 +4,6 @@ import { Fragment, useState } from 'react';
 import type { BestMovesResponse } from '../api';
 import { moveText } from '../chessText';
 import { Icon, plural } from '../ui';
-import { isPopular } from './arrows';
 
 const pct = (x: number) => `${Math.round(100 * x)} %`;
 const share = (n: number, total: number) => (total ? (100 * n) / total : 0);
@@ -43,7 +42,7 @@ export function LevelTable({
   nagsOf,
   onPick,
   onPlay,
-  markPopular,
+  missing,
   level,
   depth,
   maxDepth,
@@ -66,7 +65,8 @@ export function LevelTable({
   nagsOf?: (uci: string) => readonly number[] | null | undefined;
   onPick: (uci: string) => void;
   onPlay: (moves: PlayedMove[]) => void;
-  markPopular: boolean;
+  /** Missing moves (gap finder): in orange. */
+  missing?: (uci: string) => boolean;
   /** Search at my level for the depth chosen (undefined: depth 0 or not computed). */
   level: BestMovesResponse | undefined;
   depth: number;
@@ -173,8 +173,8 @@ export function LevelTable({
         <tbody>
           {shown.map(({ m, n, rank, direct, best, score }) => {
             const prepared = inRep(m.uci);
-            // Same colours as the arrows: green in the repertoire, orange popular but missing.
-            const popular = markPopular && !prepared && isPopular(rank, n / total);
+            // Same colours as the arrows: green in the repertoire, orange a missing move (gap finder).
+            const popular = !prepared && !!missing?.(m.uci);
             // Searched less far than the depth reached (or not at all): less precise score.
             const pruned = searching && !!level && (!best || best.minReach !== reach);
             const isOpen = open === m.uci && !!best && best.replies.length > 0;
@@ -190,10 +190,9 @@ export function LevelTable({
                 <tr
                   className={[prepared ? 'in-rep' : popular ? 'popular' : '', top?.m.uci === m.uci ? 'level-top' : ''].join(' ')}
                   onClick={() => onPick(m.uci)}
-                  title={prepared ? 'Dans votre répertoire' : popular ? 'Joué souvent, pas dans votre répertoire' : 'Jouer ce coup'}
+                  title={prepared ? 'Dans votre répertoire' : popular ? 'Coup manquant : joué souvent, pas encore dans votre répertoire' : 'Jouer ce coup'}
                 >
                   <td className="san">
-                    {prepared ? '✓ ' : ''}
                     <San san={m.san} nags={nagsOf?.(m.uci)} />
                     {engineBest === m.uci && (
                       <span className="sf-tag" title="Aussi le meilleur coup de Stockfish" aria-label="Aussi le meilleur coup de Stockfish">

@@ -20,10 +20,9 @@ await runMigrations();
 for (const file of files) {
   const raw = readFileSync(file);
   const json = JSON.parse((file.endsWith('.gz') ? gunzipSync(raw) : raw).toString('utf8'));
-  const entries =
-    json && json.version === 1 && Array.isArray(json.entries)
-      ? (json as StatsSeed).entries
-      : entriesFromQueryCache(json, statSync(file).mtimeMs);
-  const written = await importEntries(entries, 'import');
+  const seed = json && json.version === 1 && Array.isArray(json.entries);
+  const entries = seed ? (json as StatsSeed).entries : entriesFromQueryCache(json, statSync(file).mtimeMs);
+  // Answers of the Lichess explorer, not statistics counted from a sample of games ('import').
+  const written = await importEntries(entries, seed ? 'seed' : 'lichess');
   console.log(`${file}: ${entries.length} positions read, ${written} written`);
 }

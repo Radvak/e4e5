@@ -1,7 +1,7 @@
 import { groupLines, lineStarts, START_FEN, type Repertoire, type RepMove, type TrainingPosition } from '@tabiya/core';
 import type { Key } from 'chessground/types';
 import type { DrawShape } from 'chessground/draw';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Grade } from '../api';
 import { Board } from '../components/Board';
@@ -9,6 +9,7 @@ import { San } from '../components/Nag';
 import { OpeningName } from '../components/OpeningName';
 import { dayStart } from '../settings';
 import { answerArrows, inTime, JUMP_MS, REPLAY_MS, REPLAYED_PLIES, REPLY_MS } from './common';
+import { DrillActions, LineDone, QuizLine, SwipeBar } from './DrillParts';
 import { outcomeOf, type Outcome } from './Feedback';
 import type { Source } from './useTrainingSources';
 
@@ -33,8 +34,6 @@ const LINE_END_MS = 1100;
 
 /** Same position (cards belong to the user: the same position in two repertoires is one question). */
 const same = (a: Item, b: Item) => a.target.fen === b.target.fen;
-/** Dots of the questions passed shown left of the swipe bar (then "+N"). */
-const MAX_DOTS = 8;
 /**
  * A position answered less than this ago waits behind the others (FSRS learning steps make it due
  * again after a minute): it is not asked twice in a row while something else is to do.
@@ -301,7 +300,10 @@ export function ReviewMode({
   };
 
   const record = (q: Question, outcome: Outcome) => {
-    const grade: Grade = outcome === 'correct' ? 'good' : 'again';
+    // After an alternative (right too: the move asked could not be guessed, then shown): no
+    // penalty, the move asked is graded as answered right.
+    const right = outcome === 'correct' || outcome === 'alternative';
+    const grade: Grade = right ? 'good' : 'again';
     answered.current.set(q.target.fen, Date.now());
     // Answered after all (it came back in the queue): no longer waiting among the passed ones.
     setPassed((list) => (list.some((p) => same(p, q)) ? list.filter((p) => !same(p, q)) : list));
@@ -309,12 +311,18 @@ export function ReviewMode({
     // right answer leaves its schedule unchanged. Due soon: recorded, so it does not come back alone.
     const card = latest(q.source).cardOf(q.target.fen, q.expected.uci);
     const bonus = card !== undefined && Date.parse(card.due) > Date.now() + SOON_MS;
-    if (!(bonus && outcome === 'correct')) onReview(q.source, q.target.fen, q.expected.uci, grade);
+    if (!(bonus && right)) onReview(q.source, q.target.fen, q.expected.uci, grade);
     setStats((s) => ({
       reviewed: s.reviewed + 1,
       asked: s.asked + (outcome === 'new' ? 0 : 1),
-      firstTry: s.firstTry + (outcome === 'correct' ? 1 : 0),
+      firstTry: s.firstTry + (outcome === 'correct' || outcome === 'alternative' ? 1 : 0),
     }));
+  };
+
+  /** Another of my moves played instead of the one asked: right, graded good when it is due (soon). */
+  const onAlternative = (q: Question, move: RepMove) => {
+    const card = latest(q.source).cardOf(q.target.fen, move.uci);
+    if (card && Date.parse(card.due) <= Date.now() + SOON_MS) onReview(q.source, q.target.fen, move.uci, 'good');
   };
 
   /** The question waiting for the pause between two lines (a swipe asks it at once). */
@@ -412,6 +420,7 @@ export function ReviewMode({
       question={current}
       onAnswered={(played, outcome) => onAnswered(current, played, outcome)}
       onSkip={() => onSkip(current)}
+      onAlternative={(move) => onAlternative(current, move)}
       passed={passed.length}
       onBack={onBack}
     />
@@ -442,8 +451,8 @@ function restOfLine(source: Source, move: RepMove): RepMove[] {
  * One question: one of my moves (`expected`). When the line continues, the board first shows
  * my previous move, then plays the opponent's reply. A new move is shown; two wrong tries or
  * the time running out reveal it. Another move of my repertoire (an alternative) is not a
- * mistake: try again. One button: the piece to move (hint), then the solution (the move is
- * played, helped, and the line goes on). Swipe to the left on the bar under the board: the
+ * mistake: said so, and the move asked is shown (green arrow) to play it. One button: the piece
+ * to move (hint), then the solution (the move is played, helped, and the line goes on). Swipe to the left on the bar under the board: the
  * next question.
  */
 function Drill({
@@ -451,6 +460,7 @@ function Drill({
   lineDone,
   question,
   onAnswered,
+  onAlternative,
   onSkip,
   passed,
   onBack,
@@ -459,6 +469,8 @@ function Drill({
   round: number;
   question: Question;
   onAnswered: (played: RepMove, outcome: Outcome) => void;
+  /** Another of my moves played (an alternative): right, the move asked is then shown. */
+  onAlternative: (move: RepMove) => void;
   /** Swipe to the left on the bar under the board: the next question. */
   onSkip: () => void;
   /** Questions passed so far (a dot each, left of the bar). */
@@ -481,7 +493,7 @@ function Drill({
     revealed: isNew,
     /** Alternatives played: each one restarts the clock. */
     retries: 0,
-    /** The last alternative played (shown in a bubble). */
+    /** The last alternative played (shown in a bubble); the move asked is then shown by its arrow. */
     alternative: null as RepMove | null,
     /** 1: the piece to move is shown. */
     hinted: false,
@@ -521,6 +533,8 @@ function Drill({
     if (uci !== expected.uci) {
       const other = answers.find((m) => m.uci === uci);
       if (other) {
+        // Right too: said so, and the move reviewed here is shown (green arrow).
+        if (!alternative) onAlternative(other);
         update({ retries: retries + 1, alternative: other });
         return 'retry';
       }
@@ -528,8 +542,8 @@ function Drill({
       return false;
     }
     update({ played: expected });
-    // New or helped: asked again soon. Right first time: good.
-    onAnswered(expected, outcome(hinted));
+    // New or helped: asked again soon. Right first time, or after an alternative: good.
+    onAnswered(expected, alternative && !isNew && mistakes === 0 && !hinted ? 'alternative' : outcome(hinted));
   };
 
   /** One button: first the piece to move, then the solution (the move is played, helped). */
@@ -538,56 +552,6 @@ function Drill({
     update({ played: expected });
     onAnswered(expected, outcome(true));
   };
-
-  /**
-   * Swipe to the left on the bar under the board (like Android's gesture bar): its handle follows
-   * the finger, and past a threshold the next question comes. The board keeps its gestures.
-   */
-  const handle = useRef<HTMLSpanElement>(null);
-  const swipe = useRef<{ x: number; y: number; axis: 'x' | 'y' | null } | null>(null);
-  const slide = (dx: number) => {
-    const el = handle.current;
-    if (!el) return;
-    el.style.transition = dx ? 'none' : 'transform 0.15s';
-    el.style.transform = dx ? `translateX(${dx}px)` : '';
-  };
-  const onTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
-    const t = e.touches[0];
-    swipe.current = t && e.touches.length === 1 ? { x: t.clientX, y: t.clientY, axis: null } : null;
-  };
-  const onTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
-    const s = swipe.current;
-    const t = e.touches[0];
-    if (!s || !t) return;
-    const dx = t.clientX - s.x;
-    const dy = t.clientY - s.y;
-    if (!s.axis) {
-      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
-      s.axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
-    }
-    // To the left: pass; to the right: back to a question passed (if any, else it gives a little).
-    if (s.axis === 'x') slide(dx < 0 || passed > 0 ? dx : dx / 6);
-  };
-  const endSwipe = (e: React.TouchEvent<HTMLDivElement>) => {
-    const s = swipe.current;
-    swipe.current = null;
-    slide(0);
-    const t = e.changedTouches[0];
-    if (!s || !t || s.axis !== 'x' || e.type === 'touchcancel') return;
-    const dx = t.clientX - s.x;
-    const threshold = Math.max(50, e.currentTarget.getBoundingClientRect().width * 0.25);
-    if (-dx > threshold) onSkip();
-    else if (dx > threshold && passed > 0) onBack();
-  };
-
-  /** The quiz's line under the board: kept scrolled to its end (its beginning gives way). */
-  const quizLine = useRef<HTMLDivElement>(null);
-  useLayoutEffect(() => {
-    const el = quizLine.current;
-    if (!el) return;
-    el.scrollLeft = el.scrollWidth;
-    el.classList.toggle('cut', el.scrollWidth > el.clientWidth);
-  });
 
   /** The moves on the board, from the start. */
   let moves: RepMove[];
@@ -598,10 +562,10 @@ function Drill({
 
   const shapes = useMemo<DrawShape[]>(() => {
     if (!asking) return [];
-    if (revealed) return answerArrows([expected]);
+    if (revealed || alternative) return answerArrows([expected]);
     if (hinted) return [{ orig: expected.uci.slice(0, 2) as Key, brush: 'repertoire' }];
     return [];
-  }, [revealed, hinted, asking, expected]);
+  }, [revealed, hinted, asking, expected, alternative]);
 
   const toExplorer = () =>
     navigate(`/explorer?${new URLSearchParams({ line: moves.map((m) => m.uci).join(','), ...(source.color === 'black' ? { color: 'black' } : {}) })}`);
@@ -617,60 +581,23 @@ function Drill({
           shapes={shapes}
           onMove={asking ? play : undefined}
         />
-        {lineDone && played && (
-          <div className="line-done" role="status">
-            <svg viewBox="0 0 52 52" aria-hidden="true">
-              <circle cx="26" cy="26" r="23" />
-              <path d="M15 27l7 7 15-16" />
-            </svg>
-            <span>Ligne revue</span>
-          </div>
-        )}
+        {lineDone && played && <LineDone text="Ligne revue" />}
         {alternative && asking && (
           <div key={retries} className="alt-bubble" role="status">
-            ♻️ <strong>{alternative.san}</strong> est aussi dans ton répertoire — cherche l’autre !
+            👍 <strong><San san={alternative.san} nags={alternative.nags} /></strong> est un bon coup, mais ici on révise{' '}
+            <strong><San san={expected.san} nags={expected.nags} /></strong>
           </div>
         )}
         {/* The quiz's line so far (since it started, not from the first move), annotations in colour. */}
-        <div ref={quizLine} className="quiz-line" aria-label="Ligne du quiz">
-          <span>
-            {moves.slice(lineFrom.current).map((m, k) => {
-              const ply = lineFrom.current + k;
-              const num = ply % 2 === 0 ? `${ply / 2 + 1}. ` : k === 0 ? `${(ply + 1) / 2}… ` : '';
-              return (
-                <span key={ply} className="quiz-move">
-                  {num && <span className="muted">{num}</span>}
-                  <San san={m.san} nags={m.nags} />
-                </span>
-              );
-            })}
-          </span>
-        </div>
-        <div
-          className="swipe-bar"
-          onTouchStart={onTouchStart}
-          onTouchMove={onTouchMove}
-          onTouchEnd={endSwipe}
-          onTouchCancel={endSwipe}
-          title={passed ? `Balayez vers la gauche pour passer, vers la droite pour revenir (${passed} passée${passed > 1 ? 's' : ''})` : 'Balayez vers la gauche pour passer à la suite'}
-        >
-          {passed > 0 && (
-            <span className="swipe-passed" aria-label={`${passed} question${passed > 1 ? 's' : ''} passée${passed > 1 ? 's' : ''}`}>
-              {Array.from({ length: Math.min(passed, MAX_DOTS) }, (_, i) => <span key={i} className="dot-passed" />)}
-              {passed > MAX_DOTS && <span className="more">+{passed - MAX_DOTS}</span>}
-            </span>
-          )}
-          <span ref={handle} className="swipe-handle" aria-hidden="true" />
-          <span className="swipe-label muted">{passed ? '← passer · revenir →' : '← balayez pour passer'}</span>
-        </div>
-        <div className="drill-actions">
-          <button onClick={hint} disabled={!asking} title={hinted || revealed ? 'Jouer le coup attendu (compté comme aidé), puis la ligne continue' : 'Montrer la pièce à jouer'}>
-            {hinted || revealed ? '🏳 Solution' : '💡 Indice'}
-          </button>
-          <button onClick={toExplorer} title="Ouvrir cette position dans l’Explorer">
-            🧭 Explorer
-          </button>
-        </div>
+        <QuizLine moves={moves.slice(lineFrom.current)} firstPly={lineFrom.current} />
+        <SwipeBar onSkip={onSkip} onBack={onBack} passed={passed} />
+        <DrillActions
+          hinted={hinted || revealed}
+          disabled={!asking}
+          solutionTitle="Jouer le coup attendu (compté comme aidé), puis la ligne continue"
+          onHint={hint}
+          onExplorer={toExplorer}
+        />
       </div>
     </div>
   );

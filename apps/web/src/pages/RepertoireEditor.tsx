@@ -6,7 +6,7 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api, type Gap, type ImportResult, type Me, type RepertoireDetail, type StoredMove } from '../api';
 import { useMoveDrag, type DropTarget } from '../components/useMoveDrag';
-import { isPopular, OUTLINE_EXTRA, type ArrowKind } from '../components/arrows';
+import { OUTLINE_EXTRA, type ArrowKind } from '../components/arrows';
 import { EngineLines, EngineToggle } from '../components/EnginePanel';
 import { useEngine } from '../engine/useEngine';
 import { Board } from '../components/Board';
@@ -258,9 +258,20 @@ export function RepertoireEditor({ me }: { me: Me }) {
     return () => window.removeEventListener('beforeunload', warn);
   }, [hasDraft]);
 
+  /** Missing moves here (gap finder, "Coups manquants"): the opponent moves not prepared yet. */
+  const missingHere = useMemo(
+    () =>
+      new Set(
+        (gapReport.data?.[rep.color]?.gaps ?? [])
+          .filter((g) => g.repertoireId === id && g.fen === fen && g.move && !rep.has(fen, g.move.uci))
+          .map((g) => g.move!.uci),
+      ),
+    [gapReport.data, rep, id, fen],
+  );
+
   /**
-   * Arrows: green = move in the repertoire (thicker = more popular), orange = popular move
-   * (3%+ of games) that is not in the repertoire, or next move of the line not saved yet.
+   * Arrows: green = move in the repertoire (thicker = more popular), orange = missing move (gap
+   * finder) or next move of the line not saved yet.
    */
   const shapes = useMemo<DrawShape[]>(() => {
     const ed = explorer.data?.data;
@@ -285,17 +296,14 @@ export function RepertoireEditor({ me }: { me: Me }) {
       const saved = here.find((m) => m.uci === next.uci);
       out.push(arrow(next.uci, 'outline', w + OUTLINE_EXTRA), arrow(next.uci, !saved ? 'nextDraft' : saved.paused ? 'paused' : 'next', w));
     }
-    for (const [i, m] of (ed?.moves ?? []).entries()) {
-      const s = share.get(m.uci) ?? 0;
-      // Orange only for the opponent's moves: what others play on my turn is not a hole.
-      if (!rep.isMyTurn(fen) && isPopular(i, s) && !rep.has(fen, m.uci) && m.uci !== next?.uci) out.push(arrow(m.uci, 'popular', width(s)));
-    }
+    // Orange: the missing moves only (those of "Coups manquants").
+    for (const uci of missingHere) if (uci !== next?.uci) out.push(arrow(uci, 'popular', width(share.get(uci) ?? 0)));
     // Level under engine: wider, so both show when they agree.
     if (levelBest) out.push(arrow(levelBest.uci, 'level', 9));
     const best = engineOn ? engine.lines[0]?.pv[0] : undefined;
     if (best) out.push(arrow(best.uci, 'engine', 6));
     return out;
-  }, [explorer.data, rep, fen, here, engineOn, engine.lines[0]?.pv[0]?.uci, levelBest?.uci, options, selected]);
+  }, [explorer.data, rep, fen, here, engineOn, engine.lines[0]?.pv[0]?.uci, levelBest?.uci, options, selected, missingHere]);
 
   if (isLoading) return <p className="muted">Chargement…</p>;
   const colorReport = data ? gapReport.data?.[data.color] : undefined;
@@ -370,7 +378,7 @@ export function RepertoireEditor({ me }: { me: Me }) {
             error={explorer.error}
             loading={explorer.isLoading}
             onPick={play}
-            markPopular={!rep.isMyTurn(fen)}
+            isMissing={(uci) => missingHere.has(uci)}
             firstMoveNumber={ply}
             onPlay={playMoves}
             level={{
