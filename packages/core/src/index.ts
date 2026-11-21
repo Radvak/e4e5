@@ -9,3 +9,5 @@ export * from './gaps.js';
 export * from './bestMoves.js';
 export * from './fsrs.js';
 export * from './summary.js';
+export * from './zobrist.js';
+export * from './statsCodec.js';

@@ -24,6 +24,8 @@ const paths = {
   pencil: 'M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z',
   level: 'M5 20v-6M12 20V4M19 20v-10M3 20h18',
   search: 'M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM21 21l-4.35-4.35',
+  /** A board under a magnifier: the analysis (Lichess at my level + Stockfish). */
+  analysis: 'M3 3h11v11H3zM3 8.5h11M8.5 3v11M16 20a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM18.9 18.9 22 22',
   engine: 'M7 5h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2zM10 10h4v4h-4zM9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3',
 } as const;
 export type IconName = keyof typeof paths;

@@ -1,20 +1,26 @@
 import { playSanOn, playUci, positionFromFen, START_FEN, totalGames, type Color, type PlayedMove } from '@tabiya/core';
-import { useMutation, useQueries, useQuery } from '@tanstack/react-query';
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { DrawShape } from 'chessground/draw';
 import type { Key } from 'chessground/types';
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api, ApiError, type Me, type MyGameRef, type RepertoireMoveHere } from '../api';
 import { Board } from '../components/Board';
-import { EngineLines, EngineToggle } from '../components/EnginePanel';
+import { EngineLines, EvalBar } from '../components/EnginePanel';
 import { lineText, parseMoves } from '../components/lineText';
 import { useEngine } from '../engine/useEngine';
 import { useGaps } from '../useGaps';
-import { LEVEL_STEPS, LevelToggle, topLevelMove, useBestMoves, useLevelDepth, useLevelToggle } from '../components/BestMoves';
+import { LEVEL_STEPS, topLevelMove, useBestMoves, useLevelDepth } from '../components/BestMoves';
 import { ExplorerPanel } from '../components/ExplorerPanel';
+import { AnalysisToggle, ToolCards, useAnalysisToggle } from '../components/ToolCards';
 import { MoveTable } from '../components/MoveTable';
 import { San } from '../components/Nag';
 import { OpeningName } from '../components/OpeningName';
+import { PausedZoneHeader } from '../components/PausedZoneHeader';
+import { useMoveDrag, type DropTarget } from '../components/useMoveDrag';
+import { useLongPress } from '../components/useLongPress';
+import { MoveActionsDialog } from '../components/MoveActionsDialog';
+import { useFlip } from '../components/useFlip';
 import { explorerParams, rangeLabel, speedsLabel, useSettings } from '../settings';
 import { Icon, PageHeader } from '../ui';
 
@@ -107,13 +113,18 @@ export function Explorer({ me }: { me: Me }) {
   };
 
   const repMoves = useQuery({ queryKey: ['explorer-reps', fen], queryFn: () => api.repertoireMovesAt(fen) });
+  // The repertoires containing the position on the board (listed under the line).
+  const posReps = useQuery({ queryKey: ['explorer-pos-reps', fen], queryFn: () => api.positionRepertoires(fen) });
   // Annotations of the moves of the line (from my repertoires): the moves of each position of the
   // line, same queries as above (cached), so going back and forth costs nothing.
   const pathPositions = useQueries({
     queries: line.map((m) => ({ queryKey: ['explorer-reps', m.fromFen], queryFn: () => api.repertoireMovesAt(m.fromFen), staleTime: 60_000 })),
   });
   const pathNags = line.map((m, i) => pathPositions[i]?.data?.find((r) => r.uci === m.uci && r.nags?.length)?.nags ?? null);
-  const [levelOn, toggleLevel] = useLevelToggle();
+  // One button for the analysis: Lichess at my level and Stockfish both run (ToolCards).
+  const [analysisOn, toggleAnalysis] = useAnalysisToggle();
+  const levelOn = analysisOn;
+  const engineOn = analysisOn;
   const lichess = useQuery({
     queryKey: ['explorer', fen, ex.speeds, ex.ratings],
     queryFn: () => api.explorer(fen, ex.speeds, ex.ratings),
@@ -130,19 +141,16 @@ export function Explorer({ me }: { me: Me }) {
     staleTime: 60_000,
   });
 
-  // Stockfish, with the same on/off setting as the repertoire editor.
-  const [engineOn, setEngineOn] = useState(() => localStorage.getItem('engine') === 'on');
-  const toggleEngine = (on: boolean) => {
-    localStorage.setItem('engine', on ? 'on' : 'off');
-    setEngineOn(on);
-  };
   const engine = useEngine(fen, engineOn);
   const best = engineOn ? engine.lines[0]?.pv[0] : undefined;
   // Moves at my level for the side to move (Lichess explorer), only when asked: the violet card.
   const [levelDepth, onDepth] = useLevelDepth();
   const depth = levelOn ? levelDepth : 0;
-  const level = useBestMoves(fen, ex.speeds, ex.ratings, depth > 0, depth);
-  const levelBest = depth > 0 ? topLevelMove(level.data) : undefined;
+  // My side is the board's orientation: scores from it, and the search at my level on my turn only
+  // (as in the repertoire editor); on the opponent's turn, the score of each move's games for me.
+  const myTurn = (fen.split(' ')[1] === 'b' ? 'black' : 'white') === orientation;
+  const level = useBestMoves(fen, ex.speeds, ex.ratings, depth > 0 && myTurn, depth);
+  const levelBest = depth > 0 && myTurn ? topLevelMove(level.data) : undefined;
   /** Plays an engine line from the current position (follows the line when it matches). */
   const playMoves = (moves: PlayedMove[]) => {
     const follows = moves.every((m, i) => line[ply + i]?.uci === m.uci);
@@ -153,7 +161,77 @@ export function Explorer({ me }: { me: Me }) {
   // The arrows (popular moves) follow the Lichess players of my level.
   const data = lichess.data?.data;
   const prepared = useMemo(() => groupByMove(repMoves.data ?? []), [repMoves.data]);
-  const turn: Color = fen.split(' ')[1] === 'b' ? 'black' : 'white';
+  // The next moves in their order: the main one first, then the others trained, then the paused ones
+  // (paused in every repertoire playing them). Main: one of my moves (the moves to remember, in the
+  // repertoires of the side to move), main in each of them; an opponent's reply in my repertoires
+  // of the other colour is never "main".
+  const toMove: Color = fen.split(' ')[1] === 'b' ? 'black' : 'white';
+  /** The repertoires where this move is mine (side to move), trained. */
+  const mineOf = (g: { reps: RepertoireMoveHere[] }) => g.reps.filter((r) => r.color === toMove && !r.paused);
+  const nextMoves = useMemo(() => {
+    const all = [...prepared.values()].map((g) => {
+      const mine = g.reps.filter((r) => r.color === toMove && !r.paused);
+      return { ...g, main: mine.length > 0 && mine.every((r) => r.isMain), paused: g.reps.every((r) => r.paused) };
+    });
+    return [...all.filter((g) => !g.paused && g.main), ...all.filter((g) => !g.paused && !g.main), ...all.filter((g) => g.paused)];
+  }, [prepared, toMove]);
+  const qc = useQueryClient();
+  /**
+   * Main and paused moves, set by dragging the next moves (as in the editor), in every repertoire
+   * playing the move. Shown at once (rules of the server), then reloaded.
+   */
+  const arrange = useMutation({
+    mutationFn: async (patches: RowPatch[]) => {
+      for (const p of patches) await api.updateMove(p.r.repertoireId, p.r.id, p.patch);
+    },
+    onMutate: (patches) => {
+      qc.setQueryData<RepertoireMoveHere[]>(['explorer-reps', fen], (rows) => rows && patches.reduce(applyRowPatch, rows));
+    },
+    onSettled: (_data, _error, patches) =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: ['explorer-reps'] }),
+        ...[...new Set(patches.map((p) => p.r.repertoireId))].map((id) => qc.invalidateQueries({ queryKey: ['repertoire', id] })),
+        qc.invalidateQueries({ queryKey: ['gaps'] }),
+        qc.invalidateQueries({ queryKey: ['repertoires'] }),
+      ]),
+  });
+  /** A next move dropped: on top, main; in the paused zone, paused; out of it, trained again. */
+  const dropMove = (index: number, target: DropTarget) => {
+    const g = nextMoves[index];
+    if (!g) return;
+    const active = nextMoves.filter((x) => !x.paused);
+    if (target.zone === 'paused') {
+      if (!g.paused) arrange.mutate(g.reps.filter((r) => !r.paused).map((r) => ({ r, patch: { paused: true } })));
+    } else if (target.index === 0) {
+      // Main: only in the repertoires where the move is mine.
+      if (g.paused || !g.main) arrange.mutate(g.reps.filter((r) => r.color === toMove || r.paused).map((r) => ({ r, patch: r.color === toMove ? { isMain: true } : { paused: false } })));
+    } else if (g.paused) {
+      arrange.mutate(g.reps.filter((r) => r.paused).map((r) => ({ r, patch: { paused: false } })));
+    } else if (active[0] === g && active[1]) {
+      // The main move dropped lower: the move now on top becomes the main one.
+      arrange.mutate(mineOf(active[1]).map((r) => ({ r, patch: { isMain: true } })));
+    }
+  };
+  const { listRef, drag, handle } = useMoveDrag(dropMove);
+  // A long press on a next move (right click with a mouse): its actions, in every repertoire
+  // playing it (pause; delete, with what only follows it).
+  const longPress = useLongPress();
+  const [acting, setActing] = useState<(typeof nextMoves)[number] | null>(null);
+  // The moves slide to their new place (paused: down into the paused zone; main: up).
+  useFlip(listRef);
+  const removeMove = useMutation({
+    mutationFn: async (rows: RepertoireMoveHere[]) => {
+      for (const r of rows) await api.deleteMove(r.repertoireId, r.id);
+    },
+    onSettled: (_data, _error, rows) =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: ['explorer-reps'] }),
+        qc.invalidateQueries({ queryKey: ['explorer-pos-reps'] }),
+        ...[...new Set(rows.map((r) => r.repertoireId))].map((id) => qc.invalidateQueries({ queryKey: ['repertoire', id] })),
+        qc.invalidateQueries({ queryKey: ['gaps'] }),
+        qc.invalidateQueries({ queryKey: ['repertoires'] }),
+      ]),
+  });
   // Missing moves here (gap finder, any repertoire): the opponent moves not prepared yet, in orange.
   const gaps = useGaps(me);
   const missingHere = useMemo(
@@ -197,8 +275,7 @@ export function Explorer({ me }: { me: Me }) {
       if (e.key === 'Home') goTo(0);
       if (e.key === 'End') goTo(line.length);
       if (e.key === 'f') flip();
-      if (e.key === 'e') toggleEngine(!engineOn);
-      if (e.key === 'n') toggleLevel(!levelOn);
+      if (e.key === 'a' || e.key === 'e' || e.key === 'n') toggleAnalysis(!analysisOn);
       if (e.key === '/') {
         e.preventDefault();
         setEditing(true);
@@ -246,49 +323,63 @@ export function Explorer({ me }: { me: Me }) {
     <div className="editor">
       <div className="editor-board">
         <OpeningName ucis={shown.map((m) => m.uci)} />
-        <Board fen={fen} orientation={orientation} lastMove={last?.uci} shapes={shapes} onMove={play} />
+        <div className="board-row">
+          {/* Always there (empty when the engine is off): toggling it does not resize the board. */}
+          <EvalBar line={engineOn ? engine.lines[0] : undefined} orientation={orientation} off={!engineOn} />
+          <Board fen={fen} orientation={orientation} lastMove={last?.uci} shapes={shapes} onMove={play} />
+        </div>
         <div className="nav">
           <button onClick={() => goTo(0)} title="Début (Origine)">⏮</button>
           <button onClick={() => goTo(ply - 1)} title="Reculer (←)">◀</button>
           <button onClick={() => goTo(ply + 1)} title="Avancer (→)">▶</button>
           <button onClick={() => goTo(line.length)} title="Fin de la ligne (Fin)">⏭</button>
           <button onClick={flip} title="Retourner l’échiquier (f)">⇅</button>
-          <EngineToggle enabled={engineOn} onToggle={toggleEngine} />
-          <LevelToggle enabled={levelOn} onToggle={toggleLevel} />
+          <AnalysisToggle enabled={analysisOn} onToggle={toggleAnalysis} />
         </div>
-        <EngineLines
-          enabled={engineOn}
-          lines={engine.lines}
-          depth={engine.depth}
-          maxDepth={engine.maxDepth}
-          firstMoveNumber={ply}
-          onPlay={playMoves}
+        {/* The two tools in swipeable cards, one in view at a time (ToolCards). */}
+        {analysisOn && (
+        <ToolCards
+          engine={
+            (
+              <EngineLines
+                enabled={engineOn}
+                lines={engine.lines}
+                depth={engine.depth}
+                maxDepth={engine.maxDepth}
+                firstMoveNumber={ply}
+                onPlay={playMoves}
+              />
+            )
+          }
+          level={
+            (
+            <ExplorerPanel
+              fen={fen}
+              color={orientation}
+              inRep={(uci) => prepared.has(uci)}
+              nagsOf={(uci) => prepared.get(uci)?.nags}
+              stats={lichess.data}
+              error={lichess.error}
+              loading={lichess.isLoading}
+              onPick={play}
+              isMissing={isMissing}
+              firstMoveNumber={ply}
+              onPlay={playMoves}
+              level={{
+                data: level.data,
+                loading: level.isLoading,
+                error: level.error,
+                depth,
+                maxDepth: LEVEL_STEPS,
+                onDepth,
+                canSearch: myTurn,
+                range: rangeLabel(ex.ratings),
+                engineBest: best?.uci,
+              }}
+            />
+            )
+          }
         />
-        {levelOn && (
-          <ExplorerPanel
-            fen={fen}
-            color={turn}
-            inRep={(uci) => prepared.has(uci)}
-            nagsOf={(uci) => prepared.get(uci)?.nags}
-            stats={lichess.data}
-            error={lichess.error}
-            loading={lichess.isLoading}
-            onPick={play}
-            isMissing={isMissing}
-            firstMoveNumber={ply}
-            onPlay={playMoves}
-            level={{
-              data: level.data,
-              loading: level.isLoading,
-              error: level.error,
-              depth,
-              maxDepth: LEVEL_STEPS,
-              onDepth,
-              canSearch: true,
-              range: rangeLabel(ex.ratings),
-              engineBest: best?.uci,
-            }}
-          />
         )}
       </div>
 
@@ -321,33 +412,90 @@ export function Explorer({ me }: { me: Me }) {
               </button>
             </div>
           )}
-          {/* The moves of my repertoires here, numbered as the next move of the line. */}
-          {repMoves.data && prepared.size === 0 && <p className="muted small-text rep-none">Aucun répertoire n’a de coup ici.</p>}
-          <ul className="rep-moves">
-            {[...prepared.values()].map(({ san, uci, nags, reps }) => (
-              <li key={uci} className="rep-here">
-                <button className="link san" onClick={() => play(uci)}>
-                  <span className="move-num">{ply % 2 === 0 ? `${ply / 2 + 1}.` : `${(ply + 1) / 2}…`}</span>
-                  <San san={san} nags={nags} />
-                </button>
-                {/* One line per move: its repertoires side by side, scrolled sideways when they overflow. */}
-                <span className="rep-tags">
-                  {reps.map((r) => (
-                    <Link
-                      key={r.repertoireId}
-                      className="rep-tag"
-                      to={`/r/${r.repertoireId}?${new URLSearchParams({ line: ucis([...shown, playUci(fen, uci)!]) })}`}
-                      title={`Ouvrir ${r.name} sur ce coup${r.comment ? ` — ${r.comment}` : ''}`}
+          {/* The repertoires containing the position on the board (a link opens each one here). */}
+          {posReps.data && posReps.data.length === 0 && <p className="muted small-text rep-none">Aucun répertoire ne contient cette position.</p>}
+          {posReps.data && posReps.data.length > 0 && (
+            <div className="rep-tags rep-at">
+              {[...posReps.data].sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' })).map((r) => (
+                <Link
+                  key={r.repertoireId}
+                  className="rep-tag"
+                  to={`/r/${r.repertoireId}${shown.length ? `?${new URLSearchParams({ line: ucis(shown) })}` : ''}`}
+                  title={`Ouvrir ${r.name} sur cette position${r.moves ? ` (${r.moves} coup${r.moves > 1 ? 's' : ''} préparé${r.moves > 1 ? 's' : ''} ici)` : ' (fin de sa ligne)'}`}
+                >
+                  <span className={`dot inline ${r.color}`} /> {r.name}
+                </Link>
+              ))}
+            </div>
+          )}
+          {/* The next moves of my repertoires here: annotation colour, comment; a click anywhere on the row plays the move.
+              The grip: drag on top to make it main, into the paused zone to pause it (as in the editor). */}
+          {nextMoves.length > 0 && (
+            <ul className={`rep-moves next-moves ${drag ? 'dragging-list' : ''}`} ref={listRef}>
+              {nextMoves.map((g, i) => {
+                const zone = g.paused ? 'paused' : 'active';
+                // Drop indicator: a line before the row the dragged move would land before.
+                const others = nextMoves.filter((x, k) => (x.paused ? 'paused' : 'active') === zone && k !== drag?.id);
+                const rank = others.indexOf(g);
+                const dropBefore = !!drag && drag.id !== i && drag.zone === 'active' && zone === 'active' && rank === drag.index;
+                const dropAfter = !!drag && drag.id !== i && drag.zone === 'active' && zone === 'active' && rank === others.length - 1 && drag.index === others.length;
+                // One comment per text (the same move commented in several repertoires).
+                const comments = [...new Map(g.reps.filter((r) => r.comment).map((r) => [r.comment!, r])).values()];
+                return (
+                  <Fragment key={g.uci}>
+                    {i === nextMoves.findIndex((x) => x.paused) && (
+                      <PausedZoneHeader target={drag?.zone === 'paused'} dropAbove={drag?.zone === 'active' && !nextMoves.some((x, k) => !x.paused && k !== drag.id)} />
+                    )}
+                    <li
+                      data-zone={zone}
+                      data-id={i}
+                      data-flip={`${fen}|${g.uci}`}
+                      className={['next-move', 'clickable', g.paused ? 'paused' : '', drag?.id === i ? 'dragging' : '', dropBefore ? 'drop-before' : '', dropAfter ? 'drop-after' : '']
+                        .filter(Boolean)
+                        .join(' ')}
+                      style={drag?.id === i ? { transform: `translateY(${drag.dy}px)` } : undefined}
+                      title={`Jouer ${g.san} (${g.reps.map((r) => r.name).join(', ')}) · appui long : mettre en pause, supprimer`}
+                      onClick={() => play(g.uci)}
+                      {...longPress(() => setActing(g))}
                     >
-                      <span className={`dot inline ${r.color}`} /> {r.name}
-                    </Link>
-                  ))}
-                </span>
-              </li>
-            ))}
-          </ul>
+                      <div className="move-main">
+                        <button className="link san">
+                          <span className="move-num">{ply % 2 === 0 ? `${ply / 2 + 1}.` : `${(ply + 1) / 2}…`}</span>
+                          <San san={g.san} nags={g.nags} />
+                        </button>
+                        {g.main && nextMoves.filter((x) => !x.paused).length > 1 && <span className="badge">principal</span>}
+                        {comments.map((r) => (
+                          <div key={r.repertoireId} className="comment move-comment">
+                            {comments.length > 1 && <span className="muted">{r.name} : </span>}
+                            {r.comment}
+                          </div>
+                        ))}
+                      </div>
+                      <span className="grip" title="Glisser : en haut, coup principal ; en bas, en pause" {...handle(i)}>
+                        <Icon name="grip" size={16} />
+                      </span>
+                    </li>
+                  </Fragment>
+                );
+              })}
+              {drag && !nextMoves.some((x) => x.paused) && (
+                <PausedZoneHeader target={drag.zone === 'paused'} dropAbove={drag.zone === 'active' && !nextMoves.some((_, k) => k !== drag.id)} />
+              )}
+            </ul>
+          )}
+          {acting && (
+            <MoveActionsDialog
+              san={acting.san}
+              nags={acting.nags}
+              paused={acting.paused}
+              where="de tous les répertoires"
+              onPause={(pause) => arrange.mutate(acting.reps.filter((r) => r.paused !== pause).map((r) => ({ r, patch: { paused: pause } })))}
+              onDelete={() => removeMove.mutate(acting.reps)}
+              onClose={() => setActing(null)}
+            />
+          )}
           <p className="muted small-text keys">
-            <kbd>←</kbd><kbd>→</kbd> naviguer · <kbd>f</kbd> retourner · <kbd>e</kbd> moteur · <kbd>n</kbd> à votre niveau · <kbd>/</kbd> taper une ligne (ou collez-la)
+            <kbd>←</kbd><kbd>→</kbd> naviguer · <kbd>f</kbd> retourner · <kbd>a</kbd> analyse · <kbd>/</kbd> taper une ligne (ou collez-la)
           </p>
         </section>
 
@@ -372,6 +520,7 @@ export function Explorer({ me }: { me: Me }) {
           {mine.data && (
             <MoveTable
               data={mine.data.data}
+              color={orientation}
               inRep={(uci) => prepared.has(uci)}
               nagsOf={(uci) => prepared.get(uci)?.nags}
               onPick={play}
@@ -478,4 +627,19 @@ function LineInput({ initial, onJump, onCancel }: { initial: string; onJump: (mo
       {error && <span className="error small-text">Coups illégaux ou mal écrits (exemple : 1. e4 c5 2. Nf3).</span>}
     </form>
   );
+}
+
+/** A main / paused change of one move of a repertoire (PATCH of the move). */
+type RowPatch = { r: RepertoireMoveHere; patch: { isMain?: boolean; paused?: boolean } };
+
+/** The change applied to the moves of the position, by the rules of the server, per repertoire. */
+function applyRowPatch(rows: RepertoireMoveHere[], { r, patch }: RowPatch): RepertoireMoveHere[] {
+  const sameRep = (x: RepertoireMoveHere) => x.repertoireId === r.repertoireId;
+  if (patch.isMain) return rows.map((x) => (x.id === r.id ? { ...x, isMain: true, paused: false } : sameRep(x) ? { ...x, isMain: false } : x));
+  if (patch.paused) {
+    const wasMain = rows.find((x) => x.id === r.id)?.isMain;
+    const heir = wasMain ? rows.find((x) => sameRep(x) && x.id !== r.id && !x.paused) : undefined;
+    return rows.map((x) => (x.id === r.id ? { ...x, isMain: false, paused: true } : x === heir ? { ...x, isMain: true } : x));
+  }
+  return rows.map((x) => (x.id === r.id ? { ...x, ...patch } : x));
 }

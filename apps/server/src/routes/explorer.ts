@@ -1,5 +1,5 @@
 import { fenKey, positionFromFen, RATING_BUCKETS } from '@tabiya/core';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, or, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireUser } from '../auth.js';
@@ -103,6 +103,8 @@ export async function explorerRoutes(app: FastifyInstance) {
         repertoireId: repertoires.id,
         name: repertoires.name,
         color: repertoires.color,
+        id: repMoves.id,
+        paused: repMoves.paused,
         uci: repMoves.uci,
         san: repMoves.san,
         isMain: repMoves.isMain,
@@ -112,6 +114,27 @@ export async function explorerRoutes(app: FastifyInstance) {
       .from(repMoves)
       .innerJoin(repertoires, eq(repMoves.repertoireId, repertoires.id))
       .where(and(eq(repertoires.userId, req.user!.id), eq(repMoves.fromFen, fen)));
+  });
+
+  /**
+   * The repertoires containing this position (reached by one of their moves, or with moves from
+   * it: the initial position), with the number of their moves from here (0: end of their line).
+   */
+  app.get('/api/explorer/position-repertoires', { preHandler: requireUser }, async (req, reply) => {
+    const fen = parseFen(z.object({ fen: z.string().min(10).max(120) }).parse(req.query).fen);
+    if (!fen) return reply.code(400).send({ error: 'FEN invalide' });
+    return db
+      .select({
+        repertoireId: repertoires.id,
+        name: repertoires.name,
+        color: repertoires.color,
+        moves: sql<number>`sum(case when ${repMoves.fromFen} = ${fen} then 1 else 0 end)`,
+      })
+      .from(repMoves)
+      .innerJoin(repertoires, eq(repMoves.repertoireId, repertoires.id))
+      .where(and(eq(repertoires.userId, req.user!.id), or(eq(repMoves.fromFen, fen), eq(repMoves.toFen, fen))))
+      .groupBy(repertoires.id)
+      .orderBy(repertoires.name);
   });
 
 }

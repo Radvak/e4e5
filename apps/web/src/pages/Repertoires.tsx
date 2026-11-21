@@ -1,12 +1,13 @@
 import { START_FEN, type Color } from '@tabiya/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api, type Me, type RepertoireSummary, type TrainingSummary } from '../api';
 import { useTrainingSummary } from '../useTrainingSummary';
 import { Button, EmptyState, Icon, PageHeader, Switch, Tabs, plural } from '../ui';
 import { useGaps } from '../useGaps';
 import { lineText } from '../chessText';
+import { useLongPress } from '../components/useLongPress';
 import { MiniBoard } from '../components/MiniBoard';
 
 const COLORS: { color: Color; label: string }[] = [
@@ -248,45 +249,7 @@ function RepertoireRow({ rep, counts, missing, firstGap }: {
     if (confirm(`Supprimer le répertoire « ${rep.name} » et tous ses coups ?`)) remove.mutate();
   };
   // Long press (touch) or right click (mouse) offers to delete the repertoire.
-  // The click that ends a long press is swallowed so the row does not open.
-  const press = useRef<{ timer: number; x: number; y: number } | null>(null);
-  const fired = useRef(false);
-  const cancelPress = () => {
-    if (press.current) clearTimeout(press.current.timer);
-    press.current = null;
-  };
-  const onTouchStart = (e: React.TouchEvent) => {
-    fired.current = false;
-    const t = e.touches[0];
-    cancelPress();
-    if (!t || e.touches.length > 1) return;
-    press.current = {
-      x: t.clientX,
-      y: t.clientY,
-      timer: window.setTimeout(() => {
-        press.current = null;
-        fired.current = true;
-        navigator.vibrate?.(15);
-        askDelete();
-      }, 550),
-    };
-  };
-  const onTouchMove = (e: React.TouchEvent) => {
-    const t = e.touches[0];
-    if (t && press.current && Math.hypot(t.clientX - press.current.x, t.clientY - press.current.y) > 10) cancelPress();
-  };
-  const onClickCapture = (e: React.MouseEvent) => {
-    if (!fired.current) return;
-    fired.current = false;
-    e.preventDefault();
-    e.stopPropagation();
-  };
-  const onContextMenu = (e: React.MouseEvent) => {
-    e.preventDefault();
-    // On touch screens the long press timer already asked (Android also fires contextmenu).
-    if (fired.current || press.current) return;
-    askDelete();
-  };
+  const longPress = useLongPress();
   const arrows = (rep.branches ?? []).map((uci) => ({ uci, kind: 'repertoire' as const }));
   // The whole row opens the repertoire; the switch stops the click.
   const stop = (e: React.MouseEvent) => e.stopPropagation();
@@ -298,12 +261,7 @@ function RepertoireRow({ rep, counts, missing, firstGap }: {
     <div
       className={`rep-row ${rep.active ? '' : 'paused'}`}
       onClick={() => navigate(`/r/${rep.id}`)}
-      onClickCapture={onClickCapture}
-      onTouchStart={onTouchStart}
-      onTouchMove={onTouchMove}
-      onTouchEnd={cancelPress}
-      onTouchCancel={cancelPress}
-      onContextMenu={onContextMenu}
+      {...longPress(askDelete)}
     >
       <div className="rep-thumb" title={rep.trunk?.length ? lineText(rep.trunk) : 'Position initiale'}>
         <MiniBoard fen={rep.trunkFen ?? START_FEN} orientation={rep.color} arrows={arrows} />

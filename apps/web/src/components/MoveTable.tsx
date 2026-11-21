@@ -1,7 +1,8 @@
-import { totalGames, type ExplorerResponse } from '@tabiya/core';
+import { totalGames, type Color, type ExplorerResponse } from '@tabiya/core';
 import { Fragment, useState, type ReactNode } from 'react';
 import { Icon } from '../ui';
 import { San } from './Nag';
+import { WdlBar } from './WdlBar';
 
 function pct(n: number, total: number) {
   return total ? (100 * n) / total : 0;
@@ -12,7 +13,7 @@ function pct(n: number, total: number) {
  * `limit`: only the most played moves, plus the repertoire moves played less often. `detail`: what
  * a row unfolds into (chevron), e.g. the games with that move.
  */
-export function MoveTable({ data, inRep, nagsOf, onPick, limit, missing, detail }: { data: ExplorerResponse; inRep: (uci: string) => boolean; nagsOf?: (uci: string) => readonly number[] | null | undefined; onPick: (uci: string) => void; limit?: number; missing?: (uci: string) => boolean; detail?: (uci: string) => ReactNode }) {
+export function MoveTable({ data, color = 'white', inRep, nagsOf, onPick, limit, missing, detail }: { data: ExplorerResponse; /** My side (the board's orientation): the bars from it. */ color?: Color; inRep: (uci: string) => boolean; nagsOf?: (uci: string) => readonly number[] | null | undefined; onPick: (uci: string) => void; limit?: number; missing?: (uci: string) => boolean; detail?: (uci: string) => ReactNode }) {
   const [open, setOpen] = useState<string | null>(null);
   const total = totalGames(data);
   if (total === 0) return <p className="muted">Aucune partie dans cette position.</p>;
@@ -41,11 +42,7 @@ export function MoveTable({ data, inRep, nagsOf, onPick, limit, missing, detail 
                 <span className="share">({pct(n, total).toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} %)</span>
               </td>
               <td className="wdl">
-                <div className="bar" title={`Blancs ${pct(m.white, n).toFixed(0)} % · nulles ${pct(m.draws, n).toFixed(0)} % · Noirs ${pct(m.black, n).toFixed(0)} %`}>
-                  <span className="w" style={{ width: `${pct(m.white, n)}%` }} />
-                  <span className="d" style={{ width: `${pct(m.draws, n)}%` }} />
-                  <span className="b" style={{ width: `${pct(m.black, n)}%` }} />
-                </div>
+                <WdlBar white={m.white} draws={m.draws} black={m.black} color={color} />
               </td>
               {detail && (
                 <td className="unfold-col" onClick={(e) => e.stopPropagation()}>

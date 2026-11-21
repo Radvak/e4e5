@@ -3,7 +3,9 @@
  * look and work the same: the line of the quiz, the swipe bar, the end-of-line badge and the
  * Indice / Solution and Explorer buttons.
  */
-import type { RepMove } from '@tabiya/core';
+import type { Color, RepMove } from '@tabiya/core';
+import { useQuery } from '@tanstack/react-query';
+import { api } from '../api';
 import { useLayoutEffect, useRef } from 'react';
 import { San } from '../components/Nag';
 
@@ -140,4 +142,14 @@ export function DrillActions({
       </button>
     </div>
   );
+}
+
+/**
+ * My moves in a position in all my repertoires of `color` (not only the one trained): a move of
+ * another repertoire played in training is right too (an alternative), not a mistake. Fetched
+ * with the question (same data as the Explorer's "in your repertoires").
+ */
+export function useMyMovesHere(fen: string | undefined, color: Color) {
+  const q = useQuery({ queryKey: ['explorer-reps', fen], queryFn: () => api.repertoireMovesAt(fen!), enabled: !!fen, staleTime: 60_000 });
+  return (uci: string) => q.data?.find((r) => r.uci === uci && r.color === color && !r.paused);
 }

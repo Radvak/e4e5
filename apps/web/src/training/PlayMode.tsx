@@ -9,7 +9,7 @@ import { Board } from '../components/Board';
 import { OpeningName } from '../components/OpeningName';
 import { AnswerTimer, useAnswerClock } from './AnswerTimer';
 import { answerArrows, REPLY_MS } from './common';
-import { DrillActions, LineDone, QuizLine, SwipeBar } from './DrillParts';
+import { DrillActions, LineDone, QuizLine, SwipeBar, useMyMovesHere } from './DrillParts';
 import { outcomeOf } from './Feedback';
 import type { Source } from './useTrainingSources';
 
@@ -161,6 +161,7 @@ export function PlayMode({
   }, [line?.phase]);
 
   const answers = line && line.phase === 'ask' ? line.source.rep.movesAt(line.fen) : [];
+  const elsewhere = useMyMovesHere(line?.phase === 'ask' ? line.fen : undefined, line?.source.color ?? 'white');
 
   // While I think, fetch the statistics of the positions my answers lead to.
   useEffect(() => {
@@ -171,6 +172,8 @@ export function PlayMode({
   const play = (uci: string, helped = false) => {
     if (!line || line.phase !== 'ask') return;
     const answer = answers.find((m) => m.uci === uci);
+    // A move of mine put on pause, or of another of my repertoires: not a mistake, try again.
+    if (!answer && (line.source.pausedAt(line.fen).some((m) => m.uci === uci) || elsewhere(uci))) return 'retry';
     if (!answer) {
       setLine({ ...line, mistakes: line.mistakes + 1, revealed: line.revealed || line.mistakes + 1 >= 2 });
       return false;

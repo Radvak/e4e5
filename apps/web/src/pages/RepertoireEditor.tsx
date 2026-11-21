@@ -5,17 +5,22 @@ import type { Key } from 'chessground/types';
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api, type Gap, type ImportResult, type Me, type RepertoireDetail, type StoredMove } from '../api';
+import { PausedZoneHeader } from '../components/PausedZoneHeader';
 import { useMoveDrag, type DropTarget } from '../components/useMoveDrag';
+import { useLongPress } from '../components/useLongPress';
+import { MoveActionsDialog } from '../components/MoveActionsDialog';
+import { useFlip } from '../components/useFlip';
 import { OUTLINE_EXTRA, type ArrowKind } from '../components/arrows';
-import { EngineLines, EngineToggle } from '../components/EnginePanel';
+import { EngineLines, EvalBar } from '../components/EnginePanel';
 import { useEngine } from '../engine/useEngine';
 import { Board } from '../components/Board';
-import { San } from '../components/Nag';
+import { MOVE_NAGS, moveNag, San } from '../components/Nag';
 import { ExplorerPanel } from '../components/ExplorerPanel';
+import { AnalysisToggle, ToolCards, useAnalysisToggle } from '../components/ToolCards';
 import { explorerParams, rangeLabel, useSettings } from '../settings';
-import { LEVEL_STEPS, LevelToggle, topLevelMove, useBestMoves, useLevelDepth, useLevelToggle } from '../components/BestMoves';
+import { LEVEL_STEPS, topLevelMove, useBestMoves, useLevelDepth } from '../components/BestMoves';
 import { Suggestions } from '../components/Suggestions';
-import { Button, Icon, Menu, PageHeader, plural } from '../ui';
+import { Button, Icon, PageHeader, plural } from '../ui';
 import { useGaps } from '../useGaps';
 
 
@@ -146,8 +151,21 @@ export function RepertoireEditor({ me }: { me: Me }) {
     }
   };
   const { listRef, drag, handle } = useMoveDrag(dropMove);
+  // A long press on a move (right click with a mouse): its actions (pause, delete).
+  const longPress = useLongPress();
+  const [acting, setActing] = useState<StoredMove | null>(null);
+  // The moves slide to their new place (paused: down into the paused zone; main: up).
+  useFlip(listRef);
   const setComment = useMutation({
     mutationFn: ({ m, comment }: { m: StoredMove; comment: string }) => api.updateMove(id, m.id, { comment: comment || null }),
+    onSuccess: refresh,
+  });
+  /** The move's annotation (!, ?, !!…; null: none); its other NAGs (positions, ±…) are kept. */
+  const setNag = useMutation({
+    mutationFn: ({ m, nag }: { m: StoredMove; nag: number | null }) => {
+      const nags = [...(m.nags ?? []).filter((n) => !(n in MOVE_NAGS)), ...(nag ? [nag] : [])];
+      return api.updateMove(id, m.id, { nags: nags.length ? nags : null });
+    },
     onSuccess: refresh,
   });
 
@@ -169,23 +187,18 @@ export function RepertoireEditor({ me }: { me: Me }) {
     [line, ply, fen],
   );
 
-  /** Next move: the line's, else the repertoire main line. */
   /**
-   * Next moves to choose from with the keyboard: the line's next move if it is not saved yet,
-   * then the repertoire moves (main first). ↑/↓ change the choice, → plays it.
+   * The next moves: the line's next move if it is not saved yet, then the repertoire moves (main
+   * first). → plays the line's next move, else the main one (outlined on the board).
    */
   const options: PlayedMove[] = useMemo(() => {
     const next = line[ply];
     const draft = next && !here.some((m) => m.uci === next.uci) ? [next] : [];
     return [...draft, ...here];
   }, [line, ply, here]);
-  const [choice, setChoice] = useState<{ fen: string; index: number } | null>(null);
-  const defaultChoice = Math.max(0, options.findIndex((m) => m.uci === line[ply]?.uci));
-  const selected = choice && choice.fen === fen ? Math.min(choice.index, options.length - 1) : defaultChoice;
-  const choose = (delta: number) => {
-    if (options.length < 2) return;
-    setChoice({ fen, index: (selected + delta + options.length) % options.length });
-  };
+  const selected = Math.max(0, options.findIndex((m) => m.uci === line[ply]?.uci));
+  /** Number of the next move, as in the line ("2." for White, "2…" for Black). */
+  const moveNumber = ply % 2 === 0 ? `${ply / 2 + 1}.` : `${(ply + 1) / 2}…`;
 
   const forward = useCallback(() => {
     const move = options[selected];
@@ -213,17 +226,12 @@ export function RepertoireEditor({ me }: { me: Me }) {
     setPly(moves.length);
   };
 
-  const [engineOn, setEngineOn] = useState(() => localStorage.getItem('engine') === 'on');
-  const toggleEngine = (on: boolean) => {
-    localStorage.setItem('engine', on ? 'on' : 'off');
-    setEngineOn(on);
-  };
+  // One button for the analysis (on for the browser session only): Lichess at my level (only on my
+  // turn; its box follows the likely lines or not) and Stockfish both run, in ToolCards.
+  const [analysisOn, toggleAnalysis] = useAnalysisToggle();
+  const levelOn = analysisOn;
+  const engineOn = analysisOn;
   const engine = useEngine(fen, engineOn);
-  // Moves at my level (Lichess explorer): only on my turn, and only when asked (many requests).
-  // The toggle (on for the browser session only) shows the statistics card under the board, like
-  // the engine's; its box follows the likely lines or not (kept on this device; off: the moves' own
-  // win rates, no search).
-  const [levelOn, toggleLevel] = useLevelToggle();
   const [levelDepth, onDepth] = useLevelDepth();
   const depth = levelOn ? levelDepth : 0;
   const myTurn = rep.isMyTurn(fen);
@@ -236,12 +244,9 @@ export function RepertoireEditor({ me }: { me: Me }) {
       if (e.key.startsWith('Arrow')) e.preventDefault(); // no page scroll
       if (e.key === 'ArrowLeft') goTo(ply - 1);
       if (e.key === 'ArrowRight') forward();
-      if (e.key === 'ArrowDown') choose(1);
-      if (e.key === 'ArrowUp') choose(-1);
       if (e.key === 'Home') goTo(0);
       if (e.key === 'End') goTo(line.length);
-      if (e.key === 'e') toggleEngine(!engineOn);
-      if (e.key === 'n') toggleLevel(!levelOn);
+      if (e.key === 'a' || e.key === 'e' || e.key === 'n') toggleAnalysis(!analysisOn);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -349,50 +354,75 @@ export function RepertoireEditor({ me }: { me: Me }) {
       ]}
     />
     {importOpen && <PgnImport repertoireId={id} onDone={refresh} onClose={() => setImportOpen(false)} />}
+    {acting && (
+      <MoveActionsDialog
+        san={acting.san}
+        nags={acting.nags}
+        paused={!!acting.paused}
+        where="de ce répertoire"
+        onPause={(pause) => arrange.mutate([{ m: acting, patch: { paused: pause } }])}
+        onDelete={() => deleteMove.mutate(acting)}
+        onClose={() => setActing(null)}
+      />
+    )}
     <div className="editor">
       <div className="editor-board">
-        <Board fen={fen} orientation={data.color} lastMove={last?.uci} shapes={shapes} onMove={play} />
+        <div className="board-row">
+          {/* Always there (empty when the engine is off): toggling it does not resize the board. */}
+          <EvalBar line={engineOn ? engine.lines[0] : undefined} orientation={data.color} off={!engineOn} />
+          <Board fen={fen} orientation={data.color} lastMove={last?.uci} shapes={shapes} onMove={play} />
+        </div>
         <div className="nav">
           <button onClick={() => goTo(0)} title="Début (Origine)">⏮</button>
           <button onClick={() => goTo(ply - 1)} title="Reculer (←)">◀</button>
           <button onClick={forward} title="Avancer (→)">▶</button>
           <button onClick={() => goTo(line.length)} title="Fin de la ligne (Fin)">⏭</button>
-          <EngineToggle enabled={engineOn} onToggle={toggleEngine} />
-          <LevelToggle enabled={levelOn} onToggle={toggleLevel} />
+          <AnalysisToggle enabled={analysisOn} onToggle={toggleAnalysis} />
         </div>
-        <EngineLines
-          enabled={engineOn}
-          lines={engine.lines}
-          depth={engine.depth}
-          maxDepth={engine.maxDepth}
-          firstMoveNumber={ply}
-          onPlay={playMoves}
+        {/* The two tools in swipeable cards, one in view at a time (ToolCards). */}
+        {analysisOn && (
+        <ToolCards
+          engine={
+            (
+              <EngineLines
+                enabled={engineOn}
+                lines={engine.lines}
+                depth={engine.depth}
+                maxDepth={engine.maxDepth}
+                firstMoveNumber={ply}
+                onPlay={playMoves}
+              />
+            )
+          }
+          level={
+            (
+            <ExplorerPanel
+              fen={fen}
+              color={rep.color}
+              inRep={(uci) => rep.has(fen, uci)}
+              nagsOf={(uci) => rep.movesAt(fen).find((m) => m.uci === uci)?.nags}
+              stats={explorer.data}
+              error={explorer.error}
+              loading={explorer.isLoading}
+              onPick={play}
+              isMissing={(uci) => missingHere.has(uci)}
+              firstMoveNumber={ply}
+              onPlay={playMoves}
+              level={{
+                data: level.data,
+                loading: level.isLoading,
+                error: level.error,
+                depth,
+                maxDepth: LEVEL_STEPS,
+                onDepth,
+                canSearch: myTurn,
+                range: rangeLabel(ex.ratings),
+                engineBest: engineOn ? engine.lines[0]?.pv[0]?.uci : undefined,
+              }}
+            />
+            )
+          }
         />
-        {levelOn && (
-          <ExplorerPanel
-            fen={fen}
-            color={rep.color}
-            inRep={(uci) => rep.has(fen, uci)}
-            nagsOf={(uci) => rep.movesAt(fen).find((m) => m.uci === uci)?.nags}
-            stats={explorer.data}
-            error={explorer.error}
-            loading={explorer.isLoading}
-            onPick={play}
-            isMissing={(uci) => missingHere.has(uci)}
-            firstMoveNumber={ply}
-            onPlay={playMoves}
-            level={{
-              data: level.data,
-              loading: level.isLoading,
-              error: level.error,
-              depth,
-              maxDepth: LEVEL_STEPS,
-              onDepth,
-              canSearch: myTurn,
-              range: rangeLabel(ex.ratings),
-              engineBest: engineOn ? engine.lines[0]?.pv[0]?.uci : undefined,
-            }}
-          />
         )}
       </div>
 
@@ -429,7 +459,7 @@ export function RepertoireEditor({ me }: { me: Me }) {
             })}
           </div>
           {lastStored && !lastStored.comment && commentEdit !== lastStored.id && (
-            <Button size="sm" variant="ghost" icon="pencil" title={`Commenter ${lastStored.san}`} onClick={() => setCommentEdit(lastStored.id)} />
+            <Button size="sm" variant="ghost" icon="pencil" title={`Commenter ou annoter ${lastStored.san} (!, ?…)`} onClick={() => setCommentEdit(lastStored.id)} />
           )}
           </div>
           )}
@@ -456,30 +486,29 @@ export function RepertoireEditor({ me }: { me: Me }) {
               editing={commentEdit === lastStored.id}
               onEdit={(on) => setCommentEdit(on ? lastStored.id : null)}
               onSave={(comment) => setComment.mutate({ m: lastStored, comment })}
+              onNag={(nag) => setNag.mutate({ m: lastStored, nag })}
             />
           )}
           {here.length === 0 && !hasDraft && (
             <>
               <p className="muted">Jouez des coups pour continuer la variante.</p>
               {/* End of the line on my turn: what to play next, from the engine or at my level. */}
-              {myTurn && (!engineOn || !levelOn) && (
+              {myTurn && !analysisOn && (
                 <div className="suggest-start muted small-text">
                   Suggérer un coup :
-                  {!engineOn && <Button size="sm" icon="engine" onClick={() => toggleEngine(true)}>Stockfish</Button>}
-                  {!levelOn && <Button size="sm" icon="level" onClick={() => toggleLevel(true)}>À mon niveau</Button>}
+                  <Button size="sm" icon="analysis" onClick={() => toggleAnalysis(true)}>Analyser</Button>
                 </div>
               )}
             </>
           )}
-          <ul className={`rep-moves ${drag ? 'dragging-list' : ''}`} ref={listRef}>
+          <ul className={`rep-moves next-moves ${drag ? 'dragging-list' : ''}`} ref={listRef}>
             {options[0] && !rep.has(options[0].fromFen, options[0].uci) && (
-              <li
-                className={`clickable draft-move ${selected === 0 ? 'selected' : ''}`}
-                onClick={() => play(options[0]!.uci)}
-                title="Suite de votre ligne, pas encore enregistrée"
-              >
+              <li className="next-move clickable draft-move" onClick={() => play(options[0]!.uci)} title="Suite de votre ligne, pas encore enregistrée">
                 <div className="move-main">
-                  <button className="link unsaved san">{options[0].san}</button>
+                  <button className="link unsaved san">
+                    <span className="move-num">{moveNumber}</span>
+                    {options[0].san}
+                  </button>
                 </div>
                 <div className="row nowrap move-actions" onClick={(e) => e.stopPropagation()}>
                   <Button
@@ -506,9 +535,10 @@ export function RepertoireEditor({ me }: { me: Me }) {
                   <li
                     data-zone={zone}
                     data-id={m.id}
+                    data-flip={m.id}
                     className={[
+                      'next-move',
                       'clickable',
-                      options[selected]?.uci === m.uci ? 'selected' : '',
                       m.paused ? 'paused' : '',
                       drag?.id === m.id ? 'dragging' : '',
                       dropBefore ? 'drop-before' : '',
@@ -516,27 +546,20 @@ export function RepertoireEditor({ me }: { me: Me }) {
                     ].filter(Boolean).join(' ')}
                     style={drag?.id === m.id ? { transform: `translateY(${drag.dy}px)` } : undefined}
                     onClick={() => play(m.uci)}
+                    title="Appui long : mettre en pause, supprimer"
+                    {...longPress(() => setActing(m))}
                   >
+                    <div className="move-main">
+                      <button className="link san">
+                        <span className="move-num">{moveNumber}</span>
+                        <San san={m.san} nags={m.nags} />
+                      </button>
+                      {m.isMain && !m.paused && here.filter((x) => !x.paused).length > 1 && <span className="badge">principal</span>}
+                      {m.comment && <div className="comment move-comment">{m.comment}</div>}
+                    </div>
                     <span className="grip" title="Glisser : en haut, coup principal ; en bas, en pause" {...handle(m.id)}>
                       <Icon name="grip" size={16} />
                     </span>
-                    <div className="move-main">
-                      <button className="link san">
-                        <San san={m.san} nags={m.nags} />
-                      </button>
-                      {m.comment && <div className="comment move-comment">{m.comment}</div>}
-                    </div>
-                    <div className="row nowrap move-actions" onClick={(e) => e.stopPropagation()}>
-                      <Menu
-                        items={[
-                          {
-                            label: 'Supprimer ce coup et la suite',
-                            danger: true,
-                            onClick: () => confirm(`Supprimer ${m.san} et les lignes qui suivent ?`) && deleteMove.mutate(m),
-                          },
-                        ]}
-                      />
-                    </div>
                   </li>
                 </Fragment>
               );
@@ -545,7 +568,6 @@ export function RepertoireEditor({ me }: { me: Me }) {
           </ul>
           {options.length > 0 && (
             <p className="muted small-text keys">
-              {options.length > 1 && <><kbd>↑</kbd><kbd>↓</kbd> choisir · </>}
               <kbd>→</kbd> jouer · <kbd>←</kbd> reculer
             </p>
           )}
@@ -595,17 +617,13 @@ function applyPatch(moves: StoredMove[], { m, patch }: MovePatch): StoredMove[] 
   return moves.map((x) => (x.id === m.id ? { ...x, ...patch } : x));
 }
 
-/** Start of the paused moves of a position: they and what only follows them are not trained. */
-function PausedZoneHeader({ target, dropAbove }: { target: boolean; dropAbove: boolean }) {
-  return (
-    <li data-paused-zone className={['paused-zone', target ? 'drop-target' : '', dropAbove ? 'drop-before' : ''].filter(Boolean).join(' ')}>
-      <Icon name="pause" size={13} /> En pause : pas entraînés
-    </li>
-  );
-}
 
-function CommentNote({ move, editing, onEdit, onSave }: { move: StoredMove; editing: boolean; onEdit: (on: boolean) => void; onSave: (comment: string) => void }) {
+/** The move annotations offered, from the best to the worst. */
+const NAG_CHOICES = [3, 1, 5, 6, 2, 4];
+
+function CommentNote({ move, editing, onEdit, onSave, onNag }: { move: StoredMove; editing: boolean; onEdit: (on: boolean) => void; onSave: (comment: string) => void; onNag: (nag: number | null) => void }) {
   const [text, setText] = useState(move.comment ?? '');
+  const current = moveNag(move.nags);
   if (!editing) {
     if (!move.comment) return null;
     return (
@@ -621,6 +639,18 @@ function CommentNote({ move, editing, onEdit, onSave }: { move: StoredMove; edit
   };
   return (
     <div className="comment-box">
+      {/* The move's annotation: saved at once; the one chosen again removes it. */}
+      <div className="nag-picker" role="group" aria-label={`Annotation de ${move.san}`}>
+        {NAG_CHOICES.map((n) => {
+          const nag = MOVE_NAGS[n]!;
+          const on = current?.symbol === nag.symbol;
+          return (
+            <button key={n} type="button" className={`nag-choice nag-${nag.kind} ${on ? 'on' : ''}`} aria-pressed={on} title={on ? `Retirer « ${nag.label} »` : nag.label} onClick={() => onNag(on ? null : n)}>
+              {nag.symbol}
+            </button>
+          );
+        })}
+      </div>
       <textarea autoFocus placeholder={`Commentaire sur ${move.san}…`} value={text} onChange={(e) => setText(e.target.value)} rows={3} />
       <div className="row">
         <Button size="sm" variant="primary" onClick={save}>Enregistrer</Button>

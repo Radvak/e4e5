@@ -1,5 +1,6 @@
 import { playUci, totalGames, type Color, type ExplorerResponse, type PlayedMove } from '@tabiya/core';
 import { San } from './Nag';
+import { WdlBar } from './WdlBar';
 import { Fragment, useState } from 'react';
 import type { BestMovesResponse } from '../api';
 import { moveText } from '../chessText';
@@ -14,14 +15,24 @@ const games = (n: number) => (n >= 1000 ? `${(n / 1000).toLocaleString('fr-FR', 
 
 export type LevelSort = 'score' | 'freq';
 
-/** Sort of the table (score or frequency), kept on this device. */
+const SORT_KEY = 'levelSortChoice';
+
+/**
+ * The sort chosen by a click on a header (score or frequency), kept on this device; null: none
+ * chosen, the default applies (score on my turn, frequency on the opponent's). A click on the
+ * header of the sort chosen goes back to the default.
+ */
 export function useLevelSort() {
-  const [sort, setSort] = useState<LevelSort>(() => (localStorage.getItem('levelSort') === 'freq' ? 'freq' : 'score'));
-  const set = (s: LevelSort) => {
-    localStorage.setItem('levelSort', s);
-    setSort(s);
+  const [choice, setChoice] = useState<LevelSort | null>(() => {
+    const v = localStorage.getItem(SORT_KEY);
+    return v === 'score' || v === 'freq' ? v : null;
+  });
+  const set = (s: LevelSort | null) => {
+    if (s) localStorage.setItem(SORT_KEY, s);
+    else localStorage.removeItem(SORT_KEY);
+    setChoice(s);
   };
-  return [sort, set] as const;
+  return [choice, set] as const;
 }
 
 /**
@@ -83,7 +94,10 @@ export function LevelTable({
   /** Only the most played moves, plus the repertoire moves played less often. */
   limit?: number;
 }) {
-  const [sort, setSort] = useLevelSort();
+  const [choice, setChoice] = useLevelSort();
+  // By default: my turn by score (my best moves first), the opponent's by number of games (the
+  // replies I will most likely face). A sort chosen by a click applies everywhere until undone.
+  const sort: LevelSort = choice ?? (canSearch ? 'score' : 'freq');
   const [open, setOpen] = useState<string | null>(null);
   const [all, setAll] = useState(false);
   const total = totalGames(data);
@@ -146,12 +160,13 @@ export function LevelTable({
 
   const header = (key: LevelSort, label: string, title: string, className: string) => (
     <th className={className}>
+      {/* Purple only when chosen by a click; the default sort is shown in the normal colour. */}
       <button
         type="button"
-        className={`sort ${sort === key ? 'on' : ''}`}
-        onClick={() => setSort(key)}
-        title={title}
-        aria-pressed={sort === key}
+        className={`sort ${choice === key ? 'on' : ''}`}
+        onClick={() => setChoice(choice === key ? null : key)}
+        title={choice === key ? `${title} — cliquer à nouveau pour revenir au tri par défaut` : title}
+        aria-pressed={choice === key}
       >
         {label} <span aria-hidden="true">{sort === key ? '▼' : '▽'}</span>
       </button>
@@ -210,11 +225,7 @@ export function LevelTable({
                     <span className="share">({share(n, total).toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} %)</span>
                   </td>
                   <td className="wdl">
-                    <div className="bar" title={`Blancs ${share(m.white, n).toFixed(0)} % · nulles ${share(m.draws, n).toFixed(0)} % · Noirs ${share(m.black, n).toFixed(0)} %`}>
-                      <span className="w" style={{ width: `${share(m.white, n)}%` }} />
-                      <span className="d" style={{ width: `${share(m.draws, n)}%` }} />
-                      <span className="b" style={{ width: `${share(m.black, n)}%` }} />
-                    </div>
+                    <WdlBar white={m.white} draws={m.draws} black={m.black} color={color} expected={searching && best ? best.score : undefined} />
                   </td>
                   <td className="unfold-col" onClick={(e) => e.stopPropagation()}>
                     {best && best.replies.length > 0 && (

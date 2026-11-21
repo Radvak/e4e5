@@ -385,7 +385,9 @@ button.badge:focus-visible { outline: 2px solid currentColor; outline-offset: 1p
 .explorer .games { text-align: right; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .explorer .games .share, .level-table td.count .share { font-size: 0.85em; opacity: 0.8; }
 .explorer .wdl { width: 42%; }
-.bar { display: flex; height: 12px; border-radius: 3px; overflow: hidden; border: 1px solid #5a5650; }
+.bar { display: flex; height: 12px; border-radius: 3px; overflow: hidden; position: relative; border: 1px solid #5a5650; }
+/* Score expected at my level (search), where it lands on the bar (components/WdlBar.tsx). */
+.bar .bar-mark { position: absolute; top: 0; bottom: 0; width: 2px; transform: translateX(-50%); background: var(--level); }
 .bar .w { background: #ece9e4; }
 .bar .d { background: #8a8580; }
 .bar .b { background: #0b0b0b; }
@@ -485,11 +487,6 @@ button.badge:focus-visible { outline: 2px solid currentColor; outline-offset: 1p
 .suggestion.here { background: rgba(240, 136, 62, 0.1); }
 .suggestion .badge.warn { background: rgba(240, 136, 62, 0.18); color: var(--hole); }
 .engine-line.best .pv button.link:first-child { color: var(--text); font-weight: 700; }
-.engine-toggle { flex: 0 0 auto; width: 48px; color: var(--muted); }
-.engine-toggle.on { color: #111; background: var(--engine-ui); border-color: var(--engine-ui); }
-.level-toggle { flex: 0 0 auto; width: 48px; color: var(--muted); }
-.level-toggle.on { color: #fff; background: var(--level); border-color: var(--level); }
-.level-toggle.on:hover { background: #a877f0; }
 /* Moves at my level, under the board (below the engine lines). */
 .level-lines { margin: 8px var(--page-pad) 0; padding: 4px 12px 6px; background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--level); border-radius: var(--radius); min-width: 0; }
 .level-lines > ul { list-style: none; margin: 0; padding: 0; }
@@ -702,11 +699,21 @@ button.badge:focus-visible { outline: 2px solid currentColor; outline-offset: 1p
 .nag-blunder { color: #df5353; }
 /* Explorer "Dans vos répertoires": one line per move, its repertoires in a strip scrolled
    sideways (the edge fades when there are more). */
-.rep-moves li.rep-here { display: flex; flex-wrap: nowrap; align-items: center; gap: 10px; min-height: 40px; padding: 2px 0 2px 8px; }
-.rep-moves li.rep-here .san { flex: none; min-width: 3.2em; text-align: left; }
 .rep-tags { display: flex; gap: 6px; flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; padding-right: 24px; mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); }
 .rep-tags::-webkit-scrollbar { display: none; }
 .rep-tags .rep-tag { flex: none; margin: 0; white-space: nowrap; }
+/* Explorer: the repertoires containing the position, under the line. */
+.rep-tags.rep-at { margin-top: 10px; }
+/* Explorer: the next moves of my repertoires, with their comments. */
+.rep-moves.next-moves { margin-top: 8px; }
+.rep-moves.next-moves li.next-move { display: flex; flex-direction: row; align-items: flex-start; gap: 4px; min-height: 0; padding: 6px 0; position: relative; border-top: 1px solid var(--border); border-radius: 0; }
+.rep-moves.next-moves li.next-move .grip { align-self: stretch; margin-left: auto; }
+.rep-moves.next-moves li.next-move .move-main { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; padding-top: 2px; }
+.rep-moves.next-moves li.next-move .badge { margin: 0; }
+.rep-moves.next-moves li.next-move .move-actions { margin-left: auto; }
+.rep-moves.next-moves li.next-move:first-child { border-top: none; }
+.next-move .move-num { color: var(--muted); font-weight: 400; margin-right: 3px; }
+.next-move .move-comment { font-size: 0.9rem; }
 /* Explorer: a pencil at the end of the moves path turns it into a field to type or paste a line. */
 .moves-path .line-edit { min-height: 0; width: 26px; height: 26px; padding: 0; margin-left: 4px; vertical-align: middle; background: none; border: none; color: var(--muted); }
 .moves-path .line-edit:hover { color: var(--text); background: var(--surface-2); }
@@ -714,8 +721,6 @@ button.badge:focus-visible { outline: 2px solid currentColor; outline-offset: 1p
 .line-input input { min-height: 36px; font-size: 0.95rem; }
 /* Explorer: the line, then the moves of my repertoires right under it (one card). */
 .moves-path + .rep-moves, .moves-path + .rep-none, .line-input + .rep-moves, .line-input + .rep-none { margin-top: 8px; }
-.rep-moves li.rep-here .move-num { color: var(--muted); font-weight: 400; margin-right: 3px; }
-.rep-moves li.rep-here .san { min-width: 4.2em; }
 .rep-moves + .keys, .rep-none + .keys { margin-top: 10px; }
 /* Explorer, my games: a move unfolds into its games (chevron at the end of the row). */
 table.explorer td.unfold-col { width: 1%; padding: 0 2px; }
@@ -734,7 +739,7 @@ table.explorer tr.move-detail table.games { font-size: 0.85rem; }
 .quiz-line .quiz-move { flex: none; }
 
 /* Moves of a position (editor): dragged from the grip; on top, the main move; below the paused zone header, paused. */
-.rep-moves li[data-zone] { grid-template-columns: auto 1fr auto; padding-left: 0; position: relative; }
+.rep-moves li[data-zone] { grid-template-columns: 1fr auto; padding-right: 0; position: relative; }
 .rep-moves .grip { display: flex; align-items: center; justify-content: center; width: 28px; align-self: stretch; color: var(--muted); cursor: grab; touch-action: none; opacity: 0.6; }
 .rep-moves .grip:hover { opacity: 1; color: var(--text); }
 .rep-moves.dragging-list, .rep-moves.dragging-list * { cursor: grabbing; user-select: none; -webkit-user-select: none; }
@@ -744,3 +749,59 @@ table.explorer tr.move-detail table.games { font-size: 0.85rem; }
 .rep-moves li.drop-after::after { bottom: -4px; }
 .rep-moves li.paused-zone { display: flex; align-items: center; gap: 6px; min-height: 36px; margin-top: 10px; padding: 4px 10px; position: relative; border-top: 1px dashed var(--border); border-radius: 0; color: var(--muted); font-size: 0.82rem; }
 .rep-moves li.paused-zone.drop-target { background: var(--surface-2); color: var(--text); border: 1px dashed var(--muted); border-radius: 6px; }
+/* Evaluation bar left of the board (engine on): White's part from White's side of the board. */
+.board-row { display: flex; gap: 4px; }
+/* Mobile: the board goes from edge to edge; the evaluation bar keeps a margin (its corners, its label). */
+@media (max-width: 899px) { .board-row:has(.eval-bar) { padding-left: 3px; } }
+.board-row > .board-frame { flex: 1; min-width: 0; }
+.eval-bar { position: relative; flex: none; width: 16px; background: #403d39; border-radius: 3px; overflow: hidden; }
+.eval-white { position: absolute; left: 0; right: 0; background: #f2efe4; transition: height 0.4s ease; }
+.eval-white.bottom { bottom: 0; }
+.eval-white.top { top: 0; }
+.eval-mid { position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: rgba(230, 120, 60, 0.6); }
+.eval-label { position: absolute; left: 0; right: 0; text-align: center; font-size: 0.56rem; font-weight: 700; line-height: 1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.eval-label.bottom { bottom: 3px; }
+.eval-label.top { top: 3px; }
+.eval-label.on-white { color: #131210; }
+.eval-label.on-black { color: #f2efe4; }
+
+/* Tools under the board (components/ToolCards.tsx): one card in view, a swipe to switch. */
+.tool-cards { margin: 8px var(--page-pad) 0; min-width: 0; }
+@media (min-width: 900px) { .tool-cards { margin: 8px 0 0; } }
+.tool-card > .engine-lines, .tool-card > .level-lines { margin: 0; }
+.tool-track { display: flex; align-items: flex-start; }
+.tool-track.several { overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; scrollbar-width: none; transition: height 0.2s ease; }
+.tool-track.several::-webkit-scrollbar { display: none; }
+.tool-card { flex: 0 0 100%; min-width: 0; scroll-snap-align: start; scroll-snap-stop: always; }
+
+.tool-card.enter-right { animation: tool-enter-right 0.22s ease-out; }
+.tool-card.enter-left { animation: tool-enter-left 0.22s ease-out; }
+@keyframes tool-enter-right { from { transform: translateX(40%); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes tool-enter-left { from { transform: translateX(-40%); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .tool-card.enter-right, .tool-card.enter-left { animation: none; } }
+.tool-cards { overflow-x: clip; }
+.eval-bar.off { background: none; }
+/* One button for the analysis (Lichess at my level + Stockfish), and the tabs of its two cards. */
+.analysis-toggle { flex: 0 0 auto; width: 48px; color: var(--muted); }
+.analysis-toggle.on { color: #fff; background: var(--level); border-color: var(--level); }
+.analysis-toggle.on:hover { background: #a877f0; }
+.tool-tabs { display: flex; gap: 14px; margin: 0 2px 4px; }
+.tool-tabs button { min-height: 0; padding: 2px 0; background: none; border: none; border-radius: 0; font-size: 0.75rem; font-weight: 600; color: var(--muted); border-bottom: 2px solid transparent; }
+.tool-tabs button:hover { background: none; color: var(--text); }
+.tool-tabs button.on { color: var(--text); border-bottom-color: var(--level); }
+.tool-tabs button.on:last-child { border-bottom-color: var(--engine-ui); }
+
+/* Actions on a move, after a long press (components/MoveActionsDialog.tsx). */
+.move-actions-dialog { width: min(400px, calc(100vw - 24px)); }
+.move-actions-title { margin: 0; font-size: 1.05rem; }
+.move-actions-list { display: flex; flex-direction: column; gap: 6px; }
+.move-action { display: grid; grid-template-columns: 24px 1fr; align-items: center; column-gap: 10px; width: 100%; padding: 10px 12px; text-align: left; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); color: var(--text); font: inherit; font-weight: 600; cursor: pointer; }
+.move-action:hover { border-color: var(--border-strong); }
+.move-action .muted { grid-column: 2; font-weight: 400; }
+.move-action.danger { color: var(--danger); }
+.move-actions-footer { gap: 6px; justify-content: flex-end; }
+.rep-moves li[data-zone], .rep-moves li.next-move { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+/* Editor: the move's annotation (!!, !, !?, ?!, ?, ??), above its comment. */
+.nag-picker { display: flex; gap: 6px; margin-bottom: 8px; }
+.nag-choice { min-height: 0; min-width: 40px; height: 32px; padding: 0 8px; font-weight: 800; font-size: 0.95rem; background: var(--surface-2); border-color: var(--border); }
+.nag-choice.on { box-shadow: inset 0 0 0 2px currentColor; background: color-mix(in srgb, currentColor 18%, var(--surface-2)); }

@@ -1,20 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { api, type BestMovesResponse } from '../api';
-import { Icon } from '../ui';
-
-/**
- * On/off of the "moves at my level" search, kept for the browser session only: it costs many
- * Lichess requests, so it never starts by itself on a new visit.
- */
-export function useLevelToggle() {
-  const [on, setOn] = useState(() => sessionStorage.getItem('level') === 'on');
-  const toggle = (next: boolean) => {
-    sessionStorage.setItem('level', next ? 'on' : 'off');
-    setOn(next);
-  };
-  return [on, toggle] as const;
-}
 
 /** Steps of the search at my level (server REACH_STEPS): "profondeur" checked follows them all. */
 export const LEVEL_STEPS = 4;
@@ -53,17 +39,3 @@ export function topLevelMove(data: BestMovesResponse | undefined) {
   return data?.moves.find((m) => m.minReach === data.reach) ?? data?.moves[0];
 }
 
-/** On/off button, next to the engine's. */
-export function LevelToggle({ enabled, onToggle }: { enabled: boolean; onToggle: (on: boolean) => void }) {
-  return (
-    <button
-      className={`level-toggle ${enabled ? 'on' : ''}`}
-      onClick={() => onToggle(!enabled)}
-      title={enabled ? 'Arrêter les coups à votre niveau (n)' : 'Coups à votre niveau : meilleur score espéré face aux joueurs Lichess de votre niveau (n)'}
-      aria-label={enabled ? 'Arrêter les coups à votre niveau' : 'Coups à votre niveau'}
-      aria-pressed={enabled}
-    >
-      <Icon name="level" />
-    </button>
-  );
-}

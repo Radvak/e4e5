@@ -1,4 +1,4 @@
-import { positionReview, START_FEN, type Color, type Repertoire, type TrainingPosition } from '@tabiya/core';
+import { positionReview, START_FEN, type Color, type Repertoire, type RepMove, type TrainingPosition } from '@tabiya/core';
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { api, type Grade, type ReviewCard } from '../api';
@@ -33,6 +33,8 @@ export interface Source {
   stateOf: (fen: string, now: number) => ReturnType<typeof positionReview>;
   /** Summary of the cards of my moves in a position; undefined: none learnt. */
   positionCard: (fen: string) => PositionCard | undefined;
+  /** My moves of a position put on pause (left out of the training, still in the repertoire). */
+  pausedAt: (fen: string) => RepMove[];
 }
 
 const cardKey = (fen: string, uci: string) => `${fen} ${uci}`;
@@ -68,7 +70,10 @@ export function useTrainingSources(ids: string[], from: string | null, shorten?:
         const probs = shorten && shorten.minReach > 0 ? shorten.probs(data.color) : undefined;
         const kept = probs ? keptOf(positionsOf(rep), probs, shorten!.minReach) : null;
         const positions = positionsFrom(rep, from ?? START_FEN);
-        return [{ id, data, rep, positions: kept ? positions.filter((p) => kept.has(p.fen)) : positions }];
+        // Paused moves by position: played in training, they are not a mistake (try again).
+        const paused = new Map<string, RepMove[]>();
+        for (const m of data.moves) if (m.paused) paused.set(m.fromFen, [...(paused.get(m.fromFen) ?? []), m]);
+        return [{ id, data, rep, paused, positions: kept ? positions.filter((p) => kept.has(p.fen)) : positions }];
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [ids.join(), version, from, shorten],
@@ -77,7 +82,7 @@ export function useTrainingSources(ids: string[], from: string | null, shorten?:
   // The review state, after every answer: only small functions reading the cards.
   const sources = useMemo<Source[]>(
     () =>
-      trained.map(({ id, data, rep, positions }) => {
+      trained.map(({ id, data, rep, paused, positions }) => {
         const cardOf = (fen: string, uci: string) => cards.get(cardKey(fen, uci));
         const times = (fen: string) => (uci: string) => {
           const c = cardOf(fen, uci);
@@ -89,6 +94,7 @@ export function useTrainingSources(ids: string[], from: string | null, shorten?:
           color: data.color,
           rep,
           positions,
+          pausedAt: (fen) => paused.get(fen) ?? [],
           cardOf,
           stateOf: (fen, now) => positionReview(rep.movesAt(fen), times(fen), now),
           positionCard: (fen) => {

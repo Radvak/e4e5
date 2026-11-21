@@ -158,10 +158,21 @@ export interface MyGames {
   /** Positions indexed up to this ply: deeper, no games. */
   maxPly: number;
 }
+/** A repertoire containing a position, and how many of its moves start from it (0: end of its line). */
+export interface PositionRepertoire {
+  repertoireId: string;
+  name: string;
+  color: Color;
+  moves: number;
+}
 export interface RepertoireMoveHere {
   repertoireId: string;
   name: string;
   color: Color;
+  /** The move in its repertoire (to make it main, pause it). */
+  id: number;
+  /** Paused in this repertoire: not trained. */
+  paused: boolean;
   uci: string;
   san: string;
   isMain: boolean;
@@ -251,7 +262,7 @@ export const api = {
   repertoire: (id: string) => request<RepertoireDetail>('GET', `/api/repertoires/${id}`),
   saveLine: (id: string, ucis: string[]) =>
     request<{ added: number }>('POST', `/api/repertoires/${id}/lines`, { ucis }),
-  updateMove: (id: string, moveId: number, patch: { comment?: string | null; isMain?: boolean; paused?: boolean }) =>
+  updateMove: (id: string, moveId: number, patch: { comment?: string | null; nags?: number[] | null; isMain?: boolean; paused?: boolean }) =>
     request<StoredMove>('PATCH', `/api/repertoires/${id}/moves/${moveId}`, patch),
   deleteMove: (id: string, moveId: number) => request<{ ok: true; pruned: number }>('DELETE', `/api/repertoires/${id}/moves/${moveId}`),
   importPgn: (id: string, pgn: string) => request<ImportResult>('POST', `/api/repertoires/${id}/import-pgn`, { pgn }),
@@ -267,6 +278,7 @@ export const api = {
   /** Opening of a line (UCI moves, comma separated), null if none is named. */
   opening: (line: string) =>
     request<{ eco: string; name: string } | null>('GET', `/api/explorer/opening?${new URLSearchParams({ line })}`),
+  positionRepertoires: (fen: string) => request<PositionRepertoire[]>('GET', `/api/explorer/position-repertoires?${new URLSearchParams({ fen })}`),
   repertoireMovesAt: (fen: string) => request<RepertoireMoveHere[]>('GET', `/api/explorer/repertoires?${new URLSearchParams({ fen })}`),
   syncState: () => request<SyncState>('GET', '/api/games/sync'),
   startSync: (source: 'chesscom' | 'lichess') => request<SyncJob>('POST', '/api/games/sync', { source }),

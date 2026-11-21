@@ -9,7 +9,7 @@ import { San } from '../components/Nag';
 import { OpeningName } from '../components/OpeningName';
 import { dayStart } from '../settings';
 import { answerArrows, inTime, JUMP_MS, REPLAY_MS, REPLAYED_PLIES, REPLY_MS } from './common';
-import { DrillActions, LineDone, QuizLine, SwipeBar } from './DrillParts';
+import { DrillActions, LineDone, QuizLine, SwipeBar, useMyMovesHere } from './DrillParts';
 import { outcomeOf, type Outcome } from './Feedback';
 import type { Source } from './useTrainingSources';
 
@@ -285,7 +285,10 @@ export function ReviewMode({
       const best = Math.min(...options.map((o) => o.dist));
       const tied = options.filter((o) => o.dist === best);
       const pick = weightedPick(tied, (o) => chanceOf?.(source, o.target.fen), (o) => !!o.reply.isMain);
-      return { next: question({ source, target: pick.target }, { mine: played, reply: pick.reply }) };
+      // The line as played (the previous moves, my move, the reply), not the path stored for the
+      // position: reached by another move order (transposition), the board would jump to it.
+      const target = { ...pick.target, path: [...done.target.path, played, pick.reply] };
+      return { next: question({ source, target }, { mine: played, reply: pick.reply }) };
     }
     // The line stops here: cut (a position of mine follows in the repertoire but is not trained),
     // or every sequel was already reviewed in this session, or its real end.
@@ -320,7 +323,9 @@ export function ReviewMode({
   };
 
   /** Another of my moves played instead of the one asked: right, graded good when it is due (soon). */
-  const onAlternative = (q: Question, move: RepMove) => {
+  const onAlternative = (q: Question, move: Pick<RepMove, 'uci'>) => {
+    // Only a move of this repertoire is graded here (one of another repertoire: just not a mistake).
+    if (!q.source.rep.movesAt(q.target.fen).some((m) => m.uci === move.uci)) return;
     const card = latest(q.source).cardOf(q.target.fen, move.uci);
     if (card && Date.parse(card.due) <= Date.now() + SOON_MS) onReview(q.source, q.target.fen, move.uci, 'good');
   };
@@ -470,7 +475,7 @@ function Drill({
   question: Question;
   onAnswered: (played: RepMove, outcome: Outcome) => void;
   /** Another of my moves played (an alternative): right, the move asked is then shown. */
-  onAlternative: (move: RepMove) => void;
+  onAlternative: (move: Pick<RepMove, 'uci'>) => void;
   /** Swipe to the left on the bar under the board: the next question. */
   onSkip: () => void;
   /** Questions passed so far (a dot each, left of the bar). */
@@ -493,8 +498,11 @@ function Drill({
     revealed: isNew,
     /** Alternatives played: each one restarts the clock. */
     retries: 0,
-    /** The last alternative played (shown in a bubble); the move asked is then shown by its arrow. */
-    alternative: null as RepMove | null,
+    /** The last alternative played (shown in a bubble; of this repertoire or another one of mine);
+     * the move asked is then shown by its arrow. */
+    alternative: null as Pick<RepMove, 'uci' | 'san' | 'nags'> | null,
+    /** A move of the repertoire put on pause played: not a mistake, try again (bubble). */
+    pausedMove: null as RepMove | null,
     /** 1: the piece to move is shown. */
     hinted: false,
     played: null as RepMove | null,
@@ -508,9 +516,10 @@ function Drill({
     if (!lead) lineFrom.current = Math.max(0, plies - REPLAYED_PLIES);
     setState(current);
   }
-  const { replied, shown, mistakes, revealed, retries, alternative, hinted, played } = current;
+  const { replied, shown, mistakes, revealed, retries, alternative, pausedMove, hinted, played } = current;
   const update = (patch: Partial<typeof current>) => setState((s) => ({ ...s, ...patch }));
   const answers = source.rep.movesAt(target.fen);
+  const elsewhere = useMyMovesHere(target.fen, source.color);
 
   useEffect(() => {
     if (replied) return;
@@ -531,11 +540,18 @@ function Drill({
   const play = (uci: string) => {
     if (!asking) return;
     if (uci !== expected.uci) {
-      const other = answers.find((m) => m.uci === uci);
+      // One of my moves here, in this repertoire or another one of the same colour: right too.
+      const other = answers.find((m) => m.uci === uci) ?? elsewhere(uci);
       if (other) {
         // Right too: said so, and the move reviewed here is shown (green arrow).
         if (!alternative) onAlternative(other);
-        update({ retries: retries + 1, alternative: other });
+        update({ retries: retries + 1, alternative: other, pausedMove: null });
+        return 'retry';
+      }
+      // A move of mine put on pause: not a mistake, try again.
+      const onPause = source.pausedAt(target.fen).find((m) => m.uci === uci);
+      if (onPause) {
+        update({ retries: retries + 1, pausedMove: onPause });
         return 'retry';
       }
       update({ mistakes: mistakes + 1, revealed: revealed || mistakes + 1 >= 2 });
@@ -582,7 +598,12 @@ function Drill({
           onMove={asking ? play : undefined}
         />
         {lineDone && played && <LineDone text="Ligne revue" />}
-        {alternative && asking && (
+        {pausedMove && asking && (
+          <div key={`p${retries}`} className="alt-bubble" role="status">
+            ⏸ <strong><San san={pausedMove.san} nags={pausedMove.nags} /></strong> est en pause dans ton répertoire — joue un autre coup
+          </div>
+        )}
+        {alternative && asking && !pausedMove && (
           <div key={retries} className="alt-bubble" role="status">
             👍 <strong><San san={alternative.san} nags={alternative.nags} /></strong> est un bon coup, mais ici on révise{' '}
             <strong><San san={expected.san} nags={expected.nags} /></strong>
