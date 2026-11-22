@@ -226,8 +226,9 @@ export function RepertoireEditor({ me }: { me: Me }) {
     setPly(moves.length);
   };
 
-  // One button for the analysis (on for the browser session only): Lichess at my level (only on my
-  // turn; its box follows the likely lines or not) and Stockfish both run, in ToolCards.
+  // One button for the analysis (on for the browser session only): Lichess at my level (on the
+  // opponent's turn, each of its moves scored from the search after it; its box follows the
+  // likely lines or not) and Stockfish both run, in ToolCards.
   const [analysisOn, toggleAnalysis] = useAnalysisToggle();
   const levelOn = analysisOn;
   const engineOn = analysisOn;
@@ -235,7 +236,7 @@ export function RepertoireEditor({ me }: { me: Me }) {
   const [levelDepth, onDepth] = useLevelDepth();
   const depth = levelOn ? levelDepth : 0;
   const myTurn = rep.isMyTurn(fen);
-  const level = useBestMoves(fen, ex.speeds, ex.ratings, depth > 0 && myTurn, depth);
+  const level = useBestMoves(fen, ex.speeds, ex.ratings, depth > 0, depth, rep.color);
   const levelBest = depth > 0 && myTurn ? topLevelMove(level.data) : undefined;
 
   useEffect(() => {
@@ -299,14 +300,16 @@ export function RepertoireEditor({ me }: { me: Me }) {
     if (next) {
       const w = width(share.get(next.uci) ?? 0, 9);
       const saved = here.find((m) => m.uci === next.uci);
-      out.push(arrow(next.uci, 'outline', w + OUTLINE_EXTRA), arrow(next.uci, !saved ? 'nextDraft' : saved.paused ? 'paused' : 'next', w));
+      // Paused: no white outline (it would show through the almost transparent arrow).
+      if (saved?.paused) out.push(arrow(next.uci, 'pausedNext', w));
+      else out.push(arrow(next.uci, 'outline', w + OUTLINE_EXTRA), arrow(next.uci, !saved ? 'nextDraft' : 'next', w));
     }
     // Orange: the missing moves only (those of "Coups manquants").
     for (const uci of missingHere) if (uci !== next?.uci) out.push(arrow(uci, 'popular', width(share.get(uci) ?? 0)));
     // Level under engine: wider, so both show when they agree.
-    if (levelBest) out.push(arrow(levelBest.uci, 'level', 9));
+    if (levelBest) out.push(arrow(levelBest.uci, 'level', 6));
     const best = engineOn ? engine.lines[0]?.pv[0] : undefined;
-    if (best) out.push(arrow(best.uci, 'engine', 6));
+    if (best) out.push(arrow(best.uci, 'engine', 4));
     return out;
   }, [explorer.data, rep, fen, here, engineOn, engine.lines[0]?.pv[0]?.uci, levelBest?.uci, options, selected, missingHere]);
 
@@ -415,7 +418,7 @@ export function RepertoireEditor({ me }: { me: Me }) {
                 depth,
                 maxDepth: LEVEL_STEPS,
                 onDepth,
-                canSearch: myTurn,
+                myTurn,
                 range: rangeLabel(ex.ratings),
                 engineBest: engineOn ? engine.lines[0]?.pv[0]?.uci : undefined,
               }}

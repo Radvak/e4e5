@@ -7,7 +7,7 @@
  * step (most reached first): fetch them, search again. A search wanting more than
  * `MAX_POSITIONS` positions stops at the step before (nothing missing).
  */
-import { bestMoves, type ExplorerResponse, type SuggestedMove } from '@tabiya/core';
+import { bestMoves, turnOf, type Color, type ExplorerResponse, type SuggestedMove } from '@tabiya/core';
 import { storedStats } from './stats.js';
 
 /** Probability thresholds of the steps (a position reached in fewer games is not explored). */
@@ -38,10 +38,15 @@ export async function suggestMoves(
   speeds: string[],
   ratings: number[],
   depth = REACH_STEPS.length,
+  color: Color = turnOf(root),
 ): Promise<Suggestions> {
   const steps = REACH_STEPS.slice(0, depth);
   const known = new Map([[root, rootStats]]);
-  const run = (minReach: number, only?: string[]) => bestMoves(root, (f) => known.get(f)?.data, { minReach, only });
+  // On the opponent's turn every likely move of its is searched (none pruned), each from the
+  // position after it: more positions.
+  const mine = turnOf(root) === color;
+  const maxPositions = mine ? MAX_POSITIONS : 2 * MAX_POSITIONS;
+  const run = (minReach: number, only?: string[]) => bestMoves(root, (f) => known.get(f)?.data, { minReach, only, color });
 
   // Each move's own win rate first (nothing explored), then each step in turn, loading the
   // stored positions it reaches (the deeper ones are only reached once their parents are known).
@@ -49,7 +54,7 @@ export async function suggestMoves(
   let reach: number | null = null;
   let missing: string[] = [];
   for (const [i, step] of steps.entries()) {
-    const only = i >= 2 ? moves.filter((m) => m.minReach === reach).slice(0, KEEP_DEEP).map((m) => m.uci) : undefined;
+    const only = mine && i >= 2 ? moves.filter((m) => m.minReach === reach).slice(0, KEEP_DEEP).map((m) => m.uci) : undefined;
     let next = run(step, only);
     for (let pass = 0; pass < 16 && next.missing.length; pass++) {
       const found = await storedStats(next.missing.map((m) => m.fen), speeds, ratings);
@@ -58,7 +63,7 @@ export async function suggestMoves(
       next = run(step, only);
     }
     if (next.missing.length) {
-      if (known.size + next.missing.length <= MAX_POSITIONS) missing = next.missing.map((m) => m.fen);
+      if (known.size + next.missing.length <= maxPositions) missing = next.missing.map((m) => m.fen);
       break;
     }
     // Moves looked at deeper first (best first), then the pruned ones as ranked at their step.

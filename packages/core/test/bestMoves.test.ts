@@ -158,4 +158,26 @@ describe('best moves, by probability', () => {
     expect(r.missing.find((m) => m.fen === after('d2d4', 'd7d5'))!.reach).toBeCloseTo(0.55);
     expect(r.missing.find((m) => m.fen === after('d2d4', 'g8f6'))!.reach).toBeCloseTo(0.45);
   });
+
+  it("on the opponent's turn, scores each of its moves by the search started after it", () => {
+    const e4 = after('e2e4');
+    const table = new Map([
+      // Black to move, I am White: c5 is rare (5%), still searched in full after it.
+      [e4, stats([['e7e5', 'e5', 475, 0, 475], ['c7c5', 'c5', 25, 0, 25]])],
+      [after('e2e4', 'e7e5'), stats([['g1f3', 'Nf3', 300, 0, 300], ['f1c4', 'Bc4', 280, 0, 120]])],
+      [after('e2e4', 'e7e5', 'f1c4'), stats([['g8f6', 'Nf6', 280, 0, 120]])],
+      [after('e2e4', 'c7c5'), stats([['g1f3', 'Nf3', 60, 0, 40], ['b1c3', 'Nc3', 30, 0, 70]])],
+      [after('e2e4', 'c7c5', 'g1f3'), stats([['d7d6', 'd6', 60, 0, 40]])],
+    ]);
+    const r = bestMoves(e4, (f) => table.get(f), { color: 'white', maxDepth: 2, prior: 0, minGames: 1 });
+    const e5 = r.moves.find((m) => m.san === 'e5')!;
+    expect(e5.line.map((m) => m.san)).toEqual(['e5', 'Bc4', 'Nf6']);
+    expect(e5.score).toBeCloseTo(0.7);
+    expect(e5.direct).toBeCloseTo(0.5);
+    // The replies are those to my best answer.
+    expect(e5.replies).toMatchObject([{ san: 'Nf6', share: 1 }]);
+    const c5 = r.moves.find((m) => m.san === 'c5')!;
+    expect(c5.line.map((m) => m.san)).toEqual(['c5', 'Nf3', 'd6']);
+    expect(c5.score).toBeCloseTo(0.6);
+  });
 });

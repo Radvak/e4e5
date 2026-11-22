@@ -136,8 +136,13 @@ export const positionStats = sqliteTable(
     data: text('data', { mode: 'json' }).$type<ExplorerResponse>().notNull(),
     fetchedAt: integer('fetched_at', { mode: 'timestamp_ms' }).notNull(),
     source: text('source', { enum: ['lichess', 'seed', 'import'] }).notNull(),
+    /**
+     * Months of the games ("2026-08..2026-10", the explorer asked with since/until), the period
+     * of the game statistics file (gameStats.ts) so both have the same scale; '': every game.
+     */
+    period: text('period').notNull().default(''),
   },
-  (t) => [primaryKey({ columns: [t.fen, t.speeds, t.ratings] })],
+  (t) => [primaryKey({ columns: [t.fen, t.speeds, t.ratings, t.period] })],
 );
 
 /** Seed files of `seed/` already imported into position_stats. */

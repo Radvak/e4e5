@@ -11,16 +11,20 @@ export const ARROWS = {
   // Dark grey: the blues are taken (?! light blue), and it stands out from every other colour.
   engine: { color: '#2b2b2b', label: 'meilleur coup du moteur' },
   level: { color: '#bc8cff', label: 'meilleur coup à votre niveau' },
-  paused: { color: '#8b949e', label: 'en pause, pas entraîné' },
+  // Same green as the paused move in the list (--rep, faded there too), almost transparent.
+  paused: { color: '#5cb380', label: 'en pause, pas entraîné' },
+  pausedNext: { color: '#5cb380', label: 'coup suivant, en pause (→)' },
   mistake: { color: '#e5534b', label: 'coup joué à la place du coup préparé' },
 } as const;
 
 export type ArrowKind = keyof typeof ARROWS;
 
+const OPACITY: Partial<Record<string, number>> = { next: 1, nextDraft: 1, paused: 0.25, pausedNext: 0.4 };
+
 /** chessground brushes for the arrow kinds. */
 export const BRUSHES = {
   ...Object.fromEntries(
-    Object.entries(ARROWS).map(([key, a]) => [key, { key, color: a.color, opacity: key === 'next' || key === 'nextDraft' ? 1 : 0.85, lineWidth: 10 }]),
+    Object.entries(ARROWS).map(([key, a]) => [key, { key, color: a.color, opacity: OPACITY[key] ?? 0.85, lineWidth: 10 }]),
   ),
   /** White arrow drawn just under the next move, slightly wider: a thin outline. */
   outline: { key: 'outline', color: '#ffffff', opacity: 1, lineWidth: 10 },

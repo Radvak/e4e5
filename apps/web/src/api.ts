@@ -6,7 +6,9 @@ export interface StatsMeta {
   /** false: closest stored combination, not the one asked for. */
   exact: boolean;
   fetchedAt: string;
-  source: 'lichess' | 'seed' | 'import';
+  source: 'lichess' | 'seed' | 'import' | 'database';
+  /** Months of the games counted (YYYY-MM), else the explorer's whole history. */
+  period?: { since: string; until: string };
   reason?: 'no-token' | 'rate-limited' | 'unreachable';
 }
 export interface Stats {
@@ -287,11 +289,14 @@ export const api = {
   dismissInbox: (key: string) => request<{ ok: true }>('POST', '/api/games/inbox/dismiss', { key }),
   restoreInbox: () => request<{ ok: true }>('DELETE', '/api/games/inbox/dismiss'),
   reviewNow: (id: string, fen: string) => request<{ ok: true }>('POST', `/api/repertoires/${id}/cards/due`, { fen }),
-  /** `depth`: steps of the search to go through (0: each move's own win rate; default: all). */
-  bestMoves: (fen: string, speeds: string[], ratings: number[], depth?: number) =>
+  /**
+   * `depth`: steps of the search to go through (0: each move's own win rate; default: all).
+   * `color`: my side (on the opponent's turn, its moves scored for me; default: the side to move).
+   */
+  bestMoves: (fen: string, speeds: string[], ratings: number[], depth?: number, color?: Color) =>
     request<BestMovesResponse>(
       'GET',
-      `/api/explorer/best?${new URLSearchParams({ fen, speeds: speeds.join(','), ratings: ratings.join(','), ...(depth !== undefined ? { depth: String(depth) } : {}) })}`,
+      `/api/explorer/best?${new URLSearchParams({ fen, speeds: speeds.join(','), ratings: ratings.join(','), ...(depth !== undefined ? { depth: String(depth) } : {}), ...(color ? { color } : {}) })}`,
     ),
   explorer: (fen: string, speeds: string[], ratings: number[]) =>
     request<Stats>(

@@ -1,3 +1,4 @@
+import type { Color } from '@tabiya/core';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { api, type BestMovesResponse } from '../api';
@@ -20,13 +21,14 @@ export function useLevelDepth() {
 
 /**
  * Suggested moves for the side to move: best expected score at my level over the likely lines.
- * The deeper positions are fetched in the background by the server, so it asks again meanwhile.
- * Only asked while `enabled`.
+ * On the opponent's turn (`color` my side), each of its moves scored for me, the search starting
+ * after it. The deeper positions are fetched in the background by the server, so it asks again
+ * meanwhile. Only asked while `enabled`.
  */
-export function useBestMoves(fen: string, speeds: string[], ratings: number[], enabled: boolean, depth?: number) {
+export function useBestMoves(fen: string, speeds: string[], ratings: number[], enabled: boolean, depth?: number, color?: Color) {
   return useQuery({
-    queryKey: ['best-moves', fen, speeds, ratings, depth ?? 'max'],
-    queryFn: () => api.bestMoves(fen, speeds, ratings, depth),
+    queryKey: ['best-moves', fen, speeds, ratings, depth ?? 'max', color ?? 'turn'],
+    queryFn: () => api.bestMoves(fen, speeds, ratings, depth, color),
     enabled,
     staleTime: 10 * 60_000,
     retry: false,

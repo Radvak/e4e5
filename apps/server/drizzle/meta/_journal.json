@@ -78,6 +78,13 @@
       "when": 1795165360479,
       "tag": "0010_move_paused",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1795298482317,
+      "tag": "0011_stats_period",
+      "breakpoints": true
     }
   ]
 }

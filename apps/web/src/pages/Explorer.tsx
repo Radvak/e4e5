@@ -146,10 +146,11 @@ export function Explorer({ me }: { me: Me }) {
   // Moves at my level for the side to move (Lichess explorer), only when asked: the violet card.
   const [levelDepth, onDepth] = useLevelDepth();
   const depth = levelOn ? levelDepth : 0;
-  // My side is the board's orientation: scores from it, and the search at my level on my turn only
-  // (as in the repertoire editor); on the opponent's turn, the score of each move's games for me.
+  // My side is the board's orientation: scores from it. The search at my level runs on both turns
+  // (as in the repertoire editor): on the opponent's turn each of its moves is scored for me, the
+  // search starting after it. The best move is drawn on my turn only.
   const myTurn = (fen.split(' ')[1] === 'b' ? 'black' : 'white') === orientation;
-  const level = useBestMoves(fen, ex.speeds, ex.ratings, depth > 0 && myTurn, depth);
+  const level = useBestMoves(fen, ex.speeds, ex.ratings, depth > 0, depth, orientation);
   const levelBest = depth > 0 && myTurn ? topLevelMove(level.data) : undefined;
   /** Plays an engine line from the current position (follows the line when it matches). */
   const playMoves = (moves: PlayedMove[]) => {
@@ -255,13 +256,14 @@ export function Explorer({ me }: { me: Me }) {
       brush,
       modifiers: { lineWidth },
     });
-    const out = [...prepared.keys()].map((uci) => arrow(uci, 'repertoire', width(share.get(uci) ?? 0, 9)));
+    // Paused (in every repertoire playing it, as in the list): almost transparent.
+    const out = nextMoves.map((g) => arrow(g.uci, g.paused ? 'paused' : 'repertoire', width(share.get(g.uci) ?? 0, 9)));
     // Orange: the missing moves only (those of "Coups manquants").
     for (const uci of missingHere) out.push(arrow(uci, 'popular', width(share.get(uci) ?? 0)));
-    if (levelBest) out.push(arrow(levelBest.uci, 'level', 9));
-    if (best) out.push(arrow(best.uci, 'engine', 6));
+    if (levelBest) out.push(arrow(levelBest.uci, 'level', 6));
+    if (best) out.push(arrow(best.uci, 'engine', 4));
     return out;
-  }, [data, prepared, missingHere, best?.uci, levelBest?.uci]);
+  }, [data, nextMoves, missingHere, best?.uci, levelBest?.uci]);
 
   /** The line typed instead of the moves path (pencil, or "/"). */
   const [editing, setEditing] = useState(false);
@@ -372,7 +374,7 @@ export function Explorer({ me }: { me: Me }) {
                 depth,
                 maxDepth: LEVEL_STEPS,
                 onDepth,
-                canSearch: myTurn,
+                myTurn,
                 range: rangeLabel(ex.ratings),
                 engineBest: best?.uci,
               }}

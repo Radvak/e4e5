@@ -5,6 +5,10 @@
  * - Otherwise fetched from Lichess when a token is available, and stored.
  * - If Lichess cannot be used (no token, rate limit, network), the closest stored combination
  *   for that position is served instead, flagged `exact: false` so the UI can say so.
+ * - First of all, the statistics of the Lichess game database when the position is in it
+ *   (gameStats.ts, source 'database'): no Lichess request. With that file, the explorer is asked
+ *   for the same months (since/until) and only rows of that period are used, so every number has
+ *   the same scale; rows of the explorer's whole history are left aside.
  * - Imported statistics (source 'import': counted from a sample of Lichess games, e.g. one month
  *   of database.lichess.org) are provisional: their counts are far smaller than the explorer's,
  *   so next to explorer answers they look wrong (128 games here, 1 million one move later). They
@@ -23,6 +27,7 @@ import {
 } from '@tabiya/core';
 import { and, eq, inArray } from 'drizzle-orm';
 import { db } from './db/client.js';
+import { gamePeriod, gameStatsOf, periodKey, type Period } from './gameStats.js';
 import { SEED_DIR } from './paths.js';
 import { positionStats, seedImports } from './db/schema.js';
 import { explorerCooldownUntil, explorerFetch, RateLimited } from './lichess.js';
@@ -40,7 +45,9 @@ export interface StatsMeta {
   /** false: closest available combination, not the one asked for. */
   exact: boolean;
   fetchedAt: string;
-  source: 'lichess' | 'seed' | 'import';
+  source: 'lichess' | 'seed' | 'import' | 'database';
+  /** Months of the games counted (else the explorer's whole history). */
+  period?: Period;
   /** Why live data could not be used, when relevant. */
   reason?: 'no-token' | 'rate-limited' | 'unreachable';
 }
@@ -60,10 +67,22 @@ function toResult(row: Row, exact: boolean, reason?: StatsMeta['reason']) {
       exact,
       fetchedAt: row.fetchedAt.toISOString(),
       source: row.source,
+      ...(row.period ? { period: gamePeriod() ?? undefined } : {}),
       reason,
     },
   };
 }
+
+/** Statistics of the game database file, in the result format; null if the position is not in it. */
+function fromGameStats(fen: string, speeds: string[], ratings: number[]): { data: ExplorerResponse; meta: StatsMeta } | null {
+  const data = gameStatsOf(fen, speeds, ratings, MAX_MOVES);
+  const period = gamePeriod();
+  if (!data || !period) return null;
+  return { data, meta: { speeds, ratings, exact: true, fetchedAt: new Date(`${period.until}-01T00:00:00Z`).toISOString(), source: 'database', period } };
+}
+
+/** Stored rows of the period in use (the game database's, else the whole history). */
+const ofPeriod = () => eq(positionStats.period, periodKey());
 
 /** Keeps only what the app uses (Lichess answers also carry games, per-move openings, …). */
 export function slim(raw: ExplorerResponse): ExplorerResponse {
@@ -108,7 +127,9 @@ export async function getStats(
   token: string | null,
   log: { warn: (obj: object, msg: string) => void },
 ): Promise<StatsResult> {
-  const rows = await db.select().from(positionStats).where(eq(positionStats.fen, fen));
+  const fromFile = fromGameStats(fen, speeds, ratings);
+  if (fromFile) return fromFile;
+  const rows = await db.select().from(positionStats).where(and(eq(positionStats.fen, fen), ofPeriod()));
   const exact = rows.find((r) => r.speeds === csv(speeds) && r.ratings === csv(ratings));
   const settled = exact && (exact.source !== 'import' || !token);
   if (settled && Date.now() - exact.fetchedAt.getTime() < REFRESH_AFTER_MS) return toResult(exact, true);
@@ -125,13 +146,18 @@ export async function getStats(
         topGames: '0',
         recentGames: '0',
       });
+      const period = gamePeriod();
+      if (period) {
+        params.set('since', period.since);
+        params.set('until', period.until);
+      }
       const data = slim((await explorerFetch(`/lichess?${params}`, token)) as ExplorerResponse);
-      const row = { fen, speeds: csv(speeds), ratings: csv(ratings), data, fetchedAt: new Date(), source: 'lichess' as const };
+      const row = { fen, speeds: csv(speeds), ratings: csv(ratings), data, fetchedAt: new Date(), source: 'lichess' as const, period: periodKey() };
       await db
         .insert(positionStats)
         .values(row)
         .onConflictDoUpdate({
-          target: [positionStats.fen, positionStats.speeds, positionStats.ratings],
+          target: [positionStats.fen, positionStats.speeds, positionStats.ratings, positionStats.period],
           set: { data: row.data, fetchedAt: row.fetchedAt, source: row.source },
         });
       return toResult(row, true);
@@ -146,21 +172,28 @@ export async function getStats(
 }
 
 /**
- * Stored statistics of many positions, without calling Lichess: the exact combination (even if
- * old), else the closest stored one (`exact: false`). Positions with nothing stored are absent.
- * Imported statistics count as not exact, so the callers fetch the explorer's in the background.
+ * Stored statistics of many positions, without calling Lichess: the game database file, else the
+ * exact combination (even if old), else the closest stored one (`exact: false`). Positions with
+ * nothing stored are absent. Imported statistics count as not exact, so the callers fetch the
+ * explorer's in the background.
  */
 export async function storedStats(
   fens: string[],
   speeds: string[],
   ratings: number[],
 ): Promise<Map<string, { data: ExplorerResponse; exact: boolean }>> {
+  const out = new Map<string, { data: ExplorerResponse; exact: boolean }>();
+  const rest: string[] = [];
+  for (const fen of fens) {
+    const data = gameStatsOf(fen, speeds, ratings, MAX_MOVES);
+    if (data) out.set(fen, { data, exact: true });
+    else rest.push(fen);
+  }
   const byFen = new Map<string, Row[]>();
-  for (let i = 0; i < fens.length; i += 500) {
-    const rows = await db.select().from(positionStats).where(inArray(positionStats.fen, fens.slice(i, i + 500)));
+  for (let i = 0; i < rest.length; i += 500) {
+    const rows = await db.select().from(positionStats).where(and(inArray(positionStats.fen, rest.slice(i, i + 500)), ofPeriod()));
     for (const r of rows) byFen.set(r.fen, [...(byFen.get(r.fen) ?? []), r]);
   }
-  const out = new Map<string, { data: ExplorerResponse; exact: boolean }>();
   for (const [fen, rows] of byFen) {
     const exact = rows.find((r) => r.speeds === csv(speeds) && r.ratings === csv(ratings));
     const row = exact ?? closest(rows, speeds, ratings);
@@ -294,7 +327,7 @@ export function entriesFromQueryCache(cache: Record<string, ExplorerResponse>, f
  * `source`: 'import' for statistics counted from a sample of games (provisional, see getStats),
  * 'lichess' or 'seed' for answers of the Lichess explorer.
  */
-export async function importEntries(entries: StatsEntry[], source: StatsMeta['source']): Promise<number> {
+export async function importEntries(entries: StatsEntry[], source: Row['source']): Promise<number> {
   let written = 0;
   const batch = 200;
   for (let i = 0; i < entries.length; i += batch) {
@@ -310,13 +343,13 @@ export async function importEntries(entries: StatsEntry[], source: StatsMeta['so
       const [existing] = await db
         .select({ fetchedAt: positionStats.fetchedAt })
         .from(positionStats)
-        .where(and(eq(positionStats.fen, row.fen), eq(positionStats.speeds, row.speeds), eq(positionStats.ratings, row.ratings)));
+        .where(and(eq(positionStats.fen, row.fen), eq(positionStats.speeds, row.speeds), eq(positionStats.ratings, row.ratings), eq(positionStats.period, '')));
       if (existing && existing.fetchedAt >= row.fetchedAt) continue;
       await db
         .insert(positionStats)
         .values(row)
         .onConflictDoUpdate({
-          target: [positionStats.fen, positionStats.speeds, positionStats.ratings],
+          target: [positionStats.fen, positionStats.speeds, positionStats.ratings, positionStats.period],
           set: { data: row.data, fetchedAt: row.fetchedAt, source: row.source },
         });
       written++;
@@ -326,7 +359,7 @@ export async function importEntries(entries: StatsEntry[], source: StatsMeta['so
 }
 
 export async function exportEntries(): Promise<StatsSeed> {
-  const rows = await db.select().from(positionStats);
+  const rows = await db.select().from(positionStats).where(eq(positionStats.period, ''));
   return {
     version: 1,
     entries: rows.map((r) => ({

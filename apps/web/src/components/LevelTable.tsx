@@ -39,8 +39,9 @@ export function useLevelSort() {
  * The Lichess moves of the position merged with the search at my level: one row per move with
  * its score, number of games (absolute: how reliable the score is) and win/draw/loss bar. The score is the move's own one
  * (wins + draws / 2, from my side) at 0, else the expected score over the lines followed while
- * they come up in at least the share of the games set by the box of the footer (checked: 6 %; my
- * turn only; the number of moves follows from it). Sorted by score or by
+ * they come up in at least the share of the games set by the box of the footer (checked: 6 %; the
+ * number of moves follows from it). On the opponent's turn, each of its moves is scored by the
+ * search started after it (my best answer, then the likely lines). Sorted by score or by
  * frequency (arrows of the headers); the first rows, "N autres coups" for the others. A row
  * unfolds into the expected line and the opponent's replies.
  */
@@ -58,7 +59,7 @@ export function LevelTable({
   depth,
   maxDepth,
   onDepth,
-  canSearch,
+  myTurn,
   levelLoading,
   levelError,
   range,
@@ -83,8 +84,11 @@ export function LevelTable({
   depth: number;
   maxDepth: number;
   onDepth: (d: number) => void;
-  /** The search applies here (my turn). */
-  canSearch: boolean;
+  /**
+   * My turn: my moves, by the search from here. Else the opponent's: each of its moves scored
+   * for me by the search started after it (my best answer, then the likely lines).
+   */
+  myTurn: boolean;
   levelLoading: boolean;
   levelError: Error | null;
   /** "1600–1999", for the footer. */
@@ -97,13 +101,13 @@ export function LevelTable({
   const [choice, setChoice] = useLevelSort();
   // By default: my turn by score (my best moves first), the opponent's by number of games (the
   // replies I will most likely face). A sort chosen by a click applies everywhere until undone.
-  const sort: LevelSort = choice ?? (canSearch ? 'score' : 'freq');
+  const sort: LevelSort = choice ?? (myTurn ? 'score' : 'freq');
   const [open, setOpen] = useState<string | null>(null);
   const [all, setAll] = useState(false);
   const total = totalGames(data);
   if (total === 0) return <div className="level-status muted">Aucune partie dans cette position.</div>;
 
-  const searching = canSearch && depth > 0;
+  const searching = depth > 0;
   const found = new Map((searching ? level?.moves ?? [] : []).map((m) => [m.uci, m]));
   const reach = searching ? level?.reach ?? null : null;
   const rows = data.moves
@@ -116,8 +120,9 @@ export function LevelTable({
       return { m, n, rank: data.moves.indexOf(m), direct, best, score: best?.score ?? direct };
     });
   if (sort === 'score') rows.sort((a, b) => b.score - a.score || b.n - a.n);
-  // Searched up to the depth reached: the best of these is the move the search recommends.
-  const top = searching ? rows.find((r) => r.best && r.best.minReach === reach) : undefined;
+  // Searched up to the depth reached: the best of these is the move the search recommends (my
+  // turn only: on the opponent's, the best for me is not its likely move).
+  const top = searching && myTurn ? rows.find((r) => r.best && r.best.minReach === reach) : undefined;
   const shown = all ? rows : rows.slice(0, SHOWN);
 
   /** The moves of `ucis` played from the position (stops at an illegal one). */
@@ -147,8 +152,7 @@ export function LevelTable({
   /** Short state for the footer; `why`: the full explanation (tooltip). */
   let short: string;
   let why: string;
-  if (!canSearch) [short, why] = ['tour adverse', 'Au tour de l’adversaire : score des parties pour vous, sans suivre les lignes.'];
-  else if (depth === 0) [short, why] = ['', 'Score de chaque coup seul : victoires + nulles / 2, pour vous, dans les parties Lichess.'];
+  if (depth === 0) [short, why] = ['', 'Score de chaque coup seul : victoires + nulles / 2, pour vous, dans les parties Lichess.'];
   else if (levelLoading) [short, why] = ['calcul…', 'Calcul à votre niveau…'];
   else if (levelError) [short, why] = ['erreur', levelError.message];
   else if (computing) [short, why] = ['calcul…', `Calcul : ${plural(level!.pending, 'position', 'positions')} à récupérer sur Lichess (${range}) pour suivre les lignes plus loin.`];
@@ -156,7 +160,7 @@ export function LevelTable({
   else if (reached === 0) [short, why] = ['positions manquantes', 'Positions suivantes pas encore récupérées sur Lichess : score de chaque coup seul, pas de ligne à dérouler.'];
   else if (reached < depth) [short, why] = [`${threshold(reached)} atteint`, `Lignes suivies jusqu’à ${pct(steps[reached - 1]!)} des parties seulement : descendre à ${pct(steps[depth - 1]!)} demanderait trop de positions.`];
   else [short, why] = ['', ''];
-  why ||= `Les lignes sont suivies tant qu’elles arrivent dans au moins ${pct(steps[(reached || depth) - 1]!)} des parties à votre niveau (vos meilleurs coups, les réponses adverses pondérées par leur fréquence)${plies > 1 ? ` : ici jusqu’à ${plies} demi-coups plus loin` : ''}. Plus le seuil est bas, plus les lignes vont loin ; le nombre de coups dépend de la position.`;
+  why ||= `${myTurn ? '' : 'Au tour de l’adversaire : chaque coup adverse est calculé comme si l’analyse commençait après lui (votre meilleure réponse, puis les lignes probables). '}Les lignes sont suivies tant qu’elles arrivent dans au moins ${pct(steps[(reached || depth) - 1]!)} des parties à votre niveau (vos meilleurs coups, les réponses adverses pondérées par leur fréquence)${plies > 1 ? ` : ici jusqu’à ${plies} demi-coups plus loin` : ''}. Plus le seuil est bas, plus les lignes vont loin ; le nombre de coups dépend de la position.`;
 
   const header = (key: LevelSort, label: string, title: string, className: string) => (
     <th className={className}>
@@ -193,13 +197,17 @@ export function LevelTable({
             // Searched less far than the depth reached (or not at all): less precise score.
             const pruned = searching && !!level && (!best || best.minReach !== reach);
             const isOpen = open === m.uci && !!best && best.replies.length > 0;
+            // The moves the replies answer: mine, or on the opponent's turn its move and my answer.
+            const before = (best?.line ?? []).slice(0, myTurn ? 1 : 2).map((x) => x.uci);
             const scoreTitle = !searching
               ? `${pct(direct)} pour vous dans les parties Lichess`
               : !best
                 ? 'Pas assez joué pour être calculé plus loin : score de ce coup seul.'
                 : pruned
                   ? `Écarté plus tôt : calculé moins loin, score moins précis (${pct(direct)} après ce coup seul).`
-                  : `Score espéré à votre niveau (${pct(direct)} après ce coup seul).`;
+                  : myTurn
+                    ? `Score espéré à votre niveau (${pct(direct)} après ce coup seul).`
+                    : `Score espéré à votre niveau après ce coup, avec votre meilleure réponse (${pct(direct)} dans ses parties).`;
             return (
               <Fragment key={m.uci}>
                 <tr
@@ -255,11 +263,11 @@ export function LevelTable({
                         {best.replies.map((r) => (
                           <li key={r.uci}>
                             <span className="reply">
-                              <button className="link" onClick={() => onPlay(played([m.uci, r.uci]))}>{numbered(1, r.san)}</button>
+                              <button className="link" onClick={() => onPlay(played([...before, r.uci]))}>{numbered(before.length, r.san)}</button>
                               <span className="muted small-text"> {pct(r.share)} </span>
                               {r.answer && (
-                                <button className="link answer" onClick={() => onPlay(played([m.uci, r.uci, r.answer!.uci]))}>
-                                  {numbered(2, r.answer.san)}
+                                <button className="link answer" onClick={() => onPlay(played([...before, r.uci, r.answer!.uci]))}>
+                                  {numbered(before.length + 1, r.answer.san)}
                                 </button>
                               )}
                             </span>
@@ -284,13 +292,12 @@ export function LevelTable({
           {computing && <span className="pulse" aria-hidden="true" />}
           <input
             type="checkbox"
-            checked={canSearch && depth > 0}
-            disabled={!canSearch}
+            checked={depth > 0}
             onChange={(e) => onDepth(e.target.checked ? maxDepth : 0)}
             aria-label="Profondeur : suivre les lignes probables à votre niveau (sinon : score de chaque coup seul)"
           />
           <span className="level-info">
-            {!canSearch ? 'tour adverse' : `profondeur${depth > 0 && plies > 1 ? ` · ${plies} ½-coups` : ''}${depth > 0 && short ? ` · ${short}` : ''}`}
+            {`profondeur${depth > 0 && plies > 1 ? ` · ${plies} ½-coups` : ''}${depth > 0 && short ? ` · ${short}` : ''}`}
           </span>
         </label>
         <span className="level-range">Lichess {range}</span>

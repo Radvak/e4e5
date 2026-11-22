@@ -20,6 +20,9 @@
  * every score is shrunk towards the score of the position it comes from: `prior` pseudo-games
  * at that score are added to the move's games. Moves with fewer than `minGames` games are not
  * candidates for my side.
+ *
+ * On the opponent's turn (`color` given, not the side to move), each of its likely moves is
+ * scored by the same search started one move later, from the position after it.
  */
 import { totalGames, type ExplorerMove, type ExplorerResponse } from './explorer.js';
 import { playUci, turnOf, type Color } from './position.js';
@@ -44,6 +47,15 @@ export interface BestMovesOptions {
   only?: string[];
   /** Opponent replies listed under each suggested move. */
   maxReplies?: number;
+  /**
+   * My side (default: the side to move). On the opponent's turn, the moves ranked are the
+   * opponent's possible moves (played in `minGames` games or more, `opponentMoves` most played
+   * at most): each is followed by the search from the position after it, as if it started there
+   * (probability 1), so its score is my expected score with my best answer.
+   */
+  color?: Color;
+  /** On the opponent's turn: its moves analysed (most played first). */
+  opponentMoves?: number;
 }
 
 export interface SuggestedMove {
@@ -57,11 +69,15 @@ export interface SuggestedMove {
   score: number;
   /** `minReach` of the search that scored it. */
   minReach: number;
-  /** The move, then the expected line: the most played reply, my best move, … */
+  /**
+   * The move, then the expected line: the most played reply, my best move, … (an opponent's
+   * move: then my best answer, the most played reply, …).
+   */
   line: { uci: string; san: string }[];
   /**
    * Why it scores so: the opponent's replies to it (most played first, `maxReplies` at most),
    * each with my best answer and the expected score after it. Empty when nothing is explored.
+   * For an opponent's move: the replies to my best answer (`line[1]`).
    */
   replies: SuggestedReply[];
 }
@@ -101,6 +117,8 @@ const DEFAULTS: Required<BestMovesOptions> = {
   prior: 50,
   only: [],
   maxReplies: 3,
+  color: 'white', // replaced by the side to move when not given
+  opponentMoves: 10,
 };
 
 /** Score of results from `color`'s side, shrunk towards `towards` with `prior` pseudo-games. */
@@ -117,7 +135,7 @@ export function bestMoves(
 ): BestMovesReport {
   // Options given as undefined keep their default.
   const o = { ...DEFAULTS, ...Object.fromEntries(Object.entries(options).filter(([, v]) => v !== undefined)) } as Required<BestMovesOptions>;
-  const color = turnOf(root);
+  const color = options.color ?? turnOf(root);
   const missing = new Map<string, number>();
   const need = (fen: string, reach: number) => missing.set(fen, Math.max(missing.get(fen) ?? 0, reach));
 
@@ -138,12 +156,12 @@ export function bestMoves(
   };
 
   /** My turn: my best move (null: statistics not known, the caller keeps its own score). */
-  const myTurn = (fen: string, base: number, reach: number, depthLeft: number): Value | null => {
+  const myTurn = (fen: string, base: number, reach: number, depthLeft: number, max = o.candidates): Value | null => {
     const stats = statsAt(fen);
     if (!stats) return void need(fen, reach), null;
     const own = totalGames(stats) ? scoreOf(stats, color, base, o.prior) : base;
     let best: Value | null = null;
-    for (const m of candidatesOf(stats, o.candidates)) {
+    for (const m of candidatesOf(stats, max)) {
       const v = myMove(fen, m, own, reach, depthLeft);
       if (!best || v.score > best.score) best = v;
     }
@@ -179,9 +197,23 @@ export function bestMoves(
   const stats = statsAt(root);
   if (!stats) return { moves: [], missing: [{ fen: root, reach: 1 }] };
   const own = scoreOf(stats, color, 0.5, o.prior);
-  const roots = o.only.length ? stats.moves.filter((m) => o.only.includes(m.uci)) : candidatesOf(stats, o.rootCandidates);
+  const mine = turnOf(root) === color;
+  const roots = o.only.length
+    ? stats.moves.filter((m) => o.only.includes(m.uci))
+    : candidatesOf(stats, mine ? o.rootCandidates : o.opponentMoves);
+  /**
+   * The opponent's move `m`: the search starts after it, at probability 1, as from a root of mine
+   * (my `rootCandidates` answers, then my best moves all along the likely lines).
+   */
+  const opponentMove = (m: ExplorerMove): Value => {
+    const leaf = scoreOf(m, color, own, o.prior);
+    const self = { uci: m.uci, san: m.san };
+    const next = o.minReach <= 1 ? playUci(root, m.uci) : null;
+    const deeper = next ? myTurn(next.toFen, leaf, 1, o.maxDepth, o.rootCandidates) : null;
+    return deeper ? { score: deeper.score, line: [self, ...deeper.line], replies: deeper.replies } : { score: leaf, line: [self] };
+  };
   const moves = roots.map((m) => {
-    const v = myMove(root, m, own, 1, o.maxDepth);
+    const v = mine ? myMove(root, m, own, 1, o.maxDepth) : opponentMove(m);
     return {
       uci: m.uci,
       san: m.san,

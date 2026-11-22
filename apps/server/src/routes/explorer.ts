@@ -44,19 +44,25 @@ export async function explorerRoutes(app: FastifyInstance) {
 
   /**
    * Suggested moves for the side to move: best expected score over the likely lines
-   * (`suggestMoves`). The positions of the next step are fetched in the background and
+   * (`suggestMoves`); with `color` the other side, the opponent's moves scored for me. The positions of the next step are fetched in the background and
    * `pending` says to ask again; positions stored for another range are fetched for the asked
    * one once the search is complete.
    */
   app.get('/api/explorer/best', { preHandler: requireUser }, async (req, reply) => {
-    const q = query.extend({ depth: z.coerce.number().int().min(0).max(REACH_STEPS.length).default(REACH_STEPS.length) }).parse(req.query);
+    const q = query
+      .extend({
+        depth: z.coerce.number().int().min(0).max(REACH_STEPS.length).default(REACH_STEPS.length),
+        // My side (default: the side to move); on the opponent's turn, its moves are scored for me.
+        color: z.enum(['white', 'black']).optional(),
+      })
+      .parse(req.query);
     const root = parseFen(q.fen);
     if (!root) return reply.code(400).send({ error: 'FEN invalide' });
     if (!q.speeds.length || !q.ratings.length) return reply.code(400).send({ error: 'speeds and ratings required' });
     const token = req.user!.lichessToken ?? env.lichessAppToken;
     const first = await getStats(root, q.speeds, q.ratings, token, req.log);
     if (!first.data) return { moves: [], reach: null, target: REACH_STEPS.at(-1)!, steps: REACH_STEPS, pending: 0 };
-    const { missing, approximate, ...found } = await suggestMoves(root, { data: first.data, exact: first.meta.exact }, q.speeds, q.ratings, q.depth);
+    const { missing, approximate, ...found } = await suggestMoves(root, { data: first.data, exact: first.meta.exact }, q.speeds, q.ratings, q.depth, q.color);
     const toFetch = missing.length ? missing : found.reach === found.target ? approximate : [];
     const pending = token && toFetch.length ? prefetchStats(toFetch, q.speeds, q.ratings, token, req.log) : 0;
     return { ...found, steps: REACH_STEPS, pending };

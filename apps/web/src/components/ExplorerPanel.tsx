@@ -28,7 +28,8 @@ interface Props {
     depth: number;
     maxDepth: number;
     onDepth: (d: number) => void;
-    canSearch: boolean;
+    /** My turn (else the opponent's moves are scored for me, the search starting after each). */
+    myTurn: boolean;
     range: string;
     engineBest?: string;
   };
@@ -40,7 +41,14 @@ export const REASONS: Record<NonNullable<StatsMeta['reason']>, string> = {
   unreachable: 'Lichess est injoignable',
 };
 
-/** Says where the numbers come from when they are not live data for the selected range. */
+const monthLabel = (m: string) => new Date(`${m}-01T00:00:00Z`).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+/** "octobre 2026", "août 2026 – octobre 2026". */
+const periodLabel = (p: NonNullable<StatsMeta['period']>) => (p.since === p.until ? monthLabel(p.since) : `${monthLabel(p.since)} – ${monthLabel(p.until)}`);
+
+/**
+ * Says where the numbers come from: the months of games counted (so they differ from the Lichess
+ * site, which counts every game), and when they are not live data for the selected range.
+ */
 function provenance(meta: StatsMeta): string | null {
   const date = new Date(meta.fetchedAt).toLocaleDateString('fr-FR');
   const why = meta.reason ? ` (${REASONS[meta.reason]})` : '';
@@ -48,6 +56,7 @@ function provenance(meta: StatsMeta): string | null {
     return `Pas de données pour votre tranche : parties Lichess ${speedsLabel(meta.speeds)} de joueurs ${rangeLabel(meta.ratings)}, du ${date}${why}.`;
   }
   if (meta.reason) return `Données enregistrées le ${date}${why}.`;
+  if (meta.period) return `Parties Lichess : ${periodLabel(meta.period)}.`;
   return null;
 }
 
@@ -81,7 +90,7 @@ export function ExplorerPanel({ fen, color, inRep, nagsOf, stats, error, loading
           depth={level.depth}
           maxDepth={level.maxDepth}
           onDepth={level.onDepth}
-          canSearch={level.canSearch}
+          myTurn={level.myTurn}
           levelLoading={level.loading}
           levelError={level.error}
           range={level.range}
