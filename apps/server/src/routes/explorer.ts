@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { requireUser } from '../auth.js';
 import { db } from '../db/client.js';
 import { env } from '../env.js';
-import { getStudy, getStudyPreview, searchStudies, StudyError } from '../lichessStudies.js';
+import { getStudy, StudyError, studiesBy } from '../lichessStudies.js';
 import { getStats, prefetchStats, storedStats } from '../stats.js';
 
 const SPEEDS = ['bullet', 'blitz', 'rapid', 'classical'];
@@ -90,11 +90,12 @@ export async function explorerRoutes(app: FastifyInstance) {
     return myGamesAt(db, user.id, { lichess: user.lichessUsername, chesscom: user.chesscomUsername }, { ...q, fen });
   });
 
-  /** Public Lichess studies (to create a repertoire from one): ?q= (empty: all), most liked first. */
+  /** The public studies of a Lichess player (to create a repertoire from one), most recently updated first. */
   app.get('/api/lichess/studies', { preHandler: requireUser }, async (req, reply) => {
-    const q = z.object({ q: z.string().trim().max(100).default(''), page: z.coerce.number().int().min(1).max(100).default(1) }).parse(req.query);
+    const q = z.object({ by: z.string().regex(/^[A-Za-z0-9_-]{2,30}$/) }).safeParse(req.query);
+    if (!q.success) return reply.code(400).send({ error: 'Pseudo Lichess invalide' });
     try {
-      return await searchStudies(q.q, q.page);
+      return await studiesBy(q.data.by);
     } catch (e) {
       if (e instanceof StudyError) return reply.code(e.status).send({ error: e.message });
       throw e;
@@ -106,17 +107,6 @@ export async function explorerRoutes(app: FastifyInstance) {
     if (!/^[A-Za-z0-9]{8}$/.test(req.params.id)) return reply.code(400).send({ error: 'Identifiant d’étude invalide' });
     try {
       return await getStudy(req.params.id);
-    } catch (e) {
-      if (e instanceof StudyError) return reply.code(e.status).send({ error: e.message });
-      throw e;
-    }
-  });
-
-  /** The card of a study in the catalogue: side, chapters, moves, thumbnail. */
-  app.get<{ Params: { id: string } }>('/api/lichess/studies/:id/preview', { preHandler: requireUser }, async (req, reply) => {
-    if (!/^[A-Za-z0-9]{8}$/.test(req.params.id)) return reply.code(400).send({ error: 'Identifiant d’étude invalide' });
-    try {
-      return await getStudyPreview(req.params.id);
     } catch (e) {
       if (e instanceof StudyError) return reply.code(e.status).send({ error: e.message });
       throw e;

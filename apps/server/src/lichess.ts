@@ -45,3 +45,15 @@ export function explorerFetch(path: string, token: string): Promise<unknown> {
   queue = task.catch(() => undefined);
   return task;
 }
+
+/**
+ * Calls to the lichess.org API (studies, games export), one at a time for all users: Lichess
+ * answers 429 "Please only run 1 request(s) at a time" to a second request from the same address.
+ * The explorer (another host) has its own queue above.
+ */
+let apiQueue: Promise<unknown> = Promise.resolve();
+export function lichessApiQueue<T>(task: () => Promise<T>): Promise<T> {
+  const run = apiQueue.then(task);
+  apiQueue = run.catch(() => undefined);
+  return run;
+}

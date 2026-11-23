@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { clearStudyCache, getStudy, getStudyPreview, searchStudies, StudyError } from '../src/lichessStudies.js';
+import { clearStudyCache, getStudy, StudyError, studiesBy } from '../src/lichessStudies.js';
 
 /** Answers of Lichess, by path prefix (as seen through the prototype). */
 function stubLichess(routes: Record<string, { status?: number; body: string }>) {
@@ -18,17 +18,13 @@ afterEach(() => {
   clearStudyCache();
 });
 
-const PAGE = JSON.stringify({
-  paginator: {
-    currentPage: 1,
-    maxPerPage: 16,
-    nbResults: 18865,
-    nbPages: 1180,
-    currentPageResults: [
-      { id: 'jtlLwUvh', name: 'Caro-Kann Defense', likes: 50999, updatedAt: 1733290608071, owner: { name: 'Someone', id: 'someone' }, chapters: [], topics: ['Defenses'], visibility: 'public' },
-    ],
-  },
-});
+// The official API's list of a player's studies (ndjson), as seen from production.
+const BY_PLAYER = [
+  { id: 'jsSks17H', name: 'Sicilian Defense', createdAt: 1611340981495, updatedAt: 1700000000000 },
+  { id: 'jtlLwUvh', name: 'Caro-Kann Defense', createdAt: 1612369937607, updatedAt: 1733290608071 },
+]
+  .map((s) => JSON.stringify(s))
+  .join('\n');
 
 const STUDY = `[Event "Caro-Kann: Intro"]
 [StudyName "Caro-Kann \\"CK\\""]
@@ -51,22 +47,18 @@ const STUDY = `[Event "Caro-Kann: Intro"]
 `;
 
 describe('Lichess studies', () => {
-  it('searches the public studies, most liked first', async () => {
-    const calls = stubLichess({ '/study/search': { body: PAGE } });
-    const page = await searchStudies('caro kann', 2);
-    expect(calls[0]).toEqual({ url: 'https://lichess.org/study/search?q=caro+kann&order=popular&page=2', accept: 'application/json' });
-    expect(page).toEqual({
-      page: 1,
-      nbPages: 1180,
-      nbResults: 18865,
-      studies: [{ id: 'jtlLwUvh', name: 'Caro-Kann Defense', likes: 50999, owner: 'Someone', topics: ['Defenses'], updatedAt: 1733290608071 }],
-    });
+  it("lists a player's public studies, most recently updated first, once for everyone", async () => {
+    const calls = stubLichess({ '/api/study/by/leninperez': { body: BY_PLAYER } });
+    const list = await studiesBy('LeninPerez');
+    await studiesBy('leninperez');
+    expect(calls).toEqual([{ url: 'https://lichess.org/api/study/by/leninperez', accept: 'application/x-ndjson' }]);
+    expect(list.map((s) => s.name)).toEqual(['Caro-Kann Defense', 'Sicilian Defense']);
   });
 
-  it('lists the most liked studies without a query', async () => {
-    const calls = stubLichess({ '/study/all/popular': { body: PAGE } });
-    await searchStudies('', 1);
-    expect(calls[0]!.url).toBe('https://lichess.org/study/all/popular?page=1');
+  it('says when a player does not exist, and when Lichess limits the requests', async () => {
+    stubLichess({ '/api/study/by/busy': { status: 429, body: '{"error":"Please only run 1 request(s) at a time"}' } });
+    await expect(studiesBy('nobody')).rejects.toEqual(new StudyError(404, 'Joueur Lichess introuvable'));
+    await expect(studiesBy('busy')).rejects.toMatchObject({ status: 429 });
   });
 
   it('exports a study chapter by chapter, with its side', async () => {
@@ -85,12 +77,17 @@ describe('Lichess studies', () => {
     await expect(getStudy('zzzzzzzz')).rejects.toEqual(new StudyError(404, 'Étude introuvable ou privée'));
   });
 
-  it('exports a study once for its card and its chapters (cache), and previews it', async () => {
-    const calls = stubLichess({ '/api/study/jtlLwUvh.pgn': { body: STUDY } });
-    const [preview] = await Promise.all([getStudyPreview('jtlLwUvh'), getStudy('jtlLwUvh')]);
-    await getStudy('jtlLwUvh');
-    expect(calls).toHaveLength(1);
-    expect(preview).toMatchObject({ id: 'jtlLwUvh', color: 'black', chapters: 2, moves: 6, trunk: { sans: ['e4', 'c6', 'd4', 'd5', 'e5', 'Bf5'], branches: [] } });
+  it('exports a study once for everyone (cache), one request at a time', async () => {
+    let running = 0;
+    let most = 0;
+    vi.stubGlobal('fetch', async (url: string) => {
+      most = Math.max(most, ++running);
+      await new Promise((r) => setTimeout(r, 5));
+      running--;
+      return new Response(url.includes('/api/study/') && url.includes('.pgn') ? STUDY : BY_PLAYER);
+    });
+    await Promise.all([getStudy('jtlLwUvh'), getStudy('jtlLwUvh'), studiesBy('someone'), getStudy('AbCd1234')]);
+    expect(most).toBe(1);
   });
 
   it('does not keep a failed export', async () => {

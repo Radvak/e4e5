@@ -13,6 +13,8 @@ export interface GameSources {
   lichessToken?: string | null;
   /** Extra headers (the server's User-Agent). */
   headers?: Record<string, string>;
+  /** Runs the lichess.org calls one at a time (Lichess answers 429 to a second one from the same address). */
+  lichessQueue?: <T>(task: () => Promise<T>) => Promise<T>;
 }
 
 export const PUBLIC_SOURCES: GameSources = { chesscomApi: 'https://api.chess.com', lichessHost: 'https://lichess.org' };
@@ -102,11 +104,14 @@ export async function lichessUserGames(src: GameSources, username: string, since
     perfType: 'ultraBullet,bullet,blitz,rapid,classical,correspondence',
     ...(since ? { since: String(since + 1) } : {}),
   });
-  const res = await fetch(`${src.lichessHost}/api/games/user/${encodeURIComponent(username)}?${params}`, {
-    headers: { ...src.headers, Accept: 'application/x-ndjson', ...(src.lichessToken ? { Authorization: `Bearer ${src.lichessToken}` } : {}) },
-  });
-  if (!res.ok) throw new Error(`Lichess games export ${res.status}`);
-  return (await res.text())
+  const call = async () => {
+    const res = await fetch(`${src.lichessHost}/api/games/user/${encodeURIComponent(username)}?${params}`, {
+      headers: { ...src.headers, Accept: 'application/x-ndjson', ...(src.lichessToken ? { Authorization: `Bearer ${src.lichessToken}` } : {}) },
+    });
+    if (!res.ok) throw new Error(`Lichess games export ${res.status}`);
+    return res.text();
+  };
+  return (await (src.lichessQueue ? src.lichessQueue(call) : call()))
     .split('\n')
     .filter((line) => line.trim())
     .map((line) => JSON.parse(line) as LichessGameExport);

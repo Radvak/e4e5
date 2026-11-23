@@ -1,8 +1,8 @@
 import { lichessStudyRef, pgnToMoves, trunkOf, type Color, type Thumbnail } from '@tabiya/core';
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { api, type LichessStudy, type LichessStudySummary, type RepertoireSummary } from '../api';
+import { api, type LichessStudy, type Me, type RepertoireSummary } from '../api';
 import { lineText } from '../chessText';
 import { MiniBoard } from '../components/MiniBoard';
 import { Button, Icon, PageHeader, Tabs, plural } from '../ui';
@@ -17,7 +17,6 @@ function useDebounced<T>(value: T, ms: number): T {
   return v;
 }
 
-const likes = (n: number) => (n >= 1000 ? `${(n / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} k` : String(n));
 const arrowsOf = (t: Thumbnail) => t.branches.map((uci) => ({ uci, kind: 'repertoire' as const }));
 const COLOR_TABS = [
   { id: 'white' as const, label: <><span className="dot white" /> Blancs</> },
@@ -25,12 +24,12 @@ const COLOR_TABS = [
 ];
 
 /**
- * New repertoire, from one search field and one side: what is typed filters the public Lichess
- * studies of that side (cards: thumbnail, size; most liked first) and is also the name of an
- * empty repertoire to create (Entrée, or the "Créer" row). A pasted study link opens it. A study opens its chapters
- * to choose from (?etude=, ?chapitre= for a chapter link).
+ * New repertoire, from one search field: what is typed is the name of an empty repertoire to
+ * create (Entrée, or the "Créer" row) and filters the Lichess studies of an author; a pasted
+ * study link opens it. A study opens its chapters to choose from (?etude=, ?chapitre= for a
+ * chapter link).
  */
-export function NewRepertoire() {
+export function NewRepertoire({ me }: { me: Me }) {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
@@ -65,22 +64,35 @@ export function NewRepertoire() {
       {studyId ? (
         <StudyImport key={studyId} studyId={studyId} chapterId={chapterId} onBack={closeStudy} onCreated={created} />
       ) : (
-        <Catalogue onOpen={openStudy} onCreated={created} />
+        <Catalogue me={me} onOpen={openStudy} onCreated={created} />
       )}
     </div>
   );
 }
 
 /**
- * The search field with the side (one choice for both: the empty repertoire's side, and the
- * studies shown), the empty repertoire named after what is typed ("Créer « … »", once typing),
- * and the public Lichess studies matching it, of that side, as cards.
+ * Authors of popular Lichess studies, offered to browse (the official API lists a player's
+ * studies but has no search nor popularity ranking).
  */
-function Catalogue({ onOpen, onCreated }: { onOpen: (ref: { studyId: string; chapterId?: string }) => void; onCreated: (rep: RepertoireSummary) => void }) {
+const AUTHORS = ['LeninPerez', 'Toxenory', 'EricRosen', 'FunnyAnimatorJimTV', 'Mr_Penings', 'Yonushke'];
+
+/** Lower case without accents, for the search. */
+const norm = (s: string) => s.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
+const monthYear = (ms: number) => new Date(ms).toLocaleDateString('fr-FR', { month: 'short', year: 'numeric' });
+/** Rows shown before "Afficher plus". */
+const SHOWN = 40;
+
+/**
+ * The search field with the side (the empty repertoire's), the empty repertoire named after
+ * what is typed ("Créer « … »", once typing), and the Lichess studies of an author (one request
+ * per author), filtered by what is typed. "@pseudo" lists any player's studies.
+ */
+function Catalogue({ me, onOpen, onCreated }: { me: Me; onOpen: (ref: { studyId: string; chapterId?: string }) => void; onCreated: (rep: RepertoireSummary) => void }) {
   const [params, setParams] = useSearchParams();
   // Typed into local state (the URL lags behind fast typing), copied to the URL (?q=) to come back to.
   const [input, setInput] = useState(() => params.get('q') ?? '');
   const color: Color = params.get('couleur') === 'black' ? 'black' : 'white';
+  const mine = me.lichess?.username;
   const set = (key: string, value: string) =>
     setParams(
       (p) => {
@@ -92,27 +104,38 @@ function Catalogue({ onOpen, onCreated }: { onOpen: (ref: { studyId: string; cha
       { replace: true },
     );
   const ref = lichessStudyRef(input);
-  const name = ref ? '' : input.trim().slice(0, 100);
-  const q = useDebounced(name, 400);
+  // "@pseudo": a player whose studies to list, not a name nor a filter.
+  const at = input.trim().match(/^@([A-Za-z0-9_-]{2,30})$/)?.[1];
+  const name = ref || input.trim().startsWith('@') ? '' : input.trim().slice(0, 100);
+  const typed = useDebounced(input, 300);
   useEffect(() => {
     if (ref) onOpen(ref);
   }, [ref?.studyId, ref?.chapterId]);
   useEffect(() => {
-    if (!ref) set('q', q);
-  }, [q]);
+    if (!ref) set('q', typed.trim());
+  }, [typed]);
+  const atDebounced = useDebounced(at, 500);
+  useEffect(() => {
+    if (atDebounced) set('auteur', atDebounced);
+  }, [atDebounced]);
+
+  const author = params.get('auteur') || mine || AUTHORS[0]!;
+  const authors = [...new Set([...(mine ? [mine] : []), ...AUTHORS, author])];
+  const [all, setAll] = useState(false);
+  useEffect(() => setAll(false), [author, name]);
 
   const create = useMutation({ mutationFn: () => api.createRepertoire(name, color), onSuccess: onCreated });
   const side = color === 'white' ? 'Blancs' : 'Noirs';
-  const list = useInfiniteQuery({
-    queryKey: ['lichess-studies', q],
-    queryFn: ({ pageParam }) => api.lichessStudies(q, pageParam),
-    initialPageParam: 1,
-    getNextPageParam: (last) => (last.page < last.nbPages ? last.page + 1 : undefined),
-    staleTime: 10 * 60_000,
+  const list = useQuery({
+    queryKey: ['lichess-studies-by', author.toLowerCase()],
+    queryFn: () => api.lichessStudiesBy(author),
+    staleTime: 30 * 60_000,
     retry: false,
   });
-  const studies = list.data?.pages.flatMap((p) => p.studies) ?? [];
-  const total = list.data?.pages[0]?.nbResults ?? 0;
+  const words = norm(name).split(/\s+/).filter(Boolean);
+  const matching = (list.data ?? []).filter((s) => words.every((w) => norm(s.name).includes(w)));
+  const shown = all ? matching : matching.slice(0, SHOWN);
+  const who = author === mine ? 'vous' : author;
 
   return (
     <section className="catalogue">
@@ -129,8 +152,8 @@ function Catalogue({ onOpen, onCreated }: { onOpen: (ref: { studyId: string; cha
           <input
             autoFocus
             type="search"
-            placeholder="Nom du répertoire ou ouverture à chercher (Caro-Kann, Londres…)"
-            aria-label="Nom du répertoire ou étude Lichess à chercher"
+            placeholder="Nom du répertoire, étude à chercher, ou @pseudo Lichess"
+            aria-label="Nom du répertoire, étude à chercher, ou pseudo Lichess"
             value={input}
             onChange={(e) => setInput(e.target.value)}
           />
@@ -152,78 +175,49 @@ function Catalogue({ onOpen, onCreated }: { onOpen: (ref: { studyId: string; cha
       {create.error && <p className="error">{create.error.message}</p>}
 
       <div className="catalogue-head">
-        <h3>{q ? `Ou partir d’une étude Lichess pour les ${side}` : `Études Lichess populaires pour les ${side}`}</h3>
+        <h3>{name ? 'Ou partir d’une étude Lichess' : 'Partir d’une étude Lichess'}</h3>
+        <div className="author-chips" role="tablist" aria-label="Auteur des études">
+          {authors.map((a) => (
+            <button key={a} type="button" role="tab" aria-selected={a === author} className={`chip ${a === author ? 'on' : ''}`} onClick={() => set('auteur', a === (mine ?? AUTHORS[0]) ? '' : a)}>
+              {a === mine ? 'Mes études' : a}
+            </button>
+          ))}
+        </div>
         <p className="muted small-text">
-          {!q
-            ? 'Les plus aimées, prêtes à importer et à réviser.'
-            : list.isLoading
-              ? `Recherche de « ${q} »…`
-              : `Parmi ${plural(total, 'étude publique', 'études publiques')} pour « ${q} », les plus aimées d’abord : importez-en une avec ses lignes.`}
+          {list.isLoading
+            ? `Chargement des études de ${who}…`
+            : list.data
+              ? name
+                ? matching.length
+                  ? `${plural(matching.length, 'étude', 'études')} de ${who} sur ${list.data.length} ${matching.length > 1 ? 'contiennent' : 'contient'} « ${name} ».`
+                  : ''
+                : `${plural(list.data.length, 'étude publique', 'études publiques')} de ${who}, les plus récentes d’abord. Tapez pour filtrer, ou « @pseudo » pour un autre joueur.`
+              : ''}
         </p>
       </div>
-      {list.isLoading && <StudyGridSkeleton />}
       {list.error && <p className="error">{list.error.message}</p>}
-      {list.data && studies.length === 0 && <p className="muted catalogue-empty">Aucune étude trouvée.</p>}
-      {studies.length > 0 && (
-        <div className="study-grid">
-          {studies.map((s) => <StudyCard key={s.id} study={s} color={color} onOpen={() => onOpen({ studyId: s.id })} />)}
-        </div>
+      {list.data && matching.length === 0 && (
+        <p className="muted catalogue-empty">{name ? `Aucune étude de ${who} ne contient « ${name} ».` : `${who === 'vous' ? 'Vous n’avez' : `${who} n’a`} pas d’étude publique.`}</p>
       )}
-      {list.hasNextPage && (
+      {shown.length > 0 && (
+        <ul className="study-rows">
+          {shown.map((s) => (
+            <li key={s.id}>
+              <button type="button" className="study-row" onClick={() => onOpen({ studyId: s.id })}>
+                <span className="study-name">{s.name}</span>
+                <span className="study-meta">{monthYear(s.updatedAt)}</span>
+                <Icon name="chevron" size={16} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {!all && matching.length > SHOWN && (
         <div className="catalogue-more">
-          <Button onClick={() => list.fetchNextPage()} disabled={list.isFetchingNextPage}>
-            {list.isFetchingNextPage ? 'Chargement…' : 'Plus d’études'}
-          </Button>
+          <Button onClick={() => setAll(true)}>{plural(matching.length - SHOWN, 'autre étude', 'autres études')}</Button>
         </div>
       )}
     </section>
-  );
-}
-
-function StudyGridSkeleton() {
-  return (
-    <div className="study-grid" aria-hidden="true">
-      {Array.from({ length: 8 }, (_, i) => (
-        <div key={i} className="study-card skeleton">
-          <div className="study-thumb" />
-          <div className="study-body"><span className="bar" /><span className="bar short" /></div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-/** A study: its thumbnail (where its lines split), name, likes, author, side and size. */
-function StudyCard({ study, color, onOpen }: { study: LichessStudySummary; color: Color; onOpen: () => void }) {
-  const preview = useQuery({
-    queryKey: ['lichess-study-preview', study.id],
-    queryFn: () => api.lichessStudyPreview(study.id),
-    staleTime: 60 * 60_000,
-    retry: false,
-  });
-  const p = preview.data;
-  // Only the studies of the side chosen, once known (those not previewed yet stay, dimmed); a
-  // study that cannot be exported (private, removed) could not be imported either.
-  if ((p && p.color !== color) || preview.error) return null;
-  return (
-    <button type="button" className={`study-card ${p ? '' : 'pending'}`} onClick={onOpen} title={p?.trunk.sans.length ? lineText(p.trunk.sans) : study.name}>
-      <div className="study-thumb">
-        {p ? <MiniBoard fen={p.trunk.fen} orientation={p.color} arrows={arrowsOf(p.trunk)} /> : <div className={`thumb-placeholder ${preview.isLoading ? 'loading' : ''}`} />}
-      </div>
-      <div className="study-body">
-        <span className="study-name">{study.name}</span>
-        <span className="study-meta">♥ {likes(study.likes)} · {study.owner}</span>
-        <span className="study-meta">
-          {p ? (
-            <>
-              <span className={`dot ${p.color}`} /> {p.color === 'white' ? 'Blancs' : 'Noirs'} · {plural(p.chapters, 'chapitre', 'chapitres')}
-            </>
-          ) : (
-            '…'
-          )}
-        </span>
-      </div>
-    </button>
   );
 }
 

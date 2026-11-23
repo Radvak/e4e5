@@ -147,15 +147,20 @@ export function ReviewMode({
   /** Positions (fen) put aside with a swipe, whatever the repertoire (the cards are the user's). */
   const skipped = useRef(new Set<string>());
   /**
-   * The lines of the session in order, finished or passed (the dots left of the swipe bar; a swipe
-   * to the right comes back to the last one passed).
+   * The lines of the session in order, finished or passed: the dots of the swipe bar, a history
+   * browsed like back / forward (a swipe to the right: the line before; to the left: the next one,
+   * then the training where it was).
    */
   const [trail, setTrail] = useState<TrailEntry[]>([]);
   const trailIds = useRef(0);
+  /** The line of the trail on the board (replayed, nothing recorded); null: the training itself. */
+  const [cursor, setCursor] = useState<number | null>(null);
+  /** The training left while browsing the trail: its question, or what was to come after a pause. */
+  const live = useRef<{ question: Question | null } | { next: () => Question | null } | null>(null);
   /** The line being answered (`id`: a passed line taken up again, its dot replaced at the end). */
   const line = useRef<{ id?: number; questions: Question[]; results: TrailResult[] }>({ questions: [], results: [] });
-  /** A line replayed from the trail: the questions left, then where a passed line goes on for real. */
-  const replay = useRef<{ id: number; rest: Question[]; resume?: { question: Question; entry: TrailEntry } } | null>(null);
+  /** The line of the trail being replayed: its questions left. */
+  const replay = useRef<{ id: number; rest: Question[] } | null>(null);
   /** Ends the line being answered: its dot (grey when passed at `skippedAt`). */
   const closeLine = (skippedAt?: Question) => {
     const l = line.current;
@@ -166,7 +171,6 @@ export function ReviewMode({
     const answeredHere = (e: TrailEntry) => e.result === 'passed' && !!e.skippedAt && l.questions.some((q) => same(q, e.skippedAt!));
     setTrail((t) => [...t.filter((e) => e.id !== l.id && !answeredHere(e)), { ...entry, id: ++trailIds.current }]);
   };
-  const passedCount = trail.filter((e) => e.result === 'passed').length;
   const firstOf = (items: Item[]) => items.find((p) => !skipped.current.has(p.target.fen)) ?? items[0];
   /** reviewed: all answers; asked: positions already learnt; firstTry: asked and right first time. */
   const [stats, setStats] = useState({ reviewed: 0, asked: 0, firstTry: 0 });
@@ -367,19 +371,29 @@ export function ReviewMode({
     if (card && Date.parse(card.due) <= Date.now() + SOON_MS) onReview(q.source, q.target.fen, move.uci, 'good');
   };
 
-  /** The question waiting for the pause between two lines (a swipe asks it at once). */
+  /** The question waiting for the pause between two lines (a swipe asks it at once), and how it is made. */
   const pending = useRef<(() => void) | null>(null);
+  const pendingNext = useRef<(() => Question | null) | null>(null);
   /** Asks `next` after `ms` (or at once on a swipe). */
   const later = (next: () => Question | null, ms: number) => {
     const go = () => {
       clearTimeout(jumpTimer.current);
       jumpTimer.current = undefined;
       pending.current = null;
+      pendingNext.current = null;
       setNow(Date.now());
       ask(next());
     };
     pending.current = go;
+    pendingNext.current = next;
     jumpTimer.current = setTimeout(go, ms);
+  };
+  /** Stops the pause before the next question (browsing the trail). */
+  const stopPending = () => {
+    clearTimeout(jumpTimer.current);
+    jumpTimer.current = undefined;
+    pending.current = null;
+    pendingNext.current = null;
   };
 
   /** The first question waiting (after a replay: back where the session was). */
@@ -389,20 +403,12 @@ export function ReviewMode({
   };
 
   const onAnswered = (q: Question, played: RepMove, outcome: Outcome) => {
-    // A line replayed from the trail: its next question as played then (nothing recorded); a passed
-    // line then goes on for real where it was passed; else back to the questions waiting.
+    // A line replayed from the trail: its next question as played then (nothing recorded); at its
+    // end it stays on the board (a swipe goes on browsing).
     if (q.replay !== undefined) {
-      const r = replay.current;
-      const next = r?.rest.shift();
-      if (r && next) return ask({ ...next, isNew: false, replay: r.id });
-      replay.current = null;
-      if (r?.resume) {
-        const { question: resumed, entry } = r.resume;
-        line.current = { id: entry.id, questions: [...entry.questions], results: [...entry.results] };
-        return ask(resumed);
-      }
-      setLineDone(true);
-      return later(firstWaiting, LINE_END_MS);
+      const next = replay.current?.rest.shift();
+      if (next) return ask({ ...next, isNew: false, replay: replay.current!.id });
+      return setLineDone(true);
     }
     record(q, outcome);
     const { next, end } = nextAfter(q, played);
@@ -419,12 +425,9 @@ export function ReviewMode({
   /** The positions of the line of `q` from it (put aside by a swipe; by position: cards are the user's). */
   const lineKeys = (q: Item & { expected: RepMove }) => [q.target.fen, ...restOfLine(q.source, q.expected).map((m) => m.toFen)];
   const onSkip = (q: Question) => {
+    // Browsing the trail: the next line, then the training where it was.
+    if (cursor !== null) return cursor + 1 < trail.length ? openAt(cursor + 1) : backToTraining();
     if (pending.current) return pending.current();
-    if (q.replay !== undefined) {
-      replay.current = null;
-      setNow(Date.now());
-      return ask(firstWaiting());
-    }
     closeLine(q);
     for (const k of lineKeys(q)) skipped.current.add(k);
     const items = queue.items.filter((p) => !same(p, q));
@@ -435,47 +438,53 @@ export function ReviewMode({
   };
 
   /**
-   * Tap on a dot of the trail: the whole line again, from its first move, the opponent replying as
-   * then. What was answered is replayed without recording anything (the review schedule stays
-   * right; the moves to be found, not shown); a passed line then goes on for real where it was
-   * passed (no longer put aside), its dot updated at its end. Then back to the questions waiting.
+   * The line `i` of the trail on the board: replayed from its first move, the opponent replying as
+   * then (a passed line: up to the question it was passed at), nothing recorded (the review
+   * schedule stays right; the moves to be found, not shown). The training is kept where it was.
    */
-  const onOpen = (id: number) => {
-    const e = trail.find((x) => x.id === id);
+  const openAt = (i: number) => {
+    const e = trail[i];
     if (!e) return;
-    clearTimeout(jumpTimer.current);
-    jumpTimer.current = undefined;
-    pending.current = null;
+    if (cursor === null) live.current = pendingNext.current ? { next: pendingNext.current } : { question: current };
+    stopPending();
     setNow(Date.now());
-    // The line being answered is left: passed (its dot), as with a swipe.
-    if (current && current.replay === undefined && line.current.questions.length) {
-      closeLine(current);
-      for (const k of lineKeys(current)) skipped.current.add(k);
-    }
-    replay.current = null;
-    const skippedAt = e.result === 'passed' ? e.skippedAt : undefined;
-    if (skippedAt) for (const k of lineKeys(skippedAt)) skipped.current.delete(k);
-    const resume = skippedAt && { question: question(skippedAt, skippedAt.lead), entry: e };
-    const [first, ...rest] = e.questions;
-    if (!first) {
-      if (!resume) return;
-      line.current = { id: e.id, questions: [], results: [] };
-      return ask(resume.question);
-    }
-    replay.current = { id: e.id, rest, resume };
+    setCursor(i);
+    const [first, ...rest] = e.result === 'passed' && e.skippedAt ? [...e.questions, e.skippedAt] : e.questions;
+    if (!first) return;
+    replay.current = { id: e.id, rest };
     ask({ ...first, lead: undefined, isNew: false, replay: e.id });
   };
 
-  /** Swipe to the right: back to the last line passed. */
+  /** Back to the training, where it was left (the same question, or the one that was coming). */
+  const backToTraining = () => {
+    const l = live.current;
+    live.current = null;
+    replay.current = null;
+    setCursor(null);
+    setNow(Date.now());
+    ask(!l ? firstWaiting() : 'next' in l ? l.next() : l.question && { ...l.question });
+  };
+
+  /** Swipe to the right: the line before (from the training: the last one). */
   const onBack = () => {
-    const last = [...trail].reverse().find((e) => e.result === 'passed');
-    if (last) onOpen(last.id);
+    const i = cursor === null ? trail.length - 1 : cursor - 1;
+    if (i >= 0) openAt(i);
+  };
+
+  /** Tap on a dot: that line; on the training's dot: back to it. */
+  const onOpen = (id: number) => {
+    const i = trail.findIndex((e) => e.id === id);
+    if (i >= 0 && i !== cursor) openAt(i);
   };
 
   if (!current) {
     return (
       <div className="panel done">
         <h3>{sources.every((s) => s.positions.length === 0) ? 'Rien à entraîner ici' : 'Tout est fait pour l’instant 🎉'}</h3>
+        {/* The lines of the session can still be seen again (swipe to the right, or a dot). */}
+        {trail.length > 0 && (
+          <SwipeBar onSkip={() => {}} onBack={onBack} canBack before={trail} onOpen={onOpen} hint="revoir les lignes de la séance →" />
+        )}
         {sources.every((s) => s.positions.length === 0) && (
           <p className="muted">Aucune position où c’est à vous de jouer dans ces lignes : ajoutez (et enregistrez) d’abord des coups pour votre camp.</p>
         )}
@@ -516,10 +525,14 @@ export function ReviewMode({
       onAnswered={(played, outcome) => onAnswered(played.uci === current.expected.uci ? current : { ...current, expected: played }, played, outcome)}
       onSkip={() => onSkip(current)}
       onAlternative={(move) => onAlternative(current, move)}
-      passed={passedCount}
       onBack={onBack}
-      trail={trail}
+      canBack={cursor === null ? trail.length > 0 : cursor > 0}
+      browsing={cursor !== null}
+      before={trail.slice(0, cursor ?? trail.length)}
+      after={cursor === null ? [] : trail.slice(cursor + 1)}
+      viewing={cursor === null ? undefined : trail[cursor]}
       onOpen={onOpen}
+      onTraining={backToTraining}
     />
   );
 }
@@ -559,10 +572,14 @@ function Drill({
   onAnswered,
   onAlternative,
   onSkip,
-  passed,
   onBack,
-  trail,
+  canBack,
+  browsing,
+  before,
+  after,
+  viewing,
   onOpen,
+  onTraining,
 }: {
   /** Changes with each question. Not used as a React key: the board must stay mounted. */
   round: number;
@@ -572,13 +589,19 @@ function Drill({
   onAlternative: (move: Pick<RepMove, 'uci'>) => void;
   /** Swipe to the left on the bar under the board: the next question. */
   onSkip: () => void;
-  /** Lines passed so far (a swipe to the right comes back to the last one). */
-  passed: number;
-  /** Swipe to the right: back to the last line passed. */
+  /** Swipe to the right: the line before. */
   onBack: () => void;
-  /** The lines of the session (dots left of the swipe bar); tap: `onOpen`. */
-  trail: TrailDot[];
+  canBack: boolean;
+  /** A line of the trail is on the board (not the training). */
+  browsing: boolean;
+  /** The lines before the one on the board (dots left of the handle) and after it (right). */
+  before: TrailDot[];
+  after: TrailDot[];
+  /** The line on the board (its result colours the handle). */
+  viewing?: TrailDot;
   onOpen: (id: number) => void;
+  /** Tap on the training's dot (right of the handle while browsing): back to it. */
+  onTraining: () => void;
   /** The line ends with the move just played (shown until the next line). */
   lineDone: boolean;
 }) {
@@ -738,7 +761,17 @@ function Drill({
         {/* The quiz's line so far (since it started, not from the first move), annotations in colour. */}
         <QuizLine moves={moves.slice(lineFrom.current)} firstPly={lineFrom.current} />
         {question.replay !== undefined && <p className="replay-note muted small-text">↺ Rejeu — pas compté dans les révisions</p>}
-        <SwipeBar onSkip={onSkip} onBack={onBack} passed={passed} trail={trail} activeId={question.replay} onOpen={onOpen} />
+        <SwipeBar
+          onSkip={onSkip}
+          onBack={onBack}
+          canBack={canBack}
+          browsing={browsing}
+          before={before}
+          after={after}
+          viewing={viewing}
+          onOpen={onOpen}
+          onTraining={onTraining}
+        />
         <DrillActions
           hinted={hinted || revealed}
           disabled={!asking}
