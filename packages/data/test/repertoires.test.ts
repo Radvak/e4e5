@@ -12,6 +12,8 @@ import {
   getRepertoire,
   importPgn,
   listRepertoires,
+  positionRepertoires,
+  repertoireMovesAt,
   saveLine,
   updateMove,
   type Db,
@@ -36,6 +38,21 @@ beforeEach(async () => {
 const E4_E5 = ['e2e4', 'e7e5'];
 
 describe('repertoires', () => {
+  it('lists the repertoires and moves of a position', async () => {
+    const white = await createRepertoire(db, 'u1', { name: 'Blancs', color: 'white' });
+    const black = await createRepertoire(db, 'u1', { name: 'Noirs', color: 'black' });
+    await saveLine(db, 'u1', white.id, [...E4_E5, 'g1f3']);
+    await saveLine(db, 'u1', black.id, ['e2e4', 'c7c5']);
+    const afterE4 = 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1';
+    expect((await repertoireMovesAt(db, 'u1', afterE4)).map((m) => [m.name, m.san])).toEqual(
+      expect.arrayContaining([['Blancs', 'e5'], ['Noirs', 'c5']]),
+    );
+    const afterE5 = 'rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2';
+    expect(await positionRepertoires(db, 'u1', afterE5)).toEqual([{ repertoireId: white.id, name: 'Blancs', color: 'white', moves: 1 }]);
+    expect(await repertoireMovesAt(db, 'u2', afterE4)).toEqual([]);
+    await expect(positionRepertoires(db, 'u1', 'pas une position')).rejects.toMatchObject({ statusCode: 400 });
+  });
+
   it('saves a line, with the first move of a position as the main one', async () => {
     const rep = await createRepertoire(db, 'u1', { name: 'Blancs', color: 'white' });
     expect(await saveLine(db, 'u1', rep.id, [...E4_E5, 'g1f3'])).toEqual({ added: 3 });

@@ -10,7 +10,7 @@ import { games, gameSyncs, type User } from './db/schema.js';
 import { env } from './env.js';
 import { analyseGames, loadRepertoires } from './gameAnalysis.js';
 import { lichessUserGames, type LichessGameExport } from './lichess.js';
-import { makeDue } from './moveCards.js';
+import { makeDue } from '@tabiya/data';
 
 export type Source = 'lichess' | 'chesscom';
 type GameRow = typeof games.$inferInsert;
@@ -162,7 +162,7 @@ async function scheduleDeviations(userId: string, job: SyncJob) {
   let reviews = 0;
   for (const a of analyseGames(recent, reps)) {
     if (a.kind !== 'my-deviation' || !a.repertoireId) continue;
-    reviews += await makeDue(userId, a.repertoireId, a.fen);
+    reviews += await makeDue(db, userId, a.repertoireId, a.fen);
   }
   job.reviews = reviews;
 }

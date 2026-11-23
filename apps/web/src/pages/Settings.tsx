@@ -161,12 +161,14 @@ function LocalModeSetting() {
   const queryClient = useQueryClient();
   const local = isLocalMode();
   const copy = async () => {
-    if (!confirm('Remplacer les répertoires de cet appareil par une copie de ceux du serveur ?')) return;
+    if (!confirm('Remplacer les répertoires et la progression de cet appareil par une copie de ceux du serveur ?')) return;
     setState('Copie en cours…');
     try {
       const { copyFromServer } = await import('../local/backend');
       const n = await copyFromServer(serverApi);
-      setState(`${plural(n.repertoires, 'répertoire copié', 'répertoires copiés')}, ${plural(n.moves, 'coup', 'coups')}.`);
+      setState(
+        `${plural(n.repertoires, 'répertoire copié', 'répertoires copiés')}, ${plural(n.moves, 'coup', 'coups')}, ${plural(n.cards, 'coup appris', 'coups appris')}.`,
+      );
       await queryClient.invalidateQueries();
     } catch (e) {
       setState(`Échec : ${e instanceof Error ? e.message : String(e)}`);
@@ -177,10 +179,10 @@ function LocalModeSetting() {
       <h3>Mode local (expérimental)</h3>
       <div className="setting">
         <div className="what">
-          <strong>Répertoires sur cet appareil</strong>
+          <strong>Répertoires et entraînement sur cet appareil</strong>
           <div className="hint">
-            Les répertoires sont lus et enregistrés dans le navigateur, sans le serveur. Le reste (entraînement, statistiques, parties) passe
-            encore par le serveur. Un seul onglet à la fois.
+            Les répertoires et la progression sont lus et enregistrés dans le navigateur, sans le serveur. Le reste (statistiques, parties)
+            passe encore par le serveur. Un seul onglet à la fois.
           </div>
         </div>
         <label className="check">
@@ -191,7 +193,7 @@ function LocalModeSetting() {
         <div className="setting">
           <div className="what">
             <strong>Copier depuis le serveur</strong>
-            <div className="hint">Remplace les répertoires de cet appareil par ceux du serveur (mêmes identifiants).</div>
+            <div className="hint">Remplace les répertoires et la progression de cet appareil par ceux du serveur (mêmes identifiants).</div>
             {state && <div className="hint">{state}</div>}
           </div>
           <button onClick={copy}>Copier</button>

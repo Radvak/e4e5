@@ -3,6 +3,7 @@
  * app running without a server: same queries, same rules.
  */
 import {
+  fenKey,
   pgnToMoves,
   playUci,
   playUciOn,
@@ -14,7 +15,7 @@ import {
   type Color,
   type RepMove,
 } from '@tabiya/core';
-import { and, asc, eq, inArray, ne } from 'drizzle-orm';
+import { and, asc, eq, inArray, ne, or, sql } from 'drizzle-orm';
 import { DataError, newId, type Db } from './db.js';
 import { planSync } from './repertoireSync.js';
 import { repertoires, repMoves, type RepMoveRow } from './schema.js';
@@ -286,4 +287,55 @@ export async function exportPgn(db: Db, userId: string, id: string) {
   const rep = await ownRepertoire(db, userId, id);
   const pgn = repertoireToPgn(new Repertoire(rep.color, await loadMoves(db, rep.id)), rep.name);
   return { pgn, filename: rep.name.replace(/[^\w-]+/g, '_') || 'repertoire' };
+}
+
+/** The position of a FEN as stored in the moves (core fenKey), else a 400. */
+function positionKey(fen: string): string {
+  try {
+    return fenKey(positionFromFen(fen));
+  } catch {
+    throw new DataError(400, 'FEN invalide');
+  }
+}
+
+/** Moves prepared in this position in any of the user's repertoires (both colours). */
+export async function repertoireMovesAt(db: Db, userId: string, fen: string) {
+  const key = positionKey(fen);
+  return db
+    .select({
+      repertoireId: repertoires.id,
+      name: repertoires.name,
+      color: repertoires.color,
+      id: repMoves.id,
+      paused: repMoves.paused,
+      uci: repMoves.uci,
+      san: repMoves.san,
+      isMain: repMoves.isMain,
+      comment: repMoves.comment,
+      nags: repMoves.nags,
+    })
+    .from(repMoves)
+    .innerJoin(repertoires, eq(repMoves.repertoireId, repertoires.id))
+    .where(and(eq(repertoires.userId, userId), eq(repMoves.fromFen, key)));
+}
+
+/**
+ * The repertoires containing this position (reached by one of their moves, or with moves from
+ * it: the initial position), with the number of their moves from here (0: end of their line).
+ */
+export async function positionRepertoires(db: Db, userId: string, fen: string) {
+  const key = positionKey(fen);
+  const rows = await db
+    .select({
+      repertoireId: repertoires.id,
+      name: repertoires.name,
+      color: repertoires.color,
+      moves: sql<number>`sum(case when ${repMoves.fromFen} = ${key} then 1 else 0 end)`,
+    })
+    .from(repMoves)
+    .innerJoin(repertoires, eq(repMoves.repertoireId, repertoires.id))
+    .where(and(eq(repertoires.userId, userId), or(eq(repMoves.fromFen, key), eq(repMoves.toFen, key))))
+    .groupBy(repertoires.id)
+    .orderBy(repertoires.name);
+  return rows.map((r) => ({ ...r, moves: Number(r.moves) }));
 }

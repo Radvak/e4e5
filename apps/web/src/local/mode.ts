@@ -1,6 +1,7 @@
 /**
- * Local mode (experimental, migration without a server): the repertoires are read and written
- * in SQLite on this device instead of the server; the rest still goes to the server. Turned on
+ * Local mode (experimental, migration without a server): the repertoires and the training are
+ * read and written in SQLite on this device instead of the server; the rest still goes to the
+ * server. Turned on
  * and off in Paramètres, or with ?local=1 / ?local=0 in the address.
  */
 const KEY = 'tabiya.backend';
@@ -17,6 +18,11 @@ export const LOCAL_METHODS = [
   'updateMove',
   'deleteMove',
   'importPgn',
+  'positionRepertoires',
+  'repertoireMovesAt',
+  'cards',
+  'review',
+  'reviewNow',
 ] as const;
 export type LocalMethod = (typeof LOCAL_METHODS)[number];
 
