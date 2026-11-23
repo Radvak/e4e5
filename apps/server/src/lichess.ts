@@ -67,6 +67,18 @@ export function explorerFetch(path: string, token: string): Promise<unknown> {
   return task;
 }
 
+/**
+ * Calls to the lichess.org API (studies, games export), one at a time for all users: Lichess
+ * answers 429 "Please only run 1 request(s) at a time" to a second request from the same address.
+ * The explorer (another host) has its own queue above.
+ */
+let apiQueue: Promise<unknown> = Promise.resolve();
+export function lichessApiQueue<T>(task: () => Promise<T>): Promise<T> {
+  const run = apiQueue.then(task);
+  apiQueue = run.catch(() => undefined);
+  return run;
+}
+
 /** A game of the Lichess games export (only the fields used). */
 export interface LichessGameExport {
   id: string;
@@ -93,11 +105,14 @@ export async function lichessUserGames(username: string, since: number | null, t
     perfType: 'ultraBullet,bullet,blitz,rapid,classical,correspondence',
     ...(since ? { since: String(since + 1) } : {}),
   });
-  const res = await fetch(`${env.lichessHost}/api/games/user/${encodeURIComponent(username)}?${params}`, {
-    headers: { Accept: 'application/x-ndjson', 'User-Agent': UA, ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+  const text = await lichessApiQueue(async () => {
+    const res = await fetch(`${env.lichessHost}/api/games/user/${encodeURIComponent(username)}?${params}`, {
+      headers: { Accept: 'application/x-ndjson', 'User-Agent': UA, ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    });
+    if (!res.ok) throw new Error(`Lichess games export ${res.status}`);
+    return res.text();
   });
-  if (!res.ok) throw new Error(`Lichess games export ${res.status}`);
-  return (await res.text())
+  return text
     .split('\n')
     .filter((line) => line.trim())
     .map((line) => JSON.parse(line) as LichessGameExport);

@@ -196,7 +196,7 @@ export function App() {
           <Route path="/" element={<Redirect to="/repertoires" />} />
           <Route path="/parties" element={<Games />} />
           <Route path="/repertoires" element={<Repertoires me={me.data} />} />
-          <Route path="/repertoires/nouveau" element={<NewRepertoire />} />
+          <Route path="/repertoires/nouveau" element={<NewRepertoire me={me.data} />} />
           <Route path="/r/:id" element={<RepertoireEditor me={me.data} />} />
           <Route path="/r/:id/train" element={<Training me={me.data} />} />
           <Route path="/train" element={<Training me={me.data} />} />
