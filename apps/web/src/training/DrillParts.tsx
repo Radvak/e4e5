@@ -51,33 +51,45 @@ export function QuizLine({ moves, firstPly }: { moves: RepMove[]; firstPly: numb
 }
 
 /**
- * The bar under the board to swipe on (like Android's gesture bar, touch screens only): its handle
- * follows the finger; to the left past a threshold: `onSkip`; to the right: `onBack` when there
- * is something to come back to (`passed` lines). On its left, the trail: a dot per line of the
- * session (green right, red a move missed, grey passed, hollow learnt), the latest ones; a tap on
- * one takes the line up again (`onOpen`). With a trail, the bar shows on every screen.
+ * The bar under the board to swipe on (like Android's gesture bar): its handle follows the finger;
+ * to the left past a threshold: `onSkip`; to the right: `onBack` when `canBack`.
+ *
+ * With a trail (the review): the lines of the session are dots (green right, red a move missed,
+ * grey passed, hollow learnt), browsed like back / forward. In the training, they are all left
+ * of the handle. Browsing (`browsing`, the line `viewing` on the board, its colour on the handle):
+ * the lines before it on the left, the ones after it on the right, then the training's dot. A tap
+ * on a dot opens that line (`onOpen`), on the training's dot goes back to it (`onTraining`). With
+ * a trail, the bar shows on every screen (the handle and its hint: touch screens only).
  */
 export function SwipeBar({
   onSkip,
   onBack,
-  passed = 0,
+  canBack = false,
   label = 'passer',
-  trail = [],
-  activeId,
+  browsing = false,
+  before = [],
+  after = [],
+  viewing,
   onOpen,
+  onTraining,
+  hint: hintText,
 }: {
   onSkip: () => void;
   onBack?: () => void;
-  passed?: number;
+  canBack?: boolean;
   label?: string;
-  trail?: TrailDot[];
-  /** The dot of the question on the board (replayed from the trail). */
-  activeId?: number;
+  browsing?: boolean;
+  before?: TrailDot[];
+  after?: TrailDot[];
+  viewing?: TrailDot;
   onOpen?: (id: number) => void;
+  onTraining?: () => void;
+  /** Text under the handle instead of the usual one. */
+  hint?: string;
 }) {
   const handle = useRef<HTMLSpanElement>(null);
   const swipe = useRef<{ x: number; y: number; axis: 'x' | 'y' | null } | null>(null);
-  const canBack = !!onBack && passed > 0;
+  const back = canBack && !!onBack;
   const slide = (dx: number) => {
     const el = handle.current;
     if (!el) return;
@@ -93,11 +105,30 @@ export function SwipeBar({
     const dx = t.clientX - s.x;
     const threshold = Math.max(50, e.currentTarget.getBoundingClientRect().width * 0.25);
     if (-dx > threshold) onSkip();
-    else if (dx > threshold && canBack) onBack!();
+    else if (dx > threshold && back) onBack!();
   };
+  const dot = (d: TrailDot) => (
+    <button
+      key={d.id}
+      type="button"
+      className={`trail-dot ${d.result}`}
+      title={`Ligne ${TRAIL_LABELS[d.result]} — la revoir depuis le début (pas compté)`}
+      aria-label={`Revoir la ligne ${TRAIL_LABELS[d.result]}`}
+      onClick={() => onOpen?.(d.id)}
+    >
+      <span />
+    </button>
+  );
+  const hint = hintText ?? (browsing
+    ? back
+      ? '← suivante · précédente →'
+      : '← suivante'
+    : back
+      ? `← ${label} · revenir →`
+      : `← balayez pour ${label}`);
   return (
     <div
-      className={`swipe-bar${trail.length ? ' has-trail' : ''}`}
+      className={`swipe-bar${before.length || browsing ? ' has-trail' : ''}`}
       onTouchStart={(e) => {
         const t = e.touches[0];
         swipe.current = t && e.touches.length === 1 ? { x: t.clientX, y: t.clientY, axis: null } : null;
@@ -112,32 +143,30 @@ export function SwipeBar({
           if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
           s.axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
         }
-        // To the left: pass; to the right: back (if any, else it gives a little).
-        if (s.axis === 'x') slide(dx < 0 || canBack ? dx : dx / 6);
+        // To the left: next; to the right: back (if any, else it gives a little).
+        if (s.axis === 'x') slide(dx < 0 || back ? dx : dx / 6);
       }}
       onTouchEnd={end}
       onTouchCancel={end}
-      title={canBack ? `Balayez vers la gauche pour ${label}, vers la droite pour revenir (${passed} passée${passed > 1 ? 's' : ''})` : `Balayez vers la gauche pour ${label}`}
+      title={hint}
     >
-      {trail.length > 0 && (
-        <span className="swipe-trail" aria-label="Lignes de la séance">
-          {trail.length > MAX_DOTS && <span className="more">+{trail.length - MAX_DOTS}</span>}
-          {trail.slice(-MAX_DOTS).map((d) => (
-            <button
-              key={d.id}
-              type="button"
-              className={`trail-dot ${d.result}${d.id === activeId ? ' active' : ''}`}
-              title={`Ligne ${TRAIL_LABELS[d.result]} — la reprendre depuis le début${d.result === 'passed' ? '' : ' (pas compté)'}`}
-              aria-label={`Reprendre la ligne ${TRAIL_LABELS[d.result]}`}
-              onClick={() => onOpen?.(d.id)}
-            >
-              <span />
-            </button>
-          ))}
+      {before.length > 0 && (
+        <span className="swipe-trail before" aria-label="Lignes précédentes">
+          {before.length > MAX_DOTS && <span className="more">+{before.length - MAX_DOTS}</span>}
+          {before.slice(-MAX_DOTS).map(dot)}
         </span>
       )}
-      <span ref={handle} className="swipe-handle" aria-hidden="true" />
-      <span className="swipe-label muted">{canBack ? `← ${label} · revenir →` : `← balayez pour ${label}`}</span>
+      <span ref={handle} className={`swipe-handle${viewing ? ` ${viewing.result}` : ''}`} aria-hidden="true" />
+      {browsing && (
+        <span className="swipe-trail after" aria-label="Lignes suivantes">
+          {after.slice(0, MAX_DOTS).map(dot)}
+          {after.length > MAX_DOTS && <span className="more">+{after.length - MAX_DOTS}</span>}
+          <button type="button" className="trail-dot training" title="Revenir à l’entraînement en cours" aria-label="Revenir à l’entraînement en cours" onClick={onTraining}>
+            <span />
+          </button>
+        </span>
+      )}
+      <span className="swipe-label muted">{hint}</span>
     </div>
   );
 }

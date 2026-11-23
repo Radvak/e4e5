@@ -769,16 +769,22 @@ button.badge:focus-visible { outline: 2px solid currentColor; outline-offset: 1p
 /* Without a touch screen the bar only holds the trail (no swipe). */
 @media (hover: hover), (pointer: fine) { .swipe-bar .swipe-handle, .swipe-bar .swipe-label { visibility: hidden; } }
 /* The trail: a dot per question of the session, a tap comes back to it (padding: a finger-sized target). */
-.swipe-trail { position: absolute; left: 0; top: 50%; transform: translateY(-50%); display: flex; align-items: center; max-width: calc(50% - 44px); overflow: hidden; }
-.swipe-trail .more { font-size: 0.68rem; color: var(--muted); margin-right: 2px; flex: none; }
+.swipe-trail { position: absolute; top: 50%; transform: translateY(-50%); display: flex; align-items: center; max-width: calc(50% - 44px); overflow: hidden; }
+.swipe-trail.before { left: 0; }
+.swipe-trail.after { right: 0; }
+.swipe-trail .more { font-size: 0.68rem; color: var(--muted); margin: 0 2px; flex: none; }
+/* The training in progress (right while browsing the trail): a ring. */
+.trail-dot.training > span { background: none; box-shadow: inset 0 0 0 1.5px var(--text); }
+/* The line on the board while browsing: the handle takes its colour. */
+.swipe-handle.right { background: #3fb950; }
+.swipe-handle.wrong { background: var(--danger); }
+.swipe-handle.new { background: none; box-shadow: inset 0 0 0 1.5px #3fb950; }
 .trail-dot { flex: none; min-height: 0; width: 18px; height: 26px; padding: 0; border: none; background: none; display: flex; align-items: center; justify-content: center; cursor: pointer; }
 .trail-dot > span { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); transition: transform 0.12s; }
 .trail-dot.right > span { background: #3fb950; }
 .trail-dot.wrong > span { background: var(--danger); }
 .trail-dot.new > span { background: none; box-shadow: inset 0 0 0 1.5px #3fb950; }
 .trail-dot:hover > span { transform: scale(1.3); }
-.trail-dot.active > span { box-shadow: 0 0 0 2px var(--bg, #1b1a17), 0 0 0 3.5px var(--text); }
-.trail-dot.new.active > span { box-shadow: inset 0 0 0 1.5px #3fb950, 0 0 0 2px var(--bg, #1b1a17), 0 0 0 3.5px var(--text); }
 .replay-note { text-align: center; margin: 2px var(--page-pad) 0; }
 
 /* Move annotations (components/Nag.tsx), usual colours. */
