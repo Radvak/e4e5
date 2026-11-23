@@ -10,7 +10,8 @@ export interface StatsMeta {
   source: 'lichess' | 'seed' | 'import' | 'database';
   /** Months of the games counted (YYYY-MM), else the explorer's whole history. */
   period?: { since: string; until: string };
-  reason?: 'no-token' | 'rate-limited' | 'unreachable';
+  /** local-stats: local mode, the statistics files of the settings not on the device. */
+  reason?: 'no-token' | 'rate-limited' | 'unreachable' | 'local-stats';
 }
 export interface Stats {
   data: ExplorerResponse;
@@ -61,6 +62,8 @@ export interface Me {
   chesscom: { username: string; ratings: ChesscomRatings | null } | null;
   /** Live explorer statistics available (own Lichess token or the app's); stored ones are always served. */
   explorer: boolean;
+  /** Local mode: the accounts are kept on this device (no login, no password). */
+  local?: boolean;
 }
 export interface RepertoireSummary {
   id: string;

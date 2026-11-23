@@ -47,8 +47,9 @@ export function Account({ me }: { me: Me }) {
           <strong>{me.username}</strong>
           {me.guest && <span className="muted"> · invité (sans mot de passe, pour tester)</span>}
           {me.login && !me.guest && <span className="muted"> · identifiant « {me.login} »</span>}
+          {me.local && <span className="muted"> · sur cet appareil (mode local, sans connexion)</span>}
         </p>
-        {!me.guest && (
+        {!me.guest && !me.local && (
           <form
             className="form-row"
             onSubmit={(e) => {
@@ -71,7 +72,7 @@ export function Account({ me }: { me: Me }) {
             </Button>
           </form>
         )}
-        {!me.guest && !me.hasPassword && (
+        {!me.guest && !me.local && !me.hasPassword && (
           <p className="muted small-text">Un identifiant et un mot de passe permettent aussi de se connecter sans Lichess (par exemple sur un réseau où Lichess est bloqué).</p>
         )}
       </section>
@@ -88,13 +89,19 @@ export function Account({ me }: { me: Me }) {
             </div>
           </div>
           {me.lichess ? (
-            me.hasPassword && (
+            (me.hasPassword || me.local) && (
               <Button size="sm" variant="danger" onClick={() => confirm('Délier votre compte Lichess ?') && unlink.mutate()}>
                 Délier
               </Button>
             )
           ) : (
-            <Button size="sm" href="/api/auth/login">Lier Lichess</Button>
+            <Button
+              size="sm"
+              href={me.local ? undefined : '/api/auth/login'}
+              onClick={me.local ? () => void import('../local/lichessLogin').then((m) => m.startLichessLogin()) : undefined}
+            >
+              Lier Lichess
+            </Button>
           )}
         </div>
         <div className="setting">

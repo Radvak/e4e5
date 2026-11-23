@@ -9,3 +9,5 @@ export * from './gamesReport.js';
 export * from './myGames.js';
 export * from './openings.js';
 export * from './gaps.js';
+export * from './lichessAccount.js';
+export * from './profile.js';

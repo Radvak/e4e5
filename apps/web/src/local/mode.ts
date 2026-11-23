@@ -9,6 +9,9 @@ const KEY = 'tabiya.backend';
 /** The API methods answered on this device in local mode (local/backend.ts). */
 export const LOCAL_METHODS = [
   'me',
+  'updateMe',
+  'unlinkLichess',
+  'logout',
   'repertoires',
   'createRepertoire',
   'renameRepertoire',

@@ -2,7 +2,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { gapCutoffFor, LINE_DEPTHS } from '@tabiya/core';
-import { serverApi, type Me, type TrainingSummary } from '../api';
+import { ApiError, serverApi, type Me, type TrainingSummary } from '../api';
 import { isLocalMode, setLocalMode } from '../local/mode';
 import { RatingRange } from '../components/RatingRange';
 import { depthPct, explorerParams, NO_LIMIT, SPEED_CHOICES, SPEED_NAMES, useSettings, type LearnOrder, type SpeedChoice } from '../settings';
@@ -161,7 +161,7 @@ function LocalModeSetting({ ratings }: { ratings: number[] }) {
   const queryClient = useQueryClient();
   const local = isLocalMode();
   const copy = async () => {
-    if (!confirm('Remplacer les répertoires et la progression de cet appareil par une copie de ceux du serveur ?')) return;
+    if (!confirm('Remplacer les répertoires, la progression et les comptes de cet appareil par une copie de ceux du serveur ?')) return;
     setState('Copie en cours…');
     try {
       const { copyFromServer } = await import('../local/backend');
@@ -171,7 +171,8 @@ function LocalModeSetting({ ratings }: { ratings: number[] }) {
       );
       await queryClient.invalidateQueries();
     } catch (e) {
-      setState(`Échec : ${e instanceof Error ? e.message : String(e)}`);
+      const signedOut = e instanceof ApiError && e.status === 401;
+      setState(signedOut ? 'Échec : connectez-vous d’abord au serveur (mode local désactivé), puis réactivez-le.' : `Échec : ${e instanceof Error ? e.message : String(e)}`);
     }
   };
   return (
@@ -182,7 +183,7 @@ function LocalModeSetting({ ratings }: { ratings: number[] }) {
           <strong>Répertoires, entraînement et parties sur cet appareil</strong>
           <div className="hint">
             Les répertoires, la progression et vos parties sont enregistrés dans le navigateur, sans le serveur. Les parties sont importées
-            directement depuis Lichess et Chess.com, et les statistiques sont lues dans des fichiers téléchargés (ci-dessous). Les comptes passent encore par le serveur. Un seul onglet à la fois.
+            directement depuis Lichess et Chess.com, et les statistiques sont lues dans des fichiers téléchargés (ci-dessous). Vos comptes Lichess et Chess.com sont liés sur cet appareil (Mon compte), sans connexion au serveur. Un seul onglet à la fois.
           </div>
         </div>
         <label className="check">
@@ -193,7 +194,7 @@ function LocalModeSetting({ ratings }: { ratings: number[] }) {
         <div className="setting">
           <div className="what">
             <strong>Copier depuis le serveur</strong>
-            <div className="hint">Remplace les répertoires et la progression de cet appareil par ceux du serveur (mêmes identifiants).</div>
+            <div className="hint">Remplace les répertoires, la progression et les comptes liés de cet appareil par ceux du serveur (mêmes identifiants). Le lien Lichess est à refaire sur l’appareil.</div>
             {state && <div className="hint">{state}</div>}
           </div>
           <button onClick={copy}>Copier</button>
