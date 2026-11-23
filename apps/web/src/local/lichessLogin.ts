@@ -3,10 +3,14 @@
  * needs no client secret nor registration; the token stays on the device (local database).
  *
  * The page goes to Lichess and comes back to /lichess-callback (LichessCallback page) with a
- * code, exchanged here for the token. In the Capacitor app the way back will be the app's own
- * address (deep link) instead.
+ * code, exchanged here for the token. In the mobile app, Lichess opens in the system browser and
+ * comes back to the app's own address (com.tabiya://lichess-callback), handed to the same page by
+ * listenForLichessCallback.
  */
 import { exchangeCode, linkLichess, PUBLIC_SOURCES } from '@tabiya/data';
+import { Browser } from '@capacitor/browser';
+import { App } from '@capacitor/app';
+import { isNative, NATIVE_CALLBACK } from '../native';
 import { LOCAL_USER, localDb } from './db';
 
 const CLIENT_ID = 'tabiya';
@@ -14,7 +18,7 @@ const KEY = 'tabiya.lichess-oauth';
 
 const b64url = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 const random = (n: number) => b64url(crypto.getRandomValues(new Uint8Array(n)));
-const redirectUri = () => `${location.origin}/lichess-callback`;
+const redirectUri = () => (isNative() ? NATIVE_CALLBACK : `${location.origin}/lichess-callback`);
 
 /** Goes to Lichess to authorise the app (back on /lichess-callback). */
 export async function startLichessLogin(): Promise<void> {
@@ -30,7 +34,18 @@ export async function startLichessLogin(): Promise<void> {
     code_challenge: challenge,
     state,
   });
-  location.assign(`${PUBLIC_SOURCES.lichessHost}/oauth?${params}`);
+  const url = `${PUBLIC_SOURCES.lichessHost}/oauth?${params}`;
+  if (isNative()) await Browser.open({ url });
+  else location.assign(url);
+}
+
+/** Mobile app: back from Lichess on the app's address, the code handed to /lichess-callback. */
+export function listenForLichessCallback() {
+  void App.addListener('appUrlOpen', ({ url }) => {
+    if (!url.startsWith(NATIVE_CALLBACK)) return;
+    void Browser.close().catch(() => undefined);
+    location.assign(`/lichess-callback${url.slice(NATIVE_CALLBACK.length)}`);
+  });
 }
 
 /** Back from Lichess: the code exchanged for the token, the account linked on the device. */

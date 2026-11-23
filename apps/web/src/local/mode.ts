@@ -4,6 +4,8 @@
  * statistics are read in files downloaded on it; the rest still goes to the server. Turned on
  * and off in Paramètres, or with ?local=1 / ?local=0 in the address.
  */
+import { isNative } from '../native';
+
 const KEY = 'tabiya.backend';
 
 /** The API methods answered on this device in local mode (local/backend.ts). */
@@ -47,7 +49,8 @@ const fromUrl = new URLSearchParams(location.search).get('local');
 if (fromUrl === '1') localStorage.setItem(KEY, 'local');
 else if (fromUrl === '0') localStorage.removeItem(KEY);
 
-export const isLocalMode = (): boolean => localStorage.getItem(KEY) === 'local';
+/** Always in the mobile app (no server there). */
+export const isLocalMode = (): boolean => isNative() || localStorage.getItem(KEY) === 'local';
 
 /** Changes the mode and reloads the app (the API methods are chosen at start). */
 export function setLocalMode(on: boolean) {

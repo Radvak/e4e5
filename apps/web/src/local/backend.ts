@@ -50,9 +50,10 @@ import {
 } from '@tabiya/data';
 import { moveCards, repertoires, repMoves, users } from '@tabiya/data/schema';
 import { eq } from 'drizzle-orm';
-import { ApiError, serverApi, type api, type Me, type RepertoireDetail, type RepertoireSummary, type ReviewCard } from '../api';
+import { ApiError, serverApi, UNREACHABLE, type api, type Me, type RepertoireDetail, type RepertoireSummary, type ReviewCard } from '../api';
 import { LOCAL_USER, localDb } from './db';
 import type { LocalMethod } from './mode';
+import { isNative } from '../native';
 import { localStats } from './stats';
 
 type Api = typeof api;
@@ -115,9 +116,11 @@ const loadOpenings = () =>
  */
 async function fromServer<T>(call: () => Promise<T>): Promise<T> {
   try {
+    // The mobile app has no server.
+    if (isNative()) throw new ApiError(UNREACHABLE, 'Pas de serveur');
     return await call();
   } catch (e) {
-    if (e instanceof ApiError && e.status === 401) {
+    if (e instanceof ApiError && (e.status === 401 || e.status === UNREACHABLE)) {
       throw new ApiError(404, 'Statistiques absentes de cet appareil : téléchargez les tranches de vos réglages (Paramètres › Mode local)', {
         reason: 'local-stats',
       });
