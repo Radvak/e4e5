@@ -11,3 +11,4 @@ export * from './openings.js';
 export * from './gaps.js';
 export * from './lichessAccount.js';
 export * from './profile.js';
+export * from './lichessStudies.js';

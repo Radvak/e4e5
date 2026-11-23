@@ -38,6 +38,8 @@ export const LOCAL_METHODS = [
   'explorer',
   'bestMoves',
   'gaps',
+  'lichessStudiesBy',
+  'lichessStudy',
 ] as const;
 export type LocalMethod = (typeof LOCAL_METHODS)[number];
 

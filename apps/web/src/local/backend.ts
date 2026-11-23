@@ -23,6 +23,9 @@ import {
   gapsAnalysis,
   getRepertoire,
   importPgn,
+  getStudy,
+  StudyError,
+  studiesBy,
   copyAccounts,
   getProfile,
   setChesscom,
@@ -62,6 +65,7 @@ async function run<T>(fn: (db: LocalDb) => Promise<unknown>): Promise<T> {
     result = await fn((await localDb()).db);
   } catch (e) {
     if (e instanceof DataError) throw new ApiError(e.statusCode, e.message);
+    if (e instanceof StudyError) throw new ApiError(e.status, e.message);
     throw new ApiError(500, e instanceof Error ? e.message : String(e));
   }
   // Through JSON, as from the server: dates become strings, undefined fields disappear.
@@ -83,6 +87,16 @@ async function localMe(db: LocalDb): Promise<Me> {
     local: true,
   };
 }
+
+/** lichess.org calls of the device, one at a time (Lichess answers 429 to a second one). */
+let lichessCalls: Promise<unknown> = Promise.resolve();
+const lichessQueue = <T>(task: () => Promise<T>): Promise<T> => {
+  const run = lichessCalls.then(task);
+  lichessCalls = run.catch(() => undefined);
+  return run;
+};
+/** The sites as the device reaches them (public addresses, no custom header). */
+const SOURCES = { ...PUBLIC_SOURCES, lichessQueue };
 
 /** The local user with its accounts. */
 async function localUser(db: LocalDb) {
@@ -151,7 +165,7 @@ export const localApi = {
   review: (id, answer) => run(async (db) => recordAnswer(db, LOCAL_USER, id, answer)),
   reviewNow: (id, fen) => run(async (db) => reviewNow(db, LOCAL_USER, id, fen)),
   syncState: () => run(async (db) => syncStatus(db, await localUser(db))),
-  startSync: (source) => run(async (db) => startSync(db, await localUser(db), source, PUBLIC_SOURCES, (e) => console.warn(`${source} sync failed`, e))),
+  startSync: (source) => run(async (db) => startSync(db, await localUser(db), source, SOURCES, (e) => console.warn(`${source} sync failed`, e))),
   gamesReport: (days, speeds) =>
     run(async (db) => {
       await loadOpenings();
@@ -190,6 +204,8 @@ export const localApi = {
     if (!s) return fromServer(() => serverApi.gaps(speeds, ratings, cutoff));
     return run(async (db) => ({ live: false, ...(await gapsAnalysis(db, LOCAL_USER, { speeds, ratings, cutoff }, s.stored)) }));
   },
+  lichessStudiesBy: (username) => run(async () => studiesBy(SOURCES, username)),
+  lichessStudy: (id) => run(async () => getStudy(SOURCES, id)),
   opening: (line) =>
     run(async () => {
       await loadOpenings();
