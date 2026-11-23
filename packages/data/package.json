@@ -1,0 +1,23 @@
+{
+  "name": "@tabiya/data",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./schema": "./src/schema.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@tabiya/core": "workspace:*",
+    "drizzle-orm": "^0.44.0"
+  },
+  "devDependencies": {
+    "@libsql/client": "^0.15.0",
+    "typescript": "^5.6.0",
+    "vitest": "^3.0.0"
+  }
+}

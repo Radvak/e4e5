@@ -8,6 +8,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .pnpmfile.cjs ./
 COPY apps/server/package.json apps/server/
 COPY apps/web/package.json apps/web/
 COPY packages/core/package.json packages/core/
+COPY packages/data/package.json packages/data/
 COPY tools/sync/package.json tools/sync/
 # Optional build secrets for a corporate network (not kept in the image; unused elsewhere):
 #   ca: extra CA of a TLS proxy; npmrc: npm config with a mirror registry (+ token).

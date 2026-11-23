@@ -1,6 +1,8 @@
 node_modules/
 dist/
 data/
+# ...but not the shared data package
+!packages/data/
 backups/
 .env
 *.log

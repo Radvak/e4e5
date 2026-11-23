@@ -27,6 +27,9 @@ importers:
       '@tabiya/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@tabiya/data':
+        specifier: workspace:*
+        version: link:../../packages/data
       drizzle-orm:
         specifier: ^0.44.0
         version: 0.44.7(@libsql/client@0.15.15)
@@ -120,6 +123,25 @@ importers:
         specifier: ^6.0.0
         version: 6.0.0
     devDependencies:
+      typescript:
+        specifier: ^5.6.0
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@22.20.5)(tsx@4.23.15)
+
+  packages/data:
+    dependencies:
+      '@tabiya/core':
+        specifier: workspace:*
+        version: link:../core
+      drizzle-orm:
+        specifier: ^0.44.0
+        version: 0.44.7(@libsql/client@0.15.15)
+    devDependencies:
+      '@libsql/client':
+        specifier: ^0.15.0
+        version: 0.15.15
       typescript:
         specifier: ^5.6.0
         version: 5.9.3

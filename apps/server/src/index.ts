@@ -32,8 +32,10 @@ app.setErrorHandler((err, _req, reply) => {
   if (err instanceof ZodError) {
     return reply.code(400).send({ error: err.issues[0]?.message ?? 'Invalid request', issues: err.issues });
   }
-  app.log.error(err);
   const status = (err as { statusCode?: number }).statusCode ?? 500;
+  // Expected failures (404, 400 of @tabiya/data) are answers, not server errors.
+  if (status >= 500) app.log.error(err);
+  else app.log.debug(err);
   return reply.code(status).send({ error: status < 500 ? (err as Error).message : 'Erreur interne' });
 });
 
