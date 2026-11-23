@@ -15,7 +15,7 @@ export type Db = BaseSQLiteDatabase<'async', any, typeof schema>;
  */
 export class DataError extends Error {
   constructor(
-    public statusCode: 400 | 404,
+    public statusCode: 400 | 404 | 409,
     message: string,
   ) {
     super(message);

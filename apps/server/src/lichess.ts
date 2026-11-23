@@ -66,39 +66,3 @@ export function explorerFetch(path: string, token: string): Promise<unknown> {
   queue = task.catch(() => undefined);
   return task;
 }
-
-/** A game of the Lichess games export (only the fields used). */
-export interface LichessGameExport {
-  id: string;
-  rated: boolean;
-  variant: string;
-  speed: string;
-  createdAt: number;
-  lastMoveAt: number;
-  status: string;
-  players: { white: { user?: { name: string; id: string }; rating?: number }; black: { user?: { name: string; id: string }; rating?: number } };
-  winner?: 'white' | 'black';
-  moves: string;
-  initialFen?: string;
-}
-
-/** Games of a Lichess user played since `since` (ms), oldest first. */
-export async function lichessUserGames(username: string, since: number | null, token: string | null): Promise<LichessGameExport[]> {
-  const params = new URLSearchParams({
-    moves: 'true',
-    clocks: 'false',
-    evals: 'false',
-    opening: 'false',
-    sort: 'dateAsc',
-    perfType: 'ultraBullet,bullet,blitz,rapid,classical,correspondence',
-    ...(since ? { since: String(since + 1) } : {}),
-  });
-  const res = await fetch(`${env.lichessHost}/api/games/user/${encodeURIComponent(username)}?${params}`, {
-    headers: { Accept: 'application/x-ndjson', 'User-Agent': UA, ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-  });
-  if (!res.ok) throw new Error(`Lichess games export ${res.status}`);
-  return (await res.text())
-    .split('\n')
-    .filter((line) => line.trim())
-    .map((line) => JSON.parse(line) as LichessGameExport);
-}

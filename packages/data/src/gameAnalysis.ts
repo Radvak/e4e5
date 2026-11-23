@@ -15,8 +15,8 @@ import {
   type PlayedMove,
 } from '@tabiya/core';
 import { eq, inArray } from 'drizzle-orm';
-import { db } from './db/client.js';
-import { games, graphColumns, repertoires, repMoves } from './db/schema.js';
+import type { Db } from './db.js';
+import { games, graphColumns, repertoires, repMoves } from './schema.js';
 
 export interface RepInfo {
   id: string;
@@ -28,7 +28,7 @@ export interface RepInfo {
   gap: GapCandidate<string>;
 }
 
-export async function loadRepertoires(userId: string): Promise<RepInfo[]> {
+export async function loadRepertoires(db: Db, userId: string): Promise<RepInfo[]> {
   const reps = await db.select().from(repertoires).where(eq(repertoires.userId, userId));
   if (!reps.length) return [];
   const moves = await db.select(graphColumns).from(repMoves).where(inArray(repMoves.repertoireId, reps.map((r) => r.id)));

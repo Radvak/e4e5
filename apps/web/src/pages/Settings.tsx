@@ -179,10 +179,10 @@ function LocalModeSetting() {
       <h3>Mode local (expérimental)</h3>
       <div className="setting">
         <div className="what">
-          <strong>Répertoires et entraînement sur cet appareil</strong>
+          <strong>Répertoires, entraînement et parties sur cet appareil</strong>
           <div className="hint">
-            Les répertoires et la progression sont lus et enregistrés dans le navigateur, sans le serveur. Le reste (statistiques, parties)
-            passe encore par le serveur. Un seul onglet à la fois.
+            Les répertoires, la progression et vos parties sont enregistrés dans le navigateur, sans le serveur. Les parties sont importées
+            directement depuis Lichess et Chess.com. Les statistiques et les comptes passent encore par le serveur. Un seul onglet à la fois.
           </div>
         </div>
         <label className="check">

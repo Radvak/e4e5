@@ -1,14 +1,16 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { constants as zlib } from 'node:zlib';
 import compress from '@fastify/compress';
 import cookie from '@fastify/cookie';
 import fastifyStatic from '@fastify/static';
 import Fastify from 'fastify';
+import { setOpeningsTable } from '@tabiya/data';
 import { ZodError } from 'zod';
 import { authRoutes } from './auth.js';
 import { runMigrations } from './db/client.js';
 import { env } from './env.js';
-import { WEB_DIST } from './paths.js';
+import { SEED_DIR, WEB_DIST } from './paths.js';
 import { explorerRoutes } from './routes/explorer.js';
 import { gameRoutes } from './routes/games.js';
 import { gapRoutes } from './routes/gaps.js';
@@ -39,6 +41,7 @@ app.setErrorHandler((err, _req, reply) => {
   return reply.code(status).send({ error: status < 500 ? (err as Error).message : 'Erreur interne' });
 });
 
+setOpeningsTable(() => readFileSync(join(SEED_DIR, 'openings.tsv'), 'utf8'));
 await importSeeds(app.log);
 
 app.get('/api/health', async () => ({ ok: true }));

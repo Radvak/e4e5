@@ -1,13 +1,14 @@
 /**
- * Local mode (experimental, migration without a server): the repertoires and the training are
- * read and written in SQLite on this device instead of the server; the rest still goes to the
- * server. Turned on
+ * Local mode (experimental, migration without a server): the repertoires, the training and the
+ * played games are read and written in SQLite on this device instead of the server; the rest
+ * still goes to the server. Turned on
  * and off in Paramètres, or with ?local=1 / ?local=0 in the address.
  */
 const KEY = 'tabiya.backend';
 
 /** The API methods answered on this device in local mode (local/backend.ts). */
 export const LOCAL_METHODS = [
+  'me',
   'repertoires',
   'createRepertoire',
   'renameRepertoire',
@@ -23,6 +24,14 @@ export const LOCAL_METHODS = [
   'cards',
   'review',
   'reviewNow',
+  'syncState',
+  'startSync',
+  'gamesReport',
+  'dismissInbox',
+  'restoreInbox',
+  'myGames',
+  'myGameMoves',
+  'opening',
 ] as const;
 export type LocalMethod = (typeof LOCAL_METHODS)[number];
 

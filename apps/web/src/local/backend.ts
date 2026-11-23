@@ -1,16 +1,31 @@
 /**
  * The API methods answered by the local database (no server), with the shared data functions
  * (@tabiya/data). Same answers as the server's, JSON included (dates as ISO strings), so the
- * pages see no difference. The repertoires and the training for now: the other methods still go
- * to the server (see mode.ts).
+ * pages see no difference. The repertoires, the training and the played games for now: the
+ * other methods still go to the server (see mode.ts).
+ *
+ * The accounts on Lichess and Chess.com are still set on the server (Paramètres): each time the
+ * app reads them (me), they are copied to the local user, whose games are then synced from the
+ * device, straight from the two sites.
  */
+import { fenKey, positionFromFen } from '@tabiya/core';
 import {
   createRepertoire,
   DataError,
   deleteMove,
   deleteRepertoire,
+  dismissInbox,
+  gamesReport,
   getRepertoire,
   importPgn,
+  myGameMoves,
+  myGamesAt,
+  openingOfUcis,
+  PUBLIC_SOURCES,
+  restoreInbox,
+  setOpeningsTable,
+  startSync,
+  syncStatus,
   listCards,
   listRepertoires,
   positionRepertoires,
@@ -21,16 +36,17 @@ import {
   updateMove,
   updateRepertoire,
 } from '@tabiya/data';
-import { moveCards, repertoires, repMoves } from '@tabiya/data/schema';
+import { moveCards, repertoires, repMoves, users } from '@tabiya/data/schema';
 import { eq } from 'drizzle-orm';
-import { ApiError, type api, type RepertoireDetail, type RepertoireSummary, type ReviewCard } from '../api';
+import { ApiError, serverApi, type api, type RepertoireDetail, type RepertoireSummary, type ReviewCard } from '../api';
 import { LOCAL_USER, localDb } from './db';
 import type { LocalMethod } from './mode';
 
 type Api = typeof api;
+type LocalDb = Awaited<ReturnType<typeof localDb>>['db'];
 
 /** Runs a data function on the local database, answering like the server would. */
-async function run<T>(fn: (db: Awaited<ReturnType<typeof localDb>>['db']) => Promise<unknown>): Promise<T> {
+async function run<T>(fn: (db: LocalDb) => Promise<unknown>): Promise<T> {
   let result: unknown;
   try {
     result = await fn((await localDb()).db);
@@ -42,7 +58,40 @@ async function run<T>(fn: (db: Awaited<ReturnType<typeof localDb>>['db']) => Pro
   return JSON.parse(JSON.stringify(result)) as T;
 }
 
+/** The local user with its accounts (copied from the server by `me`). */
+async function localUser(db: LocalDb) {
+  const [u] = await db.select().from(users).where(eq(users.id, LOCAL_USER));
+  return { id: LOCAL_USER, chesscomUsername: u?.chesscomUsername ?? null, lichessUsername: u?.lichessUsername ?? null };
+}
+
+/** The table of opening names, loaded with the code the first time it is needed (~100 Ko). */
+let openings: Promise<void> | null = null;
+const loadOpenings = () =>
+  (openings ??= import('../../../server/seed/openings.tsv?raw').then((m) => setOpeningsTable(() => m.default)));
+
+const positionKey = (fen: string) => {
+  try {
+    return fenKey(positionFromFen(fen));
+  } catch {
+    throw new DataError(400, 'FEN invalide');
+  }
+};
+
 export const localApi = {
+  /** The server's answer, its accounts copied to the local user (best effort: offline, the last ones stay). */
+  me: async () => {
+    const me = await serverApi.me();
+    try {
+      const { db } = await localDb();
+      await db
+        .update(users)
+        .set({ lichessUsername: me.lichess?.username ?? null, chesscomUsername: me.chesscom?.username ?? null })
+        .where(eq(users.id, LOCAL_USER));
+    } catch (e) {
+      console.warn('Accounts not copied to the local database', e);
+    }
+    return me;
+  },
   repertoires: () => run(async (db) => listRepertoires(db, LOCAL_USER)),
   createRepertoire: (name, color) => run(async (db) => createRepertoire(db, LOCAL_USER, { name: name.trim(), color })),
   renameRepertoire: (id, name) => run(async (db) => updateRepertoire(db, LOCAL_USER, id, { name: name.trim() })),
@@ -58,6 +107,32 @@ export const localApi = {
   cards: () => run(async (db) => listCards(db, LOCAL_USER)),
   review: (id, answer) => run(async (db) => recordAnswer(db, LOCAL_USER, id, answer)),
   reviewNow: (id, fen) => run(async (db) => reviewNow(db, LOCAL_USER, id, fen)),
+  syncState: () => run(async (db) => syncStatus(db, await localUser(db))),
+  startSync: (source) => run(async (db) => startSync(db, await localUser(db), source, PUBLIC_SOURCES, (e) => console.warn(`${source} sync failed`, e))),
+  gamesReport: (days, speeds) =>
+    run(async (db) => {
+      await loadOpenings();
+      return gamesReport(db, LOCAL_USER, { days, speeds });
+    }),
+  dismissInbox: (key) => run(async (db) => dismissInbox(db, LOCAL_USER, key)),
+  restoreInbox: () => run(async (db) => restoreInbox(db, LOCAL_USER)),
+  myGames: (fen, color, speeds, days) =>
+    run(async (db) => {
+      const u = await localUser(db);
+      return myGamesAt(db, LOCAL_USER, { lichess: u.lichessUsername, chesscom: u.chesscomUsername }, { fen: positionKey(fen), color, speeds, days });
+    }),
+  myGameMoves: (id) =>
+    run(async (db) => {
+      const moves = await myGameMoves(db, LOCAL_USER, id);
+      if (!moves) throw new DataError(404, 'Partie introuvable');
+      return { moves };
+    }),
+  opening: (line) =>
+    run(async () => {
+      await loadOpenings();
+      const o = openingOfUcis(line ? line.split(',') : []);
+      return o && { eco: o.eco, name: o.name };
+    }),
 } satisfies Pick<Api, LocalMethod>;
 
 /**

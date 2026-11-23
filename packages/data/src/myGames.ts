@@ -4,11 +4,12 @@
  * The games are indexed once per user by position (the first MAX_PLY plies, so transpositions
  * meet): for each position, the games going through it and the move played there. The index is
  * kept until the user's games change (count / latest insert) or after a while without use.
+ * Shared by the server and the app running without a server.
  */
 import { GameLine, type ExplorerResponse } from '@tabiya/core';
 import { eq, sql } from 'drizzle-orm';
-import { db } from './db/client.js';
-import { games } from './db/schema.js';
+import type { Db } from './db.js';
+import { games } from './schema.js';
 
 type Game = typeof games.$inferSelect;
 /** Positions indexed: the opening, where the explorer is used. */
@@ -29,7 +30,8 @@ interface Index {
 const ENDED = 0xffff;
 const cache = new Map<string, Index>();
 
-async function indexFor(userId: string): Promise<Index> {
+async function indexFor(db: Db, userId: string): Promise<Index> {
+  forgetIdle();
   const [sig] = await db
     .select({ n: sql<number>`count(*)`, last: sql<number>`coalesce(max(${games.createdAt}), 0)` })
     .from(games)
@@ -69,17 +71,17 @@ async function indexFor(userId: string): Promise<Index> {
     // The game ended inside the indexed opening: it reached its last position too.
     const last = ply > 0 && ply < MAX_PLY ? line.at(ply - 1) : null;
     if (last && !line.at(ply)) add(last.toFen, g * 0x10000 + ENDED);
-    // Do not block the server for long on large game collections.
-    if (g % 500 === 499) await new Promise((r) => setImmediate(r));
+    // Do not block the server (or the page) for long on large game collections.
+    if (g % 500 === 499) await new Promise((r) => setTimeout(r, 0));
   }
   cache.set(userId, index);
   return index;
 }
 
-// Forget the indexes not used for a while (memory of the small machine).
-setInterval(() => {
+/** Forgets the indexes not used for a while (memory of the small machine). */
+function forgetIdle() {
   for (const [k, v] of cache) if (Date.now() - v.usedAt > IDLE_MS) cache.delete(k);
-}, 60_000).unref();
+}
 
 export interface MyGamesQuery {
   fen: string;
@@ -90,8 +92,8 @@ export interface MyGamesQuery {
 }
 
 /** Move statistics (explorer format) and most recent games of the user in a position. */
-export async function myGamesAt(userId: string, names: { lichess: string | null; chesscom: string | null }, q: MyGamesQuery) {
-  const index = await indexFor(userId);
+export async function myGamesAt(db: Db, userId: string, names: { lichess: string | null; chesscom: string | null }, q: MyGamesQuery) {
+  const index = await indexFor(db, userId);
   const since = q.days ? Date.now() - q.days * 86_400_000 : 0;
   const data: ExplorerResponse = { white: 0, draws: 0, black: 0, moves: [] };
   const perMove = new Map<number, ExplorerResponse['moves'][number]>();
@@ -137,7 +139,7 @@ export async function myGamesAt(userId: string, names: { lichess: string | null;
 }
 
 /** The moves of one of the user's stored games (to replay it). */
-export async function myGameMoves(userId: string, id: string): Promise<string[] | null> {
+export async function myGameMoves(db: Db, userId: string, id: string): Promise<string[] | null> {
   const [row] = await db.select({ userId: games.userId, moves: games.moves }).from(games).where(eq(games.id, id));
   return row && row.userId === userId ? row.moves : null;
 }

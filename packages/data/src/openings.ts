@@ -1,11 +1,10 @@
 /**
  * Opening names (lichess-org/chess-openings, seed/openings.tsv): a played game is named after the
  * last position of its opening that has a name (by position, so transpositions are recognised).
+ * The table is given once by its user (setOpeningsTable): the server reads the file, the app
+ * loads it with its code.
  */
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { fenKey, playSanOn, playUciOn, positionFromFen, START_FEN } from '@tabiya/core';
-import { SEED_DIR } from './paths.js';
 
 export interface Opening {
   eco: string;
@@ -20,10 +19,18 @@ export interface Opening {
 /** Longest named line, in plies: no need to look further in a game. */
 let maxPlies = 0;
 let byFen: Map<string, Opening> | null = null;
+let table: (() => string) | null = null;
+
+/** Where the table comes from (the text of openings.tsv), read the first time a name is asked. */
+export function setOpeningsTable(read: () => string) {
+  table = read;
+  byFen = null;
+}
 
 function load(): Map<string, Opening> {
+  if (!table) throw new Error('Table des ouvertures non chargée (setOpeningsTable)');
   const map = new Map<string, Opening>();
-  const lines = readFileSync(join(SEED_DIR, 'openings.tsv'), 'utf8').split('\n');
+  const lines = table().split('\n');
   for (const line of lines) {
     if (!line || line.startsWith('#') || line.startsWith('eco\t')) continue;
     const [eco, name, pgn] = line.split('\t');

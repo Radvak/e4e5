@@ -1,12 +1,10 @@
 import { fenKey, positionFromFen, RATING_BUCKETS } from '@tabiya/core';
-import { positionRepertoires, repertoireMovesAt } from '@tabiya/data';
+import { myGameMoves, myGamesAt, openingOfUcis, positionRepertoires, repertoireMovesAt } from '@tabiya/data';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireUser } from '../auth.js';
 import { db } from '../db/client.js';
 import { env } from '../env.js';
-import { myGameMoves, myGamesAt } from '../myGames.js';
-import { openingOfUcis } from '../openings.js';
 import { getStudy, getStudyPreview, searchStudies, StudyError } from '../lichessStudies.js';
 import { getStats, prefetchStats } from '../stats.js';
 import { REACH_STEPS, suggestMoves } from '../suggest.js';
@@ -84,7 +82,7 @@ export async function explorerRoutes(app: FastifyInstance) {
     const fen = parseFen(q.fen);
     if (!fen) return reply.code(400).send({ error: 'FEN invalide' });
     const user = req.user!;
-    return myGamesAt(user.id, { lichess: user.lichessUsername, chesscom: user.chesscomUsername }, { ...q, fen });
+    return myGamesAt(db, user.id, { lichess: user.lichessUsername, chesscom: user.chesscomUsername }, { ...q, fen });
   });
 
   /** Public Lichess studies (to create a repertoire from one): ?q= (empty: all), most liked first. */
@@ -122,7 +120,7 @@ export async function explorerRoutes(app: FastifyInstance) {
 
   /** The moves of one of the user's synced games, to replay it on the board. */
   app.get<{ Params: { id: string } }>('/api/my-games/:id', { preHandler: requireUser }, async (req, reply) => {
-    const moves = await myGameMoves(req.user!.id, req.params.id);
+    const moves = await myGameMoves(db, req.user!.id, req.params.id);
     return moves ? { moves } : reply.code(404).send({ error: 'Partie introuvable' });
   });
 
