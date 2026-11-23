@@ -9,8 +9,16 @@ import { api } from '../api';
 import { useLayoutEffect, useRef } from 'react';
 import { San } from '../components/Nag';
 
-/** Dots of the questions passed shown left of the swipe bar (then "+N"). */
-const MAX_DOTS = 8;
+/** Dots of the trail shown left of the swipe bar, the latest ones (older ones: "+N"). */
+const MAX_DOTS = 10;
+
+/** How a line of the session ended: right, wrong (a move missed or shown), new (learnt), passed. */
+export type TrailResult = 'right' | 'wrong' | 'new' | 'passed';
+export interface TrailDot {
+  id: number;
+  result: TrailResult;
+}
+const TRAIL_LABELS: Record<TrailResult, string> = { right: 'réussie', wrong: 'ratée', new: 'apprise', passed: 'passée' };
 
 /**
  * The quiz's line (`moves`, the first one at ply `firstPly`), annotations in colour, on one line:
@@ -45,9 +53,28 @@ export function QuizLine({ moves, firstPly }: { moves: RepMove[]; firstPly: numb
 /**
  * The bar under the board to swipe on (like Android's gesture bar, touch screens only): its handle
  * follows the finger; to the left past a threshold: `onSkip`; to the right: `onBack` when there
- * is something to come back to (`passed`, a dot each).
+ * is something to come back to (`passed` lines). On its left, the trail: a dot per line of the
+ * session (green right, red a move missed, grey passed, hollow learnt), the latest ones; a tap on
+ * one takes the line up again (`onOpen`). With a trail, the bar shows on every screen.
  */
-export function SwipeBar({ onSkip, onBack, passed = 0, label = 'passer' }: { onSkip: () => void; onBack?: () => void; passed?: number; label?: string }) {
+export function SwipeBar({
+  onSkip,
+  onBack,
+  passed = 0,
+  label = 'passer',
+  trail = [],
+  activeId,
+  onOpen,
+}: {
+  onSkip: () => void;
+  onBack?: () => void;
+  passed?: number;
+  label?: string;
+  trail?: TrailDot[];
+  /** The dot of the question on the board (replayed from the trail). */
+  activeId?: number;
+  onOpen?: (id: number) => void;
+}) {
   const handle = useRef<HTMLSpanElement>(null);
   const swipe = useRef<{ x: number; y: number; axis: 'x' | 'y' | null } | null>(null);
   const canBack = !!onBack && passed > 0;
@@ -70,7 +97,7 @@ export function SwipeBar({ onSkip, onBack, passed = 0, label = 'passer' }: { onS
   };
   return (
     <div
-      className="swipe-bar"
+      className={`swipe-bar${trail.length ? ' has-trail' : ''}`}
       onTouchStart={(e) => {
         const t = e.touches[0];
         swipe.current = t && e.touches.length === 1 ? { x: t.clientX, y: t.clientY, axis: null } : null;
@@ -92,10 +119,21 @@ export function SwipeBar({ onSkip, onBack, passed = 0, label = 'passer' }: { onS
       onTouchCancel={end}
       title={canBack ? `Balayez vers la gauche pour ${label}, vers la droite pour revenir (${passed} passée${passed > 1 ? 's' : ''})` : `Balayez vers la gauche pour ${label}`}
     >
-      {passed > 0 && (
-        <span className="swipe-passed" aria-label={`${passed} question${passed > 1 ? 's' : ''} passée${passed > 1 ? 's' : ''}`}>
-          {Array.from({ length: Math.min(passed, MAX_DOTS) }, (_, i) => <span key={i} className="dot-passed" />)}
-          {passed > MAX_DOTS && <span className="more">+{passed - MAX_DOTS}</span>}
+      {trail.length > 0 && (
+        <span className="swipe-trail" aria-label="Lignes de la séance">
+          {trail.length > MAX_DOTS && <span className="more">+{trail.length - MAX_DOTS}</span>}
+          {trail.slice(-MAX_DOTS).map((d) => (
+            <button
+              key={d.id}
+              type="button"
+              className={`trail-dot ${d.result}${d.id === activeId ? ' active' : ''}`}
+              title={`Ligne ${TRAIL_LABELS[d.result]} — la reprendre depuis le début${d.result === 'passed' ? '' : ' (pas compté)'}`}
+              aria-label={`Reprendre la ligne ${TRAIL_LABELS[d.result]}`}
+              onClick={() => onOpen?.(d.id)}
+            >
+              <span />
+            </button>
+          ))}
         </span>
       )}
       <span ref={handle} className="swipe-handle" aria-hidden="true" />

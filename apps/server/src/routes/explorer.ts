@@ -8,6 +8,7 @@ import { repertoires, repMoves } from '../db/schema.js';
 import { env } from '../env.js';
 import { myGameMoves, myGamesAt } from '../myGames.js';
 import { openingOfUcis } from '../openings.js';
+import { getStudy, getStudyPreview, searchStudies, StudyError } from '../lichessStudies.js';
 import { getStats, prefetchStats } from '../stats.js';
 import { REACH_STEPS, suggestMoves } from '../suggest.js';
 
@@ -85,6 +86,39 @@ export async function explorerRoutes(app: FastifyInstance) {
     if (!fen) return reply.code(400).send({ error: 'FEN invalide' });
     const user = req.user!;
     return myGamesAt(user.id, { lichess: user.lichessUsername, chesscom: user.chesscomUsername }, { ...q, fen });
+  });
+
+  /** Public Lichess studies (to create a repertoire from one): ?q= (empty: all), most liked first. */
+  app.get('/api/lichess/studies', { preHandler: requireUser }, async (req, reply) => {
+    const q = z.object({ q: z.string().trim().max(100).default(''), page: z.coerce.number().int().min(1).max(100).default(1) }).parse(req.query);
+    try {
+      return await searchStudies(q.q, q.page);
+    } catch (e) {
+      if (e instanceof StudyError) return reply.code(e.status).send({ error: e.message });
+      throw e;
+    }
+  });
+
+  /** A public Lichess study, chapter by chapter (PGN, side, whether it joins the others). */
+  app.get<{ Params: { id: string } }>('/api/lichess/studies/:id', { preHandler: requireUser }, async (req, reply) => {
+    if (!/^[A-Za-z0-9]{8}$/.test(req.params.id)) return reply.code(400).send({ error: 'Identifiant d’étude invalide' });
+    try {
+      return await getStudy(req.params.id);
+    } catch (e) {
+      if (e instanceof StudyError) return reply.code(e.status).send({ error: e.message });
+      throw e;
+    }
+  });
+
+  /** The card of a study in the catalogue: side, chapters, moves, thumbnail. */
+  app.get<{ Params: { id: string } }>('/api/lichess/studies/:id/preview', { preHandler: requireUser }, async (req, reply) => {
+    if (!/^[A-Za-z0-9]{8}$/.test(req.params.id)) return reply.code(400).send({ error: 'Identifiant d’étude invalide' });
+    try {
+      return await getStudyPreview(req.params.id);
+    } catch (e) {
+      if (e instanceof StudyError) return reply.code(e.status).send({ error: e.message });
+      throw e;
+    }
   });
 
   /** The moves of one of the user's synced games, to replay it on the board. */

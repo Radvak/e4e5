@@ -93,3 +93,35 @@ export class Repertoire {
     return [...this.all()].filter((m) => !reach.has(m.fromFen));
   }
 }
+
+/** The trunk of some moves: the line from `start` while there is one move only, then where it splits. */
+export interface Thumbnail {
+  /** Position at the end of the trunk. */
+  fen: string;
+  /** Its moves (SAN). */
+  sans: string[];
+  /** The moves from that position (UCI): the first moves of the variations. */
+  branches: string[];
+}
+
+/** The trunk of `moves` from `start` (a thumbnail: the position, the variations as arrows). */
+export function trunkOf(moves: Iterable<Pick<RepMove, 'fromFen' | 'toFen' | 'san' | 'uci'>>, start: string = START_FEN): Thumbnail {
+  const from = new Map<string, Pick<RepMove, 'toFen' | 'san' | 'uci'>[]>();
+  for (const m of moves) {
+    const out = from.get(m.fromFen);
+    if (!out) from.set(m.fromFen, [m]);
+    else if (!out.some((o) => o.uci === m.uci)) out.push(m);
+  }
+  const sans: string[] = [];
+  let fen = start;
+  const seen = new Set([fen]);
+  for (;;) {
+    const out = from.get(fen);
+    const only = out?.length === 1 ? out[0] : undefined;
+    if (!only || seen.has(only.toFen)) break;
+    sans.push(only.san);
+    fen = only.toFen;
+    seen.add(fen);
+  }
+  return { fen, sans, branches: (from.get(fen) ?? []).map((m) => m.uci) };
+}

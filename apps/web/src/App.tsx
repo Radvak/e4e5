@@ -15,6 +15,7 @@ import { Games, useGamesReport } from './pages/Games';
 import { Login } from './pages/Login';
 import { RepertoireEditor } from './pages/RepertoireEditor';
 import { Repertoires } from './pages/Repertoires';
+import { NewRepertoire } from './pages/NewRepertoire';
 import { Account } from './pages/Account';
 import { Settings } from './pages/Settings';
 import { Training } from './pages/Training';
@@ -195,6 +196,7 @@ export function App() {
           <Route path="/" element={<Redirect to="/repertoires" />} />
           <Route path="/parties" element={<Games />} />
           <Route path="/repertoires" element={<Repertoires me={me.data} />} />
+          <Route path="/repertoires/nouveau" element={<NewRepertoire />} />
           <Route path="/r/:id" element={<RepertoireEditor me={me.data} />} />
           <Route path="/r/:id/train" element={<Training me={me.data} />} />
           <Route path="/train" element={<Training me={me.data} />} />

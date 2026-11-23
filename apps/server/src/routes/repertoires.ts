@@ -7,6 +7,7 @@ import {
   START_FEN,
   Repertoire,
   repertoireToPgn,
+  trunkOf,
   type Color,
   type RepMove,
 } from '@tabiya/core';
@@ -83,30 +84,16 @@ export async function repertoireRoutes(app: FastifyInstance) {
       .from(repMoves)
       .innerJoin(repertoires, eq(repMoves.repertoireId, repertoires.id))
       .where(eq(repertoires.userId, req.user!.id));
-    const graphs = new Map<string, Map<string, { toFen: string; san: string; uci: string }[]>>();
+    const byRep = new Map<string, typeof moves>();
     for (const m of moves) {
-      let g = graphs.get(m.repertoireId);
-      if (!g) graphs.set(m.repertoireId, (g = new Map()));
-      const out = g.get(m.fromFen);
-      if (out) out.push(m);
-      else g.set(m.fromFen, [m]);
+      const list = byRep.get(m.repertoireId);
+      if (list) list.push(m);
+      else byRep.set(m.repertoireId, [m]);
     }
     return reps.map((r) => {
-      const g = graphs.get(r.id);
-      const trunk: string[] = [];
-      let fen = START_FEN;
-      const seen = new Set([fen]);
-      for (;;) {
-        const out = g?.get(fen);
-        const only = out?.length === 1 ? out[0] : undefined;
-        if (!only || seen.has(only.toFen)) break;
-        trunk.push(only.san);
-        fen = only.toFen;
-        seen.add(fen);
-      }
       // The first moves of the variations, drawn as arrows.
-      const branches = (g?.get(fen) ?? []).map((m) => m.uci);
-      return { ...r, trunkFen: fen, trunk, branches };
+      const t = trunkOf(byRep.get(r.id) ?? []);
+      return { ...r, trunkFen: t.fen, trunk: t.sans, branches: t.branches };
     });
   });
 

@@ -1,4 +1,4 @@
-import type { Color, ExplorerResponse, FsrsCard, Grade, RepertoireSummaryCounts, RepMove, SuggestedMove } from '@tabiya/core';
+import type { Color, ExplorerResponse, FsrsCard, Grade, RepertoireSummaryCounts, PgnChapter, RepMove, SuggestedMove, Thumbnail } from '@tabiya/core';
 
 export interface StatsMeta {
   speeds: string[];
@@ -96,6 +96,40 @@ export interface ReviewCard {
 export type TrainingSummary = RepertoireSummaryCounts;
 export interface ImportResult {
   games: number; added: number; duplicates: number; unreachable: number; errors: string[];
+}
+
+/** A public Lichess study in a list (server lichessStudies.ts). */
+export interface LichessStudySummary {
+  id: string;
+  name: string;
+  likes: number;
+  owner: string;
+  topics: string[];
+  updatedAt: number;
+}
+export interface LichessStudyPage {
+  page: number;
+  nbPages: number;
+  nbResults: number;
+  studies: LichessStudySummary[];
+}
+/** A study's card in the catalogue (server getStudyPreview). */
+export interface LichessStudyPreview {
+  id: string;
+  color: Color;
+  /** Chapters with moves that can join a repertoire. */
+  chapters: number;
+  /** Distinct moves of these chapters. */
+  moves: number;
+  trunk: Thumbnail;
+}
+/** A study chapter by chapter (core PgnChapter, with its Lichess id). */
+export interface LichessStudy {
+  id: string;
+  name: string;
+  /** Side most chapters are studied from. */
+  color: Color;
+  chapters: (PgnChapter & { id?: string })[];
 }
 
 export interface Gap {
@@ -268,6 +302,11 @@ export const api = {
     request<StoredMove>('PATCH', `/api/repertoires/${id}/moves/${moveId}`, patch),
   deleteMove: (id: string, moveId: number) => request<{ ok: true; pruned: number }>('DELETE', `/api/repertoires/${id}/moves/${moveId}`),
   importPgn: (id: string, pgn: string) => request<ImportResult>('POST', `/api/repertoires/${id}/import-pgn`, { pgn }),
+  /** Public Lichess studies, most liked first (q empty: all of them). */
+  lichessStudies: (q: string, page: number) =>
+    request<LichessStudyPage>('GET', `/api/lichess/studies?${new URLSearchParams({ q, page: String(page) })}`),
+  lichessStudy: (id: string) => request<LichessStudy>('GET', `/api/lichess/studies/${encodeURIComponent(id)}`),
+  lichessStudyPreview: (id: string) => request<LichessStudyPreview>('GET', `/api/lichess/studies/${encodeURIComponent(id)}/preview`),
   cards: () => request<ReviewCard[]>('GET', '/api/cards'),
   /** An answer, possibly sent later (offline): `id` makes it count once, `reviewedAt` is when it was given. */
   review: (id: string, answer: { fen: string; uci: string; grade: Grade; id: string; reviewedAt: number }) =>

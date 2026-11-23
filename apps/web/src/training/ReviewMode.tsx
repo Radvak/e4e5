@@ -9,7 +9,7 @@ import { San } from '../components/Nag';
 import { OpeningName } from '../components/OpeningName';
 import { dayStart } from '../settings';
 import { answerArrows, inTime, JUMP_MS, REPLAY_MS, REPLAYED_PLIES, REPLY_MS } from './common';
-import { DrillActions, LineDone, QuizLine, SwipeBar, useMyMovesHere } from './DrillParts';
+import { DrillActions, LineDone, QuizLine, SwipeBar, useMyMovesHere, type TrailDot, type TrailResult } from './DrillParts';
 import { outcomeOf, type Outcome } from './Feedback';
 import type { Source } from './useTrainingSources';
 
@@ -25,7 +25,25 @@ interface Question extends Item {
   isNew: boolean;
   /** When the line continues: my last move, then the opponent's reply leading to `target`. */
   lead?: { mine: RepMove; reply: RepMove };
+  /** Replayed from the trail (id of the line's dot): nothing is recorded. */
+  replay?: number;
 }
+
+/** A line of this session, a dot of the trail left of the swipe bar (tap: come back to it). */
+interface TrailEntry extends TrailDot {
+  /** Its questions answered, in order (each with the lead that led to it, to replay it as played). */
+  questions: Question[];
+  /** How each one was answered. */
+  results: TrailResult[];
+  /** Passed: the question it was passed at (asked for real when coming back to the line). */
+  skippedAt?: Question;
+}
+
+const trailResult = (outcome: Outcome): TrailResult =>
+  outcome === 'correct' || outcome === 'alternative' ? 'right' : outcome === 'new' ? 'new' : 'wrong';
+/** A line is wrong as soon as one move was missed (even found afterwards), learnt when only new or right ones. */
+const lineResult = (results: TrailResult[]): TrailResult =>
+  results.includes('wrong') ? 'wrong' : results.every((r) => r === 'new') ? 'new' : 'right';
 
 /** Why a line stops after my move: its end, the shortened lines, or a sequel already reviewed. */
 type LineEnd = 'end' | 'cut' | 'done';
@@ -128,8 +146,27 @@ export function ReviewMode({
   const answered = useRef(new Map<string, number>());
   /** Positions (fen) put aside with a swipe, whatever the repertoire (the cards are the user's). */
   const skipped = useRef(new Set<string>());
-  /** Questions passed with a swipe, last one last (a swipe the other way comes back to it). */
-  const [passed, setPassed] = useState<Question[]>([]);
+  /**
+   * The lines of the session in order, finished or passed (the dots left of the swipe bar; a swipe
+   * to the right comes back to the last one passed).
+   */
+  const [trail, setTrail] = useState<TrailEntry[]>([]);
+  const trailIds = useRef(0);
+  /** The line being answered (`id`: a passed line taken up again, its dot replaced at the end). */
+  const line = useRef<{ id?: number; questions: Question[]; results: TrailResult[] }>({ questions: [], results: [] });
+  /** A line replayed from the trail: the questions left, then where a passed line goes on for real. */
+  const replay = useRef<{ id: number; rest: Question[]; resume?: { question: Question; entry: TrailEntry } } | null>(null);
+  /** Ends the line being answered: its dot (grey when passed at `skippedAt`). */
+  const closeLine = (skippedAt?: Question) => {
+    const l = line.current;
+    line.current = { questions: [], results: [] };
+    if (!l.questions.length && !skippedAt) return;
+    const entry = { questions: l.questions, results: l.results, skippedAt, result: skippedAt ? ('passed' as const) : lineResult(l.results) };
+    // A passed line answered after all (come back in the queue): its grey dot goes.
+    const answeredHere = (e: TrailEntry) => e.result === 'passed' && !!e.skippedAt && l.questions.some((q) => same(q, e.skippedAt!));
+    setTrail((t) => [...t.filter((e) => e.id !== l.id && !answeredHere(e)), { ...entry, id: ++trailIds.current }]);
+  };
+  const passedCount = trail.filter((e) => e.result === 'passed').length;
   const firstOf = (items: Item[]) => items.find((p) => !skipped.current.has(p.target.fen)) ?? items[0];
   /** reviewed: all answers; asked: positions already learnt; firstTry: asked and right first time. */
   const [stats, setStats] = useState({ reviewed: 0, asked: 0, firstTry: 0 });
@@ -303,13 +340,13 @@ export function ReviewMode({
   };
 
   const record = (q: Question, outcome: Outcome) => {
+    line.current.questions.push(q);
+    line.current.results.push(trailResult(outcome));
     // After an alternative (right too: the move asked could not be guessed, then shown): no
     // penalty, the move asked is graded as answered right.
     const right = outcome === 'correct' || outcome === 'alternative';
     const grade: Grade = right ? 'good' : 'again';
     answered.current.set(q.target.fen, Date.now());
-    // Answered after all (it came back in the queue): no longer waiting among the passed ones.
-    setPassed((list) => (list.some((p) => same(p, q)) ? list.filter((p) => !same(p, q)) : list));
     // Bonus position (asked to finish the line, not due soon): only a mistake is recorded, so a
     // right answer leaves its schedule unchanged. Due soon: recorded, so it does not come back alone.
     const card = latest(q.source).cardOf(q.target.fen, q.expected.uci);
@@ -345,10 +382,32 @@ export function ReviewMode({
     jumpTimer.current = setTimeout(go, ms);
   };
 
+  /** The first question waiting (after a replay: back where the session was). */
+  const firstWaiting = () => {
+    const first = firstOf(queue.items);
+    return first ? question(lineStart(first)) : null;
+  };
+
   const onAnswered = (q: Question, played: RepMove, outcome: Outcome) => {
+    // A line replayed from the trail: its next question as played then (nothing recorded); a passed
+    // line then goes on for real where it was passed; else back to the questions waiting.
+    if (q.replay !== undefined) {
+      const r = replay.current;
+      const next = r?.rest.shift();
+      if (r && next) return ask({ ...next, isNew: false, replay: r.id });
+      replay.current = null;
+      if (r?.resume) {
+        const { question: resumed, entry } = r.resume;
+        line.current = { id: entry.id, questions: [...entry.questions], results: [...entry.results] };
+        return ask(resumed);
+      }
+      setLineDone(true);
+      return later(firstWaiting, LINE_END_MS);
+    }
     record(q, outcome);
     const { next, end } = nextAfter(q, played);
     if (next?.lead) return ask(next);
+    closeLine();
     if (end) setLineDone(true);
     later(() => next, end ? LINE_END_MS : JUMP_MS);
   };
@@ -361,8 +420,13 @@ export function ReviewMode({
   const lineKeys = (q: Item & { expected: RepMove }) => [q.target.fen, ...restOfLine(q.source, q.expected).map((m) => m.toFen)];
   const onSkip = (q: Question) => {
     if (pending.current) return pending.current();
+    if (q.replay !== undefined) {
+      replay.current = null;
+      setNow(Date.now());
+      return ask(firstWaiting());
+    }
+    closeLine(q);
     for (const k of lineKeys(q)) skipped.current.add(k);
-    setPassed((list) => [...list.filter((p) => !same(p, q)), q]);
     const items = queue.items.filter((p) => !same(p, q));
     const first = firstOf(items.filter((p) => !skipped.current.has(p.target.fen))) ?? firstOf(items);
     if (first && same(first, q)) return;
@@ -370,17 +434,42 @@ export function ReviewMode({
     ask(first ? question(lineStart(first)) : null);
   };
 
-  /** Swipe to the right: back to the last question passed (its line is no longer put aside). */
-  const onBack = () => {
-    const last = passed.at(-1);
-    if (!last) return;
+  /**
+   * Tap on a dot of the trail: the whole line again, from its first move, the opponent replying as
+   * then. What was answered is replayed without recording anything (the review schedule stays
+   * right; the moves to be found, not shown); a passed line then goes on for real where it was
+   * passed (no longer put aside), its dot updated at its end. Then back to the questions waiting.
+   */
+  const onOpen = (id: number) => {
+    const e = trail.find((x) => x.id === id);
+    if (!e) return;
     clearTimeout(jumpTimer.current);
     jumpTimer.current = undefined;
     pending.current = null;
-    for (const k of lineKeys(last)) skipped.current.delete(k);
-    setPassed((list) => list.slice(0, -1));
     setNow(Date.now());
-    ask(question(last));
+    // The line being answered is left: passed (its dot), as with a swipe.
+    if (current && current.replay === undefined && line.current.questions.length) {
+      closeLine(current);
+      for (const k of lineKeys(current)) skipped.current.add(k);
+    }
+    replay.current = null;
+    const skippedAt = e.result === 'passed' ? e.skippedAt : undefined;
+    if (skippedAt) for (const k of lineKeys(skippedAt)) skipped.current.delete(k);
+    const resume = skippedAt && { question: question(skippedAt, skippedAt.lead), entry: e };
+    const [first, ...rest] = e.questions;
+    if (!first) {
+      if (!resume) return;
+      line.current = { id: e.id, questions: [], results: [] };
+      return ask(resume.question);
+    }
+    replay.current = { id: e.id, rest, resume };
+    ask({ ...first, lead: undefined, isNew: false, replay: e.id });
+  };
+
+  /** Swipe to the right: back to the last line passed. */
+  const onBack = () => {
+    const last = [...trail].reverse().find((e) => e.result === 'passed');
+    if (last) onOpen(last.id);
   };
 
   if (!current) {
@@ -423,11 +512,14 @@ export function ReviewMode({
       round={round}
       lineDone={lineDone}
       question={current}
-      onAnswered={(played, outcome) => onAnswered(current, played, outcome)}
+      // A new move to learn: another new move of mine played is learnt instead of the one asked.
+      onAnswered={(played, outcome) => onAnswered(played.uci === current.expected.uci ? current : { ...current, expected: played }, played, outcome)}
       onSkip={() => onSkip(current)}
       onAlternative={(move) => onAlternative(current, move)}
-      passed={passed.length}
+      passed={passedCount}
       onBack={onBack}
+      trail={trail}
+      onOpen={onOpen}
     />
   );
 }
@@ -469,6 +561,8 @@ function Drill({
   onSkip,
   passed,
   onBack,
+  trail,
+  onOpen,
 }: {
   /** Changes with each question. Not used as a React key: the board must stay mounted. */
   round: number;
@@ -478,10 +572,13 @@ function Drill({
   onAlternative: (move: Pick<RepMove, 'uci'>) => void;
   /** Swipe to the left on the bar under the board: the next question. */
   onSkip: () => void;
-  /** Questions passed so far (a dot each, left of the bar). */
+  /** Lines passed so far (a swipe to the right comes back to the last one). */
   passed: number;
-  /** Swipe to the right: back to the last question passed. */
+  /** Swipe to the right: back to the last line passed. */
   onBack: () => void;
+  /** The lines of the session (dots left of the swipe bar); tap: `onOpen`. */
+  trail: TrailDot[];
+  onOpen: (id: number) => void;
   /** The line ends with the move just played (shown until the next line). */
   lineDone: boolean;
 }) {
@@ -503,6 +600,8 @@ function Drill({
     alternative: null as Pick<RepMove, 'uci' | 'san' | 'nags'> | null,
     /** A move of the repertoire put on pause played: not a mistake, try again (bubble). */
     pausedMove: null as RepMove | null,
+    /** A new move to learn, and one of my moves here already learnt played: learn a new one (bubble). */
+    knownMove: null as RepMove | null,
     /** 1: the piece to move is shown. */
     hinted: false,
     played: null as RepMove | null,
@@ -516,10 +615,14 @@ function Drill({
     if (!lead) lineFrom.current = Math.max(0, plies - REPLAYED_PLIES);
     setState(current);
   }
-  const { replied, shown, mistakes, revealed, retries, alternative, pausedMove, hinted, played } = current;
+  const { replied, shown, mistakes, revealed, retries, alternative, pausedMove, knownMove, hinted, played } = current;
   const update = (patch: Partial<typeof current>) => setState((s) => ({ ...s, ...patch }));
   const answers = source.rep.movesAt(target.fen);
   const elsewhere = useMyMovesHere(target.fen, source.color);
+  // A new move to learn: all my moves here are shown, the new ones in green (any of them is the
+  // answer), those already learnt in very light green (played: learn a new one instead).
+  const newHere = isNew ? answers.filter((m) => !source.cardOf(target.fen, m.uci)) : [];
+  const learntHere = isNew ? answers.filter((m) => source.cardOf(target.fen, m.uci)) : [];
 
   useEffect(() => {
     if (replied) return;
@@ -540,18 +643,30 @@ function Drill({
   const play = (uci: string) => {
     if (!asking) return;
     if (uci !== expected.uci) {
+      const otherNew = newHere.find((m) => m.uci === uci);
+      if (otherNew) {
+        update({ played: otherNew });
+        onAnswered(otherNew, outcome(hinted));
+        return;
+      }
+      const learnt = learntHere.find((m) => m.uci === uci);
+      if (learnt) {
+        if (!knownMove) onAlternative(learnt);
+        update({ retries: retries + 1, knownMove: learnt, alternative: null, pausedMove: null });
+        return 'retry';
+      }
       // One of my moves here, in this repertoire or another one of the same colour: right too.
       const other = answers.find((m) => m.uci === uci) ?? elsewhere(uci);
       if (other) {
         // Right too: said so, and the move reviewed here is shown (green arrow).
         if (!alternative) onAlternative(other);
-        update({ retries: retries + 1, alternative: other, pausedMove: null });
+        update({ retries: retries + 1, alternative: other, pausedMove: null, knownMove: null });
         return 'retry';
       }
       // A move of mine put on pause: not a mistake, try again.
       const onPause = source.pausedAt(target.fen).find((m) => m.uci === uci);
       if (onPause) {
-        update({ retries: retries + 1, pausedMove: onPause });
+        update({ retries: retries + 1, pausedMove: onPause, knownMove: null });
         return 'retry';
       }
       update({ mistakes: mistakes + 1, revealed: revealed || mistakes + 1 >= 2 });
@@ -578,10 +693,11 @@ function Drill({
 
   const shapes = useMemo<DrawShape[]>(() => {
     if (!asking) return [];
+    if (isNew) return [...answerArrows(newHere), ...learntHere.map((m) => ({ ...answerArrows([m])[0]!, brush: 'learned' }))];
     if (revealed || alternative) return answerArrows([expected]);
     if (hinted) return [{ orig: expected.uci.slice(0, 2) as Key, brush: 'repertoire' }];
     return [];
-  }, [revealed, hinted, asking, expected, alternative]);
+  }, [revealed, hinted, asking, expected, alternative, isNew, round]);
 
   const toExplorer = () =>
     navigate(`/explorer?${new URLSearchParams({ line: moves.map((m) => m.uci).join(','), ...(source.color === 'black' ? { color: 'black' } : {}) })}`);
@@ -603,6 +719,16 @@ function Drill({
             ⏸ <strong><San san={pausedMove.san} nags={pausedMove.nags} /></strong> est en pause dans ton répertoire — joue un autre coup
           </div>
         )}
+        {knownMove && asking && (
+          <div key={`k${retries}`} className="alt-bubble" role="status">
+            ✓ <strong><San san={knownMove.san} nags={knownMove.nags} /></strong> est déjà appris — apprends-en un nouveau
+            {newHere.length === 1 ? (
+              <> : <strong><San san={expected.san} nags={expected.nags} /></strong></>
+            ) : (
+              ' (flèches vert foncé)'
+            )}
+          </div>
+        )}
         {alternative && asking && !pausedMove && (
           <div key={retries} className="alt-bubble" role="status">
             👍 <strong><San san={alternative.san} nags={alternative.nags} /></strong> est un bon coup, mais ici on révise{' '}
@@ -611,7 +737,8 @@ function Drill({
         )}
         {/* The quiz's line so far (since it started, not from the first move), annotations in colour. */}
         <QuizLine moves={moves.slice(lineFrom.current)} firstPly={lineFrom.current} />
-        <SwipeBar onSkip={onSkip} onBack={onBack} passed={passed} />
+        {question.replay !== undefined && <p className="replay-note muted small-text">↺ Rejeu — pas compté dans les révisions</p>}
+        <SwipeBar onSkip={onSkip} onBack={onBack} passed={passed} trail={trail} activeId={question.replay} onOpen={onOpen} />
         <DrillActions
           hinted={hinted || revealed}
           disabled={!asking}

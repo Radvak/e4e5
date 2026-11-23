@@ -39,8 +39,6 @@ const norm = (s: string) => s.normalize('NFD').replace(/\p{Diacritic}/gu, '').to
 const oneOf = <T extends string>(v: string | null, ids: readonly T[], def: T): T => (ids.includes(v as T) ? (v as T) : def);
 
 export function Repertoires({ me }: { me: Me }) {
-  const qc = useQueryClient();
-  const navigate = useNavigate();
   const reps = useQuery({ queryKey: ['repertoires'], queryFn: api.repertoires });
   const summary = useTrainingSummary(me);
   const counts = new Map((summary.data ?? []).map((s) => [s.repertoireId, s]));
@@ -54,9 +52,6 @@ export function Repertoires({ me }: { me: Me }) {
     missing.set(g.repertoireId, (missing.get(g.repertoireId) ?? 0) + 1);
     if (!firstGap.has(g.repertoireId)) firstGap.set(g.repertoireId, g.move ? [...g.ucis, g.move.uci] : g.ucis);
   }
-  const [creating, setCreating] = useState(false);
-  const [name, setName] = useState('');
-  const [color, setColor] = useState<Color>('white');
 
   // Filters live in the URL: they survive opening a repertoire and coming back.
   const [params, setParams] = useSearchParams();
@@ -74,15 +69,6 @@ export function Repertoires({ me }: { me: Me }) {
       },
       { replace: true },
     );
-
-  const refresh = () => qc.invalidateQueries({ queryKey: ['repertoires'] });
-  const create = useMutation({
-    mutationFn: () => api.createRepertoire(name.trim(), color),
-    onSuccess: async (rep) => {
-      await refresh();
-      navigate(`/r/${rep.id}`);
-    },
-  });
 
   const list = reps.data ?? [];
   const byColor = (c: Color) => list.filter((r) => r.color === c).length;
@@ -123,44 +109,16 @@ export function Repertoires({ me }: { me: Me }) {
       <PageHeader
         title="Répertoires"
         subtitle={list.length ? plural(list.length, 'répertoire', 'répertoires') : undefined}
-        actions={list.length > 0 && <Button variant="primary" icon="plus" onClick={() => setCreating(!creating)}>Nouveau</Button>}
+        actions={list.length > 0 && <Button variant="primary" icon="plus" to="/repertoires/nouveau">Nouveau</Button>}
       />
-
-      {creating && (
-        <form
-          className="card stack"
-          style={{ marginBottom: 16 }}
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (name.trim()) create.mutate();
-          }}
-        >
-          <h3>Nouveau répertoire</h3>
-          <input autoFocus placeholder="Nom (par ex. Sicilienne Najdorf)" value={name} onChange={(e) => setName(e.target.value)} />
-          <Tabs
-            block
-            value={color}
-            onChange={setColor}
-            tabs={[
-              { id: 'white', label: <><span className="dot white" /> Blancs</> },
-              { id: 'black', label: <><span className="dot black" /> Noirs</> },
-            ]}
-          />
-          <div className="row">
-            <Button type="submit" variant="primary" disabled={!name.trim() || create.isPending}>Créer</Button>
-            <Button variant="ghost" onClick={() => setCreating(false)}>Annuler</Button>
-          </div>
-          {create.error && <p className="error">{create.error.message}</p>}
-        </form>
-      )}
 
       {reps.isLoading && <p className="muted">Chargement…</p>}
       {!reps.isLoading && list.length === 0 && (
         <EmptyState
           title="Aucun répertoire"
-          action={<Button variant="primary" icon="plus" onClick={() => setCreating(true)}>Créer un répertoire</Button>}
+          action={<Button variant="primary" icon="plus" to="/repertoires/nouveau">Créer un répertoire</Button>}
         >
-          Un répertoire regroupe vos coups pour une couleur (par exemple « 1.e4 avec les Blancs »). Vous pourrez y importer un PGN.
+          Un répertoire regroupe vos coups pour une couleur (par exemple « 1.e4 avec les Blancs »). Partez de zéro, ou d’une étude Lichess populaire.
         </EmptyState>
       )}
 

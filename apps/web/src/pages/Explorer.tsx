@@ -114,13 +114,16 @@ export function Explorer({ me }: { me: Me }) {
 
   const repMoves = useQuery({ queryKey: ['explorer-reps', fen], queryFn: () => api.repertoireMovesAt(fen) });
   // The repertoires containing the position on the board (listed under the line).
-  const posReps = useQuery({ queryKey: ['explorer-pos-reps', fen], queryFn: () => api.positionRepertoires(fen) });
+  const posRepsAll = useQuery({ queryKey: ['explorer-pos-reps', fen], queryFn: () => api.positionRepertoires(fen) });
+  const posReps = { data: posRepsAll.data?.filter((r) => r.color === orientation) };
   // Annotations of the moves of the line (from my repertoires): the moves of each position of the
   // line, same queries as above (cached), so going back and forth costs nothing.
   const pathPositions = useQueries({
     queries: line.map((m) => ({ queryKey: ['explorer-reps', m.fromFen], queryFn: () => api.repertoireMovesAt(m.fromFen), staleTime: 60_000 })),
   });
-  const pathNags = line.map((m, i) => pathPositions[i]?.data?.find((r) => r.uci === m.uci && r.nags?.length)?.nags ?? null);
+  const pathNags = line.map(
+    (m, i) => pathPositions[i]?.data?.find((r) => r.color === orientation && r.uci === m.uci && r.nags?.length)?.nags ?? null,
+  );
   // One button for the analysis: Lichess at my level and Stockfish both run (ToolCards).
   const [analysisOn, toggleAnalysis] = useAnalysisToggle();
   const levelOn = analysisOn;
@@ -161,7 +164,11 @@ export function Explorer({ me }: { me: Me }) {
 
   // The arrows (popular moves) follow the Lichess players of my level.
   const data = lichess.data?.data;
-  const prepared = useMemo(() => groupByMove(repMoves.data ?? []), [repMoves.data]);
+  // Only the repertoires of the side at the bottom of the board (White at the bottom: my White repertoires).
+  const prepared = useMemo(
+    () => groupByMove((repMoves.data ?? []).filter((r) => r.color === orientation)),
+    [repMoves.data, orientation],
+  );
   // The next moves in their order: the main one first, then the others trained, then the paused ones
   // (paused in every repertoire playing them). Main: one of my moves (the moves to remember, in the
   // repertoires of the side to move), main in each of them; an opponent's reply in my repertoires
@@ -238,11 +245,11 @@ export function Explorer({ me }: { me: Me }) {
   const missingHere = useMemo(
     () =>
       new Set(
-        [...(gaps.data?.white?.gaps ?? []), ...(gaps.data?.black?.gaps ?? [])]
+        (gaps.data?.[orientation]?.gaps ?? [])
           .filter((g) => g.fen === fen && g.move && !prepared.has(g.move.uci))
           .map((g) => g.move!.uci),
       ),
-    [gaps.data, fen, prepared],
+    [gaps.data, fen, prepared, orientation],
   );
   const isMissing = (uci: string) => missingHere.has(uci);
 
@@ -415,7 +422,7 @@ export function Explorer({ me }: { me: Me }) {
             </div>
           )}
           {/* The repertoires containing the position on the board (a link opens each one here). */}
-          {posReps.data && posReps.data.length === 0 && <p className="muted small-text rep-none">Aucun répertoire ne contient cette position.</p>}
+          {posReps.data && posReps.data.length === 0 && <p className="muted small-text rep-none">Aucun répertoire {orientation === 'white' ? 'Blancs' : 'Noirs'} ne contient cette position.</p>}
           {posReps.data && posReps.data.length > 0 && (
             <div className="rep-tags rep-at">
               {[...posReps.data].sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' })).map((r) => (

@@ -26,6 +26,8 @@ export const BRUSHES = {
   ...Object.fromEntries(
     Object.entries(ARROWS).map(([key, a]) => [key, { key, color: a.color, opacity: OPACITY[key] ?? 0.85, lineWidth: 10 }]),
   ),
+  /** Review, a new move to learn: my other moves here already learnt, very light green. */
+  learned: { key: 'learned', color: '#a8e6bc', opacity: 0.7, lineWidth: 10 },
   /** White arrow drawn just under the next move, slightly wider: a thin outline. */
   outline: { key: 'outline', color: '#ffffff', opacity: 1, lineWidth: 10 },
 };
