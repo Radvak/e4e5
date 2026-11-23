@@ -1,4 +1,4 @@
-import { fenKey, positionFromFen, RATING_BUCKETS } from '@tabiya/core';
+import { fenKey, positionFromFen, RATING_BUCKETS, REACH_STEPS, suggestMoves } from '@tabiya/core';
 import { myGameMoves, myGamesAt, openingOfUcis, positionRepertoires, repertoireMovesAt } from '@tabiya/data';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
@@ -6,8 +6,7 @@ import { requireUser } from '../auth.js';
 import { db } from '../db/client.js';
 import { env } from '../env.js';
 import { getStudy, getStudyPreview, searchStudies, StudyError } from '../lichessStudies.js';
-import { getStats, prefetchStats } from '../stats.js';
-import { REACH_STEPS, suggestMoves } from '../suggest.js';
+import { getStats, prefetchStats, storedStats } from '../stats.js';
 
 const SPEEDS = ['bullet', 'blitz', 'rapid', 'classical'];
 const RATINGS: readonly number[] = RATING_BUCKETS;
@@ -60,7 +59,13 @@ export async function explorerRoutes(app: FastifyInstance) {
     const token = req.user!.lichessToken ?? env.lichessAppToken;
     const first = await getStats(root, q.speeds, q.ratings, token, req.log);
     if (!first.data) return { moves: [], reach: null, target: REACH_STEPS.at(-1)!, steps: REACH_STEPS, pending: 0 };
-    const { missing, approximate, ...found } = await suggestMoves(root, { data: first.data, exact: first.meta.exact }, q.speeds, q.ratings, q.depth, q.color);
+    const { missing, approximate, ...found } = await suggestMoves(
+      (fens) => storedStats(fens, q.speeds, q.ratings),
+      root,
+      { data: first.data, exact: first.meta.exact },
+      q.depth,
+      q.color,
+    );
     const toFetch = missing.length ? missing : found.reach === found.target ? approximate : [];
     const pending = token && toFetch.length ? prefetchStats(toFetch, q.speeds, q.ratings, token, req.log) : 0;
     return { ...found, steps: REACH_STEPS, pending };

@@ -7,8 +7,15 @@
  * step (most reached first): fetch them, search again. A search wanting more than
  * `MAX_POSITIONS` positions stops at the step before (nothing missing).
  */
-import { bestMoves, turnOf, type Color, type ExplorerResponse, type SuggestedMove } from '@tabiya/core';
-import { storedStats } from './stats.js';
+import { bestMoves, type SuggestedMove } from './bestMoves.js';
+import type { ExplorerResponse } from './explorer.js';
+import { turnOf, type Color } from './position.js';
+
+/**
+ * Statistics already at hand for some positions (stored, or in the stats files), without asking
+ * Lichess; positions without any are absent. `exact: false`: another range of ratings or speeds.
+ */
+export type StoredStats = (fens: string[]) => Promise<Map<string, { data: ExplorerResponse; exact: boolean }>>;
 
 /** Probability thresholds of the steps (a position reached in fewer games is not explored). */
 export const REACH_STEPS = [0.5, 0.25, 0.12, 0.06];
@@ -33,10 +40,9 @@ export interface Suggestions {
  * `depth`: how many of the steps to go through (0: each move's own win rate; default: all).
  */
 export async function suggestMoves(
+  storedStats: StoredStats,
   root: string,
   rootStats: { data: ExplorerResponse; exact: boolean },
-  speeds: string[],
-  ratings: number[],
   depth = REACH_STEPS.length,
   color: Color = turnOf(root),
 ): Promise<Suggestions> {
@@ -57,7 +63,7 @@ export async function suggestMoves(
     const only = mine && i >= 2 ? moves.filter((m) => m.minReach === reach).slice(0, KEEP_DEEP).map((m) => m.uci) : undefined;
     let next = run(step, only);
     for (let pass = 0; pass < 16 && next.missing.length; pass++) {
-      const found = await storedStats(next.missing.map((m) => m.fen), speeds, ratings);
+      const found = await storedStats(next.missing.map((m) => m.fen));
       if (!found.size) break;
       for (const [f, s] of found) known.set(f, s);
       next = run(step, only);

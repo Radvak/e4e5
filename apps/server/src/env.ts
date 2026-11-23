@@ -35,4 +35,6 @@ export const env = {
    * before the Lichess explorer; absent file: explorer only.
    */
   statsDb: get('STATS_DB', isProd ? '/data/stats.db' : './data/stats.db'),
+  /** The statistics split per rating bucket (scripts/split-stats.ts), downloaded by the app (local mode). */
+  statsFilesDir: get('STATS_FILES_DIR', isProd ? '/data/stats-files' : './data/stats-files'),
 };

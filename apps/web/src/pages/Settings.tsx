@@ -147,7 +147,7 @@ export function Settings({ me }: { me: Me }) {
         </div>
       </section>
 
-      <LocalModeSetting />
+      <LocalModeSetting ratings={ex.ratings} />
     </div>
   );
 }
@@ -156,7 +156,7 @@ export function Settings({ me }: { me: Me }) {
  * Local mode (experimental): the repertoires kept in SQLite on this device instead of the
  * server, a step of the migration without a server (MIGRATION-SERVERLESS.md).
  */
-function LocalModeSetting() {
+function LocalModeSetting({ ratings }: { ratings: number[] }) {
   const [state, setState] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const local = isLocalMode();
@@ -182,7 +182,7 @@ function LocalModeSetting() {
           <strong>Répertoires, entraînement et parties sur cet appareil</strong>
           <div className="hint">
             Les répertoires, la progression et vos parties sont enregistrés dans le navigateur, sans le serveur. Les parties sont importées
-            directement depuis Lichess et Chess.com. Les statistiques et les comptes passent encore par le serveur. Un seul onglet à la fois.
+            directement depuis Lichess et Chess.com, et les statistiques sont lues dans des fichiers téléchargés (ci-dessous). Les comptes passent encore par le serveur. Un seul onglet à la fois.
           </div>
         </div>
         <label className="check">
@@ -199,7 +199,105 @@ function LocalModeSetting() {
           <button onClick={copy}>Copier</button>
         </div>
       )}
+      {local && <LocalStatsSetting ratings={ratings} />}
     </section>
+  );
+}
+
+const bucketLabel = (b: number, next?: number) => (b === 0 ? 'Moins de 1000' : next ? `${b}–${next - 1}` : `${b} et plus`);
+const mo = (bytes: number) => `${(bytes / 1e6).toFixed(bytes < 1e7 ? 1 : 0)} Mo`;
+
+/**
+ * Statistics on the device (local mode): the files per rating bucket of the Lichess game
+ * database, downloaded here (local/stats.ts, loaded only in local mode). The buckets of the
+ * settings are marked: with all of them here, the explorer, the search at my level and the
+ * missing moves are computed on the device.
+ */
+function LocalStatsSetting({ ratings }: { ratings: number[] }) {
+  type Stats = typeof import('../local/stats');
+  const [index, setIndex] = useState<Awaited<ReturnType<Stats['statsIndex']>> | null>(null);
+  const [files, setFiles] = useState<Awaited<ReturnType<Stats['localStatsFiles']>>>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState<Record<number, string>>({});
+  const queryClient = useQueryClient();
+  const lib = () => import('../local/stats');
+  const refresh = async () => setFiles(await (await lib()).localStatsFiles());
+  useEffect(() => {
+    void lib().then(async (m) => {
+      await m.statsIndex().then(setIndex, (e: unknown) => setError(e instanceof Error ? e.message : String(e)));
+      await refresh().catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
+    });
+  }, []);
+  const here = new Set(files.map((f) => f.bucket));
+  const download = async (file: NonNullable<typeof index>['files'][number]) => {
+    setBusy((b) => ({ ...b, [file.bucket]: '0 %' }));
+    try {
+      await (await lib()).downloadStats(file, (p) =>
+        setBusy((b) => ({ ...b, [file.bucket]: p.total ? `${Math.round((100 * p.loaded) / p.total)} %` : mo(p.loaded) })),
+      );
+      setError(null);
+    } catch (e) {
+      setError(`${bucketLabel(file.bucket)} : ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setBusy(({ [file.bucket]: _, ...rest }) => rest);
+      await refresh();
+      await queryClient.invalidateQueries();
+    }
+  };
+  const remove = async (bucket: number) => {
+    await (await lib()).deleteStats(bucket);
+    await refresh();
+    await queryClient.invalidateQueries();
+  };
+  const offered = index?.files ?? [];
+  const missing = offered.filter((f) => ratings.includes(f.bucket) && !here.has(f.bucket));
+  const downloadMine = async () => {
+    for (const f of missing) await download(f);
+  };
+  return (
+    <div className="setting setting-block">
+      <div className="what">
+        <strong>Statistiques sur cet appareil</strong>
+        <div className="hint">
+          Les parties de la base Lichess{index ? ` (${index.period.since === index.period.until ? index.period.since : `${index.period.since} à ${index.period.until}`})` : ''}, une
+          tranche Elo par fichier. Avec toutes les tranches de vos réglages (marquées ●), l’explorateur, la recherche à votre niveau et les coups
+          manquants sont calculés sur l’appareil ; sinon, par le serveur.
+        </div>
+        {error && <div className="hint error">{error}</div>}
+      </div>
+      {offered.length > 0 && (
+        <table className="stats-files">
+          <tbody>
+            {offered.map((f, i) => (
+              <tr key={f.bucket}>
+                <td>
+                  {ratings.includes(f.bucket) ? '● ' : ''}
+                  {bucketLabel(f.bucket, offered[i + 1]?.bucket)}
+                </td>
+                <td className="muted">{plural(f.positions, 'position', 'positions')}</td>
+                <td className="muted">{mo(f.bytes)}</td>
+                <td>
+                  {busy[f.bucket] ? (
+                    <span className="muted">{busy[f.bucket]}</span>
+                  ) : here.has(f.bucket) ? (
+                    <button className="link" onClick={() => remove(f.bucket)}>
+                      Supprimer
+                    </button>
+                  ) : (
+                    <button onClick={() => download(f)}>Télécharger</button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {missing.length > 0 && !Object.keys(busy).length && (
+        <button onClick={downloadMine}>
+          Télécharger les tranches de mes réglages ({mo(missing.reduce((n, f) => n + f.bytes, 0))})
+        </button>
+      )}
+    </div>
   );
 }
 

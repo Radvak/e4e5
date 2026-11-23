@@ -8,3 +8,4 @@ export * from './gameSync.js';
 export * from './gamesReport.js';
 export * from './myGames.js';
 export * from './openings.js';
+export * from './gaps.js';

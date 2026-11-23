@@ -7,8 +7,12 @@
  * The accounts on Lichess and Chess.com are still set on the server (Paramètres): each time the
  * app reads them (me), they are copied to the local user, whose games are then synced from the
  * device, straight from the two sites.
+ *
+ * The statistics (explorer, search at my level, missing moves) are read in the files downloaded
+ * on the device (stats.ts) when every rating bucket of the settings is there; otherwise, and for
+ * a position not in the files, the server answers as before.
  */
-import { fenKey, positionFromFen } from '@tabiya/core';
+import { fenKey, positionFromFen, REACH_STEPS, suggestMoves } from '@tabiya/core';
 import {
   createRepertoire,
   DataError,
@@ -16,6 +20,7 @@ import {
   deleteRepertoire,
   dismissInbox,
   gamesReport,
+  gapsAnalysis,
   getRepertoire,
   importPgn,
   myGameMoves,
@@ -41,6 +46,7 @@ import { eq } from 'drizzle-orm';
 import { ApiError, serverApi, type api, type RepertoireDetail, type RepertoireSummary, type ReviewCard } from '../api';
 import { LOCAL_USER, localDb } from './db';
 import type { LocalMethod } from './mode';
+import { localStats } from './stats';
 
 type Api = typeof api;
 type LocalDb = Awaited<ReturnType<typeof localDb>>['db'];
@@ -127,6 +133,26 @@ export const localApi = {
       if (!moves) throw new DataError(404, 'Partie introuvable');
       return { moves };
     }),
+  explorer: async (fen, speeds, ratings) => {
+    const s = await localStats(speeds, ratings);
+    const data = s && (await s.one(positionKey(fen)));
+    if (!s || !data) return serverApi.explorer(fen, speeds, ratings);
+    const meta = { speeds, ratings, exact: true, fetchedAt: new Date(`${s.period.until}-01T00:00:00Z`).toISOString(), source: 'database' as const, period: s.period };
+    return { data, meta };
+  },
+  bestMoves: async (fen, speeds, ratings, depth, color) => {
+    const s = await localStats(speeds, ratings);
+    const root = positionKey(fen);
+    const first = s && (await s.one(root));
+    if (!s || !first) return serverApi.bestMoves(fen, speeds, ratings, depth, color);
+    const { missing: _m, approximate: _a, ...found } = await suggestMoves(s.stored, root, { data: first, exact: true }, depth, color);
+    return { ...found, steps: REACH_STEPS, pending: 0 };
+  },
+  gaps: async (speeds, ratings, cutoff) => {
+    const s = await localStats(speeds, ratings);
+    if (!s) return serverApi.gaps(speeds, ratings, cutoff);
+    return run(async (db) => ({ live: false, ...(await gapsAnalysis(db, LOCAL_USER, { speeds, ratings, cutoff }, s.stored)) }));
+  },
   opening: (line) =>
     run(async () => {
       await loadOpenings();

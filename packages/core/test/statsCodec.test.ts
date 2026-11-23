@@ -1,5 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { cellOf, cellsOf, decodeMove, decodePositionStats, encodeMove, encodePositionStats, type CellCounts } from '../src/index.js';
+import {
+  bucketCells,
+  cellOf,
+  cellsOf,
+  decodeMove,
+  decodePositionCounts,
+  decodePositionStats,
+  encodeMove,
+  encodePositionStats,
+  keepCells,
+  START_FEN,
+  statsFromRows,
+  type CellCounts,
+} from '../src/index.js';
 
 describe('position statistics codec', () => {
   it('encodes moves on 15 bits', () => {
@@ -35,5 +48,25 @@ describe('position statistics codec', () => {
       black: 7,
       moves: [{ uci: 'h2h4', white: 999_999, draws: 5, black: 7 }],
     });
+  });
+
+  it('splits a position by rating bucket, the parts adding up to the whole', () => {
+    const cells = (entries: [number, [number, number, number]][]): CellCounts => new Map(entries);
+    const counts = {
+      total: cells([[cellOf('blitz', 1600), [100, 20, 90]], [cellOf('rapid', 1800), [300, 50, 200]]]),
+      moves: [
+        { move: encodeMove('e2e4'), cells: cells([[cellOf('blitz', 1600), [60, 10, 50]], [cellOf('rapid', 1800), [200, 30, 100]]]) },
+        { move: encodeMove('d2d4'), cells: cells([[cellOf('rapid', 1800), [100, 20, 100]]]) },
+      ],
+    };
+    expect(decodePositionCounts(encodePositionStats(counts))).toEqual(counts);
+    const b1600 = keepCells(counts, bucketCells(1600));
+    expect(b1600.moves.map((m) => decodeMove(m.move))).toEqual(['e2e4']);
+    const rows = [encodePositionStats(b1600), encodePositionStats(keepCells(counts, bucketCells(1800)))];
+    const speeds = ['blitz', 'rapid'];
+    const whole = statsFromRows(START_FEN, [encodePositionStats(counts)], speeds, [1600, 1800], 30);
+    expect(statsFromRows(START_FEN, rows, speeds, [1600, 1800], 30)).toEqual(whole);
+    expect(whole).toMatchObject({ white: 400, draws: 70, black: 290, moves: [{ san: 'e4', white: 260 }, { san: 'd4', white: 100 }] });
+    expect(statsFromRows(START_FEN, [], speeds, [1600], 30)).toBeNull();
   });
 });

@@ -897,3 +897,8 @@ table.explorer tr.move-detail table.games { font-size: 0.85rem; }
 .nag-picker { display: flex; gap: 6px; margin-bottom: 8px; }
 .nag-choice { min-height: 0; min-width: 40px; height: 32px; padding: 0 8px; font-weight: 800; font-size: 0.95rem; background: var(--surface-2); border-color: var(--border); }
 .nag-choice.on { box-shadow: inset 0 0 0 2px currentColor; background: color-mix(in srgb, currentColor 18%, var(--surface-2)); }
+
+/* Paramètres › Mode local: statistics files on the device. */
+.stats-files { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 0.9rem; }
+.stats-files td { padding: 6px 4px; border-top: 1px solid var(--border); }
+.stats-files td:last-child { text-align: right; }

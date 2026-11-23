@@ -9,6 +9,10 @@
  * Messages: { id, sql, params, method } → { id, rows } | { id, error }. `method` follows Drizzle's
  * sqlite-proxy: 'run' (no rows), 'all' / 'values' (rows as arrays), 'get' (first row as an
  * array, undefined without a row); 'exec' runs a script of several statements (migrations).
+ *
+ * The statistics files (one per rating bucket, scripts/split-stats.ts on the server) are other
+ * databases of the same pool, opened read-only: { id, stats: … } downloads one (progress sent as
+ * { id, progress }), deletes one, lists them, or reads the rows of some positions in some of them.
  */
 import sqlite3InitModule, { type Database } from '@sqlite.org/sqlite-wasm';
 
@@ -19,23 +23,57 @@ export interface Request {
   params: unknown[];
   method: Method;
 }
-export type Response = { id: number; rows: unknown[] | undefined } | { id: number; error: string };
+/** A statistics file on the device: its bucket, positions and the months of its games. */
+export interface StatsFile {
+  bucket: number;
+  positions: number;
+  since: string;
+  until: string;
+  builtAt: string | null;
+}
+export type StatsOp =
+  | { op: 'download'; bucket: number; url: string }
+  | { op: 'delete'; bucket: number }
+  | { op: 'list' }
+  /** keys: Zobrist keys (decimal strings); answers, per key, the rows of the buckets asked. */
+  | { op: 'get'; buckets: number[]; keys: string[] };
+export interface StatsRequest {
+  id: number;
+  stats: StatsOp;
+}
+export type Response =
+  | { id: number; rows: unknown[] | undefined }
+  | { id: number; error: string }
+  | { id: number; progress: { loaded: number; total: number } };
 export type Ready = { ready: true; persistent: boolean } | { ready: false; error: string };
 
+type Pool = Awaited<ReturnType<Awaited<ReturnType<typeof sqlite3InitModule>>['installOpfsSAHPoolVfs']>>;
+
 let db: Database;
+let pool: Pool | null = null;
+/** Open statistics files, by bucket. */
+const statsDbs = new Map<number, Database>();
+const statsPath = (bucket: number) => `/stats-${bucket}.sqlite3`;
 
 const opened = (async (): Promise<Ready> => {
   const sqlite3 = await sqlite3InitModule();
   try {
-    const pool = await sqlite3.installOpfsSAHPoolVfs({ name: 'tabiya', directory: '/tabiya-db' });
+    // The app's database and up to 9 statistics files, each with its journal.
+    pool = await sqlite3.installOpfsSAHPoolVfs({ name: 'tabiya', directory: '/tabiya-db', initialCapacity: 24 });
+    await pool.reserveMinimumCapacity(24);
     db = new pool.OpfsSAHPoolDb('/tabiya.sqlite3');
     db.exec('PRAGMA foreign_keys = ON; PRAGMA journal_mode = TRUNCATE;');
+    for (const name of pool.getFileNames()) {
+      const bucket = /^\/stats-(\d+)\.sqlite3$/.exec(name)?.[1];
+      if (bucket !== undefined) statsDbs.set(Number(bucket), new pool.OpfsSAHPoolDb(name));
+    }
     return { ready: true, persistent: true };
   } catch (e) {
     // Another tab holds the database: refused rather than working on an empty copy.
     if (String(e).includes('NoModificationAllowedError') || String(e).includes('Access Handles')) {
       return { ready: false, error: 'Tabiya est déjà ouvert dans un autre onglet.' };
     }
+    pool = null;
     db = new sqlite3.oo1.DB(':memory:', 'c');
     db.exec('PRAGMA foreign_keys = ON;');
     return { ready: true, persistent: false };
@@ -44,11 +82,81 @@ const opened = (async (): Promise<Ready> => {
 
 opened.then((state) => postMessage(state));
 
-self.onmessage = async (e: MessageEvent<Request>) => {
-  const { id, sql, params, method } = e.data;
+function fileInfo(bucket: number, file: Database): StatsFile {
+  const meta = Object.fromEntries(
+    (file.exec({ sql: 'SELECT name, value FROM meta', rowMode: 'array', returnValue: 'resultRows' }) as [string, string][]).map(([k, v]) => [k, JSON.parse(v)]),
+  ) as { since?: string; until?: string; builtAt?: string };
+  const [[positions]] = file.exec({ sql: 'SELECT count(*) FROM stats', rowMode: 'array', returnValue: 'resultRows' }) as [[number]];
+  return { bucket, positions: Number(positions), since: meta.since ?? '', until: meta.until ?? '', builtAt: meta.builtAt ?? null };
+}
+
+/** Downloads a gzipped statistics file, sending the progress, and replaces the bucket's file. */
+async function download(id: number, bucket: number, url: string): Promise<StatsFile> {
+  if (!pool) throw new Error('Stockage de l’appareil indisponible (navigation privée ?) : statistiques impossibles à enregistrer');
+  const res = await fetch(url);
+  if (!res.ok || !res.body) throw new Error(`Téléchargement impossible (${res.status})`);
+  const total = Number(res.headers.get('Content-Length') ?? 0);
+  let loaded = 0;
+  let last = 0;
+  const counted = res.body.pipeThrough(
+    new TransformStream<Uint8Array, Uint8Array>({
+      transform(chunk, ctrl) {
+        loaded += chunk.length;
+        if (loaded - last > 256 * 1024 || loaded === total) {
+          last = loaded;
+          postMessage({ id, progress: { loaded, total } } satisfies Response);
+        }
+        ctrl.enqueue(chunk);
+      },
+    }),
+  );
+  const bytes = new Uint8Array(await new Response(counted.pipeThrough(new DecompressionStream('gzip') as unknown as TransformStream<Uint8Array, Uint8Array>)).arrayBuffer());
+  statsDbs.get(bucket)?.close();
+  statsDbs.delete(bucket);
+  await pool.importDb(statsPath(bucket), bytes);
+  const file = new pool.OpfsSAHPoolDb(statsPath(bucket));
+  statsDbs.set(bucket, file);
+  return fileInfo(bucket, file);
+}
+
+async function statsOp(id: number, op: StatsOp): Promise<unknown[]> {
+  switch (op.op) {
+    case 'download':
+      return [await download(id, op.bucket, op.url)];
+    case 'delete':
+      statsDbs.get(op.bucket)?.close();
+      statsDbs.delete(op.bucket);
+      pool?.unlink(statsPath(op.bucket));
+      return [];
+    case 'list':
+      return [...statsDbs].sort((a, b) => a[0] - b[0]).map(([bucket, file]) => fileInfo(bucket, file));
+    case 'get': {
+      const files = op.buckets.flatMap((b) => statsDbs.get(b) ?? []);
+      const stmts = files.map((f) => f.prepare('SELECT data FROM stats WHERE key = ?'));
+      try {
+        return op.keys.map((key) => {
+          const rows: Uint8Array[] = [];
+          for (const stmt of stmts) {
+            stmt.bind([BigInt(key)]);
+            if (stmt.step()) rows.push(stmt.get(0) as Uint8Array);
+            stmt.reset();
+          }
+          return rows;
+        });
+      } finally {
+        for (const s of stmts) s.finalize();
+      }
+    }
+  }
+}
+
+self.onmessage = async (e: MessageEvent<Request | StatsRequest>) => {
+  const { id } = e.data;
   const state = await opened;
   if (!state.ready) return postMessage({ id, error: state.error } satisfies Response);
   try {
+    if ('stats' in e.data) return postMessage({ id, rows: await statsOp(id, e.data.stats) } satisfies Response);
+    const { sql, params, method } = e.data;
     if (method === 'exec') {
       db.exec(sql);
       return postMessage({ id, rows: [] } satisfies Response);

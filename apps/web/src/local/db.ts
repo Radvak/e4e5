@@ -8,7 +8,7 @@ import * as schema from '@tabiya/data/schema';
 import type { Db } from '@tabiya/data';
 import { drizzle } from 'drizzle-orm/sqlite-proxy';
 import journal from '../../../server/drizzle/meta/_journal.json';
-import type { Method, Ready, Request, Response } from './sqlite.worker';
+import type { Method, Ready, Request, Response, StatsOp, StatsRequest } from './sqlite.worker';
 
 /** The only user of a local database. */
 export const LOCAL_USER = 'local';
@@ -19,6 +19,8 @@ export interface LocalDb {
   db: Db;
   /** false: kept in memory only (no OPFS), lost when the page closes. */
   persistent: boolean;
+  /** An operation on the statistics files (sqlite.worker.ts); `onProgress` for downloads. */
+  stats: (op: StatsOp, onProgress?: (p: { loaded: number; total: number }) => void) => Promise<unknown[]>;
 }
 
 let opening: Promise<LocalDb> | null = null;
@@ -48,10 +50,14 @@ async function open(): Promise<LocalDb> {
   }
 
   let nextId = 1;
-  const pending = new Map<number, { resolve: (rows: unknown[] | undefined) => void; reject: (e: Error) => void }>();
+  const pending = new Map<
+    number,
+    { resolve: (rows: unknown[] | undefined) => void; reject: (e: Error) => void; progress?: (p: { loaded: number; total: number }) => void }
+  >();
   worker.addEventListener('message', (e: MessageEvent<Response>) => {
     const p = pending.get(e.data.id);
     if (!p) return;
+    if ('progress' in e.data) return p.progress?.(e.data.progress);
     pending.delete(e.data.id);
     if ('error' in e.data) p.reject(new Error(e.data.error));
     else p.resolve(e.data.rows);
@@ -76,5 +82,11 @@ async function open(): Promise<LocalDb> {
 
   const db = drizzle(async (sql, params, method) => ({ rows: (await query(sql, params, method)) as never }), { schema }) as unknown as Db;
   await db.insert(schema.users).values({ id: LOCAL_USER, username: 'Moi' }).onConflictDoNothing();
-  return { db, persistent: ready.persistent };
+  const stats = (op: StatsOp, progress?: (p: { loaded: number; total: number }) => void) =>
+    new Promise<unknown[]>((resolve, reject) => {
+      const id = nextId++;
+      pending.set(id, { resolve: (rows) => resolve(rows ?? []), reject, progress });
+      worker.postMessage({ id, stats: op } satisfies StatsRequest);
+    });
+  return { db, persistent: ready.persistent, stats };
 }
