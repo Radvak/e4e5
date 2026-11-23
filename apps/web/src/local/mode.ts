@@ -1,0 +1,34 @@
+/**
+ * Local mode (experimental, migration without a server): the repertoires are read and written
+ * in SQLite on this device instead of the server; the rest still goes to the server. Turned on
+ * and off in Paramètres, or with ?local=1 / ?local=0 in the address.
+ */
+const KEY = 'tabiya.backend';
+
+/** The API methods answered on this device in local mode (local/backend.ts). */
+export const LOCAL_METHODS = [
+  'repertoires',
+  'createRepertoire',
+  'renameRepertoire',
+  'setRepertoireActive',
+  'deleteRepertoire',
+  'repertoire',
+  'saveLine',
+  'updateMove',
+  'deleteMove',
+  'importPgn',
+] as const;
+export type LocalMethod = (typeof LOCAL_METHODS)[number];
+
+const fromUrl = new URLSearchParams(location.search).get('local');
+if (fromUrl === '1') localStorage.setItem(KEY, 'local');
+else if (fromUrl === '0') localStorage.removeItem(KEY);
+
+export const isLocalMode = (): boolean => localStorage.getItem(KEY) === 'local';
+
+/** Changes the mode and reloads the app (the API methods are chosen at start). */
+export function setLocalMode(on: boolean) {
+  if (on) localStorage.setItem(KEY, 'local');
+  else localStorage.removeItem(KEY);
+  location.reload();
+}

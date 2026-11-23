@@ -1,7 +1,9 @@
-import { useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { gapCutoffFor, LINE_DEPTHS } from '@tabiya/core';
-import type { Me, TrainingSummary } from '../api';
+import { serverApi, type Me, type TrainingSummary } from '../api';
+import { isLocalMode, setLocalMode } from '../local/mode';
 import { RatingRange } from '../components/RatingRange';
 import { depthPct, explorerParams, NO_LIMIT, SPEED_CHOICES, SPEED_NAMES, useSettings, type LearnOrder, type SpeedChoice } from '../settings';
 import { PageHeader, plural } from '../ui';
@@ -144,7 +146,58 @@ export function Settings({ me }: { me: Me }) {
           </select>
         </div>
       </section>
+
+      <LocalModeSetting />
     </div>
+  );
+}
+
+/**
+ * Local mode (experimental): the repertoires kept in SQLite on this device instead of the
+ * server, a step of the migration without a server (MIGRATION-SERVERLESS.md).
+ */
+function LocalModeSetting() {
+  const [state, setState] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const local = isLocalMode();
+  const copy = async () => {
+    if (!confirm('Remplacer les répertoires de cet appareil par une copie de ceux du serveur ?')) return;
+    setState('Copie en cours…');
+    try {
+      const { copyFromServer } = await import('../local/backend');
+      const n = await copyFromServer(serverApi);
+      setState(`${plural(n.repertoires, 'répertoire copié', 'répertoires copiés')}, ${plural(n.moves, 'coup', 'coups')}.`);
+      await queryClient.invalidateQueries();
+    } catch (e) {
+      setState(`Échec : ${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
+  return (
+    <section className="card" id="local">
+      <h3>Mode local (expérimental)</h3>
+      <div className="setting">
+        <div className="what">
+          <strong>Répertoires sur cet appareil</strong>
+          <div className="hint">
+            Les répertoires sont lus et enregistrés dans le navigateur, sans le serveur. Le reste (entraînement, statistiques, parties) passe
+            encore par le serveur. Un seul onglet à la fois.
+          </div>
+        </div>
+        <label className="check">
+          <input type="checkbox" checked={local} onChange={(e) => setLocalMode(e.target.checked)} /> Activé
+        </label>
+      </div>
+      {local && (
+        <div className="setting">
+          <div className="what">
+            <strong>Copier depuis le serveur</strong>
+            <div className="hint">Remplace les répertoires de cet appareil par ceux du serveur (mêmes identifiants).</div>
+            {state && <div className="hint">{state}</div>}
+          </div>
+          <button onClick={copy}>Copier</button>
+        </div>
+      )}
+    </section>
   );
 }
 

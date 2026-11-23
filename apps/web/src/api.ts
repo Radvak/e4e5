@@ -1,3 +1,4 @@
+import { isLocalMode, LOCAL_METHODS } from './local/mode';
 import type { Color, ExplorerResponse, FsrsCard, Grade, RepertoireSummaryCounts, PgnChapter, RepMove, SuggestedMove, Thumbnail } from '@tabiya/core';
 
 export interface StatsMeta {
@@ -343,3 +344,16 @@ export const api = {
       `/api/explorer?${new URLSearchParams({ fen, speeds: speeds.join(','), ratings: ratings.join(',') })}`,
     ),
 };
+
+/** The server's methods, kept when local mode replaces some of them (copy from the server). */
+export const serverApi = { ...api };
+
+// Local mode (experimental): the methods of local/backend.ts answered on this device. Loaded only
+// when used, so SQLite is not downloaded otherwise.
+if (isLocalMode()) {
+  const local = () => import('./local/backend');
+  for (const key of LOCAL_METHODS) {
+    (api as Record<string, unknown>)[key] = (...args: unknown[]) =>
+      local().then((m) => (m.localApi[key] as (...a: unknown[]) => Promise<unknown>)(...args));
+  }
+}
