@@ -1,0 +1,70 @@
+# Opening statistics of one month of the Lichess game database (database.lichess.org), built
+# straight from the dump (streamed, nothing written but the result) and split per rating bucket
+# for the app (tools/stats). The files go to a release stats-YYYY-MM; the Pages workflow then
+# publishes the latest one under /stats/.
+name: Opening statistics
+
+on:
+  workflow_dispatch:
+    inputs:
+      month:
+        description: Month of the Lichess database (YYYY-MM); empty for last month
+        required: false
+      max_games:
+        description: Games read at most (test run, release stats-YYYY-MM-test); empty for all
+        required: false
+  schedule:
+    # The 8th of each month: last month's database is published by then.
+    - cron: '0 5 8 * *'
+  # A change of the tools: a quick test run (1 million games, release stats-YYYY-MM-test).
+  push:
+    paths: [tools/stats/**, .github/workflows/stats.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The monthly run starts from main, which has no tools/stats until serverless is merged.
+          ref: ${{ github.event_name == 'schedule' && 'serverless' || github.ref }}
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: zstd
+        run: command -v zstd || (sudo apt-get update && sudo apt-get install -y zstd)
+      - run: pnpm install --frozen-lockfile --filter stats...
+      - name: Month
+        id: month
+        env:
+          MONTH: ${{ inputs.month }}
+          MAX_GAMES: ${{ inputs.max_games || (github.event_name == 'push' && '1000000' || '') }}
+        run: |
+          month="${MONTH:-$(date -u -d "$(date -u +%Y-%m-01) -1 month" +%Y-%m)}"
+          [[ "$month" =~ ^20[0-9]{2}-(0[1-9]|1[0-2])$ ]] || { echo "Mois invalide : $month"; exit 1; }
+          echo "month=$month" >> "$GITHUB_OUTPUT"
+          echo "tag=stats-$month${MAX_GAMES:+-test}" >> "$GITHUB_OUTPUT"
+      - name: Build stats.db
+        env:
+          # The FEN of each position followed lives in the JS heap (the counters in typed arrays).
+          NODE_OPTIONS: --max-old-space-size=12288
+          MAX_GAMES: ${{ inputs.max_games || (github.event_name == 'push' && '1000000' || '') }}
+        run: pnpm --filter stats build-stats "${{ steps.month.outputs.month }}" --out "$RUNNER_TEMP/stats.db" ${MAX_GAMES:+--max-games "$MAX_GAMES"}
+      - name: Split per rating bucket
+        run: pnpm --filter stats split --in "$RUNNER_TEMP/stats.db" --out "$RUNNER_TEMP/stats-files"
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.month.outputs.tag }}
+          MONTH: ${{ steps.month.outputs.month }}
+        run: |
+          gh release delete "$TAG" --yes --cleanup-tag || true
+          gh release create "$TAG" "$RUNNER_TEMP"/stats-files/* --target "$GITHUB_SHA" --latest=false \
+            --title "Statistiques d'ouvertures $MONTH" \
+            --notes "Base de parties Lichess de $MONTH (database.lichess.org, CC0), un fichier par tranche Elo pour l'app (tools/stats). Liste : index.json."
