@@ -5,7 +5,7 @@ import { api, type Me } from './api';
 import { cardsQuery } from './offline/reviews';
 import { preparedOf } from './training/graphCache';
 import { dayStart, useSettings } from './settings';
-import { useGaps } from './useGaps';
+import { useGapReach } from './useGaps';
 
 const minute = () => Math.floor(Date.now() / 60_000) * 60_000;
 
@@ -39,7 +39,7 @@ export function useTrainingSummary(me: Me | undefined): { data: RepertoireSummar
     queries: (list.data ?? []).map((r) => ({ queryKey: ['repertoire', r.id], queryFn: () => api.repertoire(r.id), enabled: !!me })),
   });
   const cards = useQuery({ ...cardsQuery, enabled: !!me });
-  const gaps = useGaps(me);
+  const gaps = useGapReach(me);
   const now = useMinute();
   const repsVersion = reps.map((q) => q.dataUpdatedAt).join();
 
@@ -48,10 +48,9 @@ export function useTrainingSummary(me: Me | undefined): { data: RepertoireSummar
     if (!list.data || reps.some((q) => !q.data)) return undefined;
     // Shortened lines need the probabilities: wait for them (unless they cannot be had).
     if (lineDepth > 0 && gaps.isLoading) return undefined;
-    const report = gaps.data;
-    return reps.map((q) => preparedOf(q.data!, report?.[q.data!.color]?.reach, lineDepth));
+    return reps.map((q) => preparedOf(q.data!, gaps.reach?.[q.data!.color], lineDepth));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [list.data, repsVersion, gaps.data, gaps.isLoading, lineDepth]);
+  }, [list.data, repsVersion, gaps.reach, gaps.isLoading, lineDepth]);
 
   // The counts, after every answer: cheap, and computed once for all the hooks.
   const data = useMemo(() => {

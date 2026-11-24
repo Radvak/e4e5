@@ -36,9 +36,7 @@ interface Props {
 }
 
 export const REASONS: Record<NonNullable<StatsMeta['reason']>, string> = {
-  'no-token': 'liez Lichess dans les paramètres pour des statistiques à jour',
-  'rate-limited': 'limite de Lichess atteinte, réessayez dans une minute',
-  unreachable: 'Lichess est injoignable',
+  'not-stored': 'position trop rare, absente des statistiques enregistrées',
 };
 
 const monthLabel = (m: string) => new Date(`${m}-01T00:00:00Z`).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric', timeZone: 'UTC' });

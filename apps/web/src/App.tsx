@@ -7,7 +7,6 @@ import { dropPendingReviews, pendingReviews, startReviewSync } from './offline/r
 import { useOnline, usePendingReviews } from './offline/useOffline';
 import { InstallPrompt } from './components/InstallPrompt';
 import { useTrainingSummary } from './useTrainingSummary';
-import { useGaps } from './useGaps';
 import type { Me } from './api';
 import { Lacunes } from './pages/Lacunes';
 import { Explorer } from './pages/Explorer';
@@ -86,23 +85,6 @@ function Badge({ n, label }: { n: number; label: string }) {
   );
 }
 
-/**
- * Lichess statistics being fetched in the background (gap finder, depth of the lines): how many
- * positions are left. Shown on every page, which also keeps the fetching going (the gap report
- * is asked again while some are pending, each pass reaching deeper positions).
- */
-function StatsProgress({ me }: { me: Me }) {
-  const gaps = useGaps(me);
-  const pending = (gaps.data?.white?.pending ?? 0) + (gaps.data?.black?.pending ?? 0);
-  if (!pending) return null;
-  return (
-    <span className="stats-progress" title={`Statistiques Lichess en cours de récupération : ${plural(pending, 'position', 'positions')}`} aria-live="polite">
-      <span className="spinner" aria-hidden="true" />
-      {pending}
-    </span>
-  );
-}
-
 /** Lacunes: the errors of my games (moves played instead of the prepared ones), not ignored. */
 function GamesBadge() {
   const n = useGamesReport().data?.inbox.errorCount ?? 0;
@@ -171,7 +153,6 @@ export function App() {
           ))}
         </nav>
         <div className="spacer" />
-        <StatsProgress me={me.data} />
         <Menu
           trigger={me.data.username.slice(0, 1).toUpperCase()}
           title="Compte"

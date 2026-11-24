@@ -5,19 +5,18 @@
  * any of them is not a hole for the others. Each hole is then given to the repertoire going
  * furthest along its line, past that repertoire's trunk (`gapOwner`), or to none.
  *
- * Runs on stored statistics only, so it answers at once. Positions the analysis needs without
- * stored data for the requested range are fetched in the background (`pending`): the client
- * asks again until nothing is pending, and each pass may reach deeper positions.
+ * Runs on stored statistics only (stats.ts: Lichess is never asked), so it answers at once. A
+ * position without any stored statistics ends its line; one stored for another range only is
+ * used as such (`approximate`). `pending` is always 0.
  */
 import { findGaps, gapCandidate, LINE_DEPTHS, Repertoire, rankRepertoires, turnOf, type Color } from '@tabiya/core';
 import { eq, inArray, sql } from 'drizzle-orm';
-import type { FastifyBaseLogger, FastifyInstance } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireUser } from '../auth.js';
 import { db } from '../db/client.js';
 import { graphColumns, positionStats, repertoires, repMoves, type User } from '../db/schema.js';
-import { env } from '../env.js';
-import { prefetchStats, storedStats } from '../stats.js';
+import { storedStats } from '../stats.js';
 import { statsParams } from './explorer.js';
 
 export const gapsQuery = statsParams.extend({
@@ -41,15 +40,14 @@ export async function gapRoutes(app: FastifyInstance) {
   app.get('/api/gaps', { preHandler: requireUser }, async (req, reply) => {
     const q = gapsQuery.parse(req.query);
     if (!q.speeds.length || !q.ratings.length) return reply.code(400).send({ error: 'speeds and ratings required' });
-    return gapsReport(req.user!, q, req.log);
+    return gapsReport(req.user!, q);
   });
 }
 
 /** The gap finder report of a user (both colours), for statistics settings `q`. */
-export async function gapsReport(user: User, q: z.infer<typeof gapsQuery>, log: FastifyBaseLogger) {
+export async function gapsReport(user: User, q: z.infer<typeof gapsQuery>) {
   const userId = user.id;
   const reps = await db.select().from(repertoires).where(eq(repertoires.userId, userId));
-  const token = user.lichessToken ?? env.lichessAppToken;
   const EXPLORE = exploreFor(q.cutoff);
 
   // Cheap signature of what the answer depends on: the moves (added / deleted), the
@@ -83,21 +81,17 @@ export async function gapsReport(user: User, q: z.infer<typeof gapsQuery>, log: 
     // line (two repertoires 1. e4 and 1. d4 do not halve each other's positions and holes).
     const report = findGaps(merged, statsAt, { cutoff: EXPLORE, split: false });
 
-    // Fetched in the background: positions without exact statistics, reached often enough.
-    const often = (fen: string) => (report.reached.get(fen) ?? 0) >= q.cutoff;
     const approximate = report.usedStats.filter((f) => !stored.get(f)!.exact);
-    const toFetch = [...report.missingStats.map((m) => m.fen), ...approximate].filter(often);
-    const pending = token ? prefetchStats(toFetch, q.speeds, q.ratings, token, log) : 0;
 
     const candidates = own.map((r) => gapCandidate(r.id, new Repertoire(color, colorMoves.filter((m) => m.repertoireId === r.id))));
     return {
       truncated: report.truncated,
       /** Positions analysed with statistics of another range (exact ones not stored yet). */
       approximate: approximate.length,
-      /** Positions without any statistics, reached often enough to matter (they are fetched). */
+      /** Positions without any statistics, reached often enough to matter (their lines end there). */
       missing: report.missingStats.filter((m) => m.prob >= q.cutoff).length,
-      /** Positions being fetched in the background: ask again later. */
-      pending,
+      /** Nothing is fetched (kept for the clients asking again while some were). */
+      pending: 0,
       /**
        * Probability of reaching each position of the repertoire if I play its line (capped at 1:
        * move orders of mine meeting again add up), explored down to EXPLORE: orders
@@ -126,8 +120,7 @@ export async function gapsReport(user: User, q: z.infer<typeof gapsQuery>, log: 
     };
   };
 
-  const body = { live: !!token, white: await analyse('white'), black: await analyse('black') };
-  // Not cached while statistics are being fetched: the next call must see them.
-  if (!body.white?.pending && !body.black?.pending) cache.set(key, { signature, at: Date.now(), body });
+  const body = { white: await analyse('white'), black: await analyse('black') };
+  cache.set(key, { signature, at: Date.now(), body });
   return body;
 }

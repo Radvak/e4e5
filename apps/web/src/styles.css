@@ -703,19 +703,6 @@ button.badge:focus-visible { outline: 2px solid currentColor; outline-offset: 1p
 .depth-choice input { accent-color: var(--accent); margin: 0; }
 .depth-choice strong { font-weight: 600; }
 
-/* Header: Lichess statistics being fetched in the background (positions left). */
-.stats-progress {
-  display: inline-flex; align-items: center; gap: 6px; margin-right: 10px;
-  color: var(--muted); font-size: 0.8rem; font-variant-numeric: tabular-nums;
-}
-.stats-progress .spinner {
-  width: 10px; height: 10px; border-radius: 50%;
-  border: 1.5px solid var(--border-strong); border-top-color: var(--muted);
-  animation: stats-spin 1s linear infinite;
-}
-@keyframes stats-spin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { .stats-progress .spinner { animation: none; } }
-
 /* Lichess moves merged with the search at my level (LevelTable). */
 .level-table .explorer th { padding: 4px 6px; font-size: 0.75rem; font-weight: 600; color: var(--muted); text-align: left; white-space: nowrap; }
 .level-table .explorer th.count, .level-table .explorer th.score-col { text-align: right; }

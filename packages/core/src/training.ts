@@ -41,17 +41,37 @@ export function trainingPositionsFrom(rep: Repertoire, root: string): TrainingPo
 }
 
 /**
- * Weight of each repertoire reply of the opponent: number of games in the explorer statistics.
- * Replies missing from the statistics still get a small weight (2% of the known games) so they
- * are played sometimes. Without statistics: main line 2, others 1.
+ * How the opponent's replies are drawn in "Se tester": the real frequency first, smoothed so the
+ * less played lines come up too, and more often when the positions behind are hard for me.
+ * - `FREQUENCY_POWER`: weight ∝ games^power (1/2: 90 % / 10 % becomes 75 % / 25 %, 97 % / 3 %
+ *   becomes 85 % / 15 %; the order of the real games is kept);
+ * - `DIFFICULTY_BONUS`: × (1 + bonus · log2(1 + d)), d the expected number of my mistakes
+ *   behind the reply (the sum, over the positions learnt behind it, of the chance of missing
+ *   it today): well known positions add almost nothing, however many (d = 0.2: × 1.13), shaky
+ *   ones raise it (d = 1: × 1.5, 3: × 2, 7: × 2.5) without outweighing how often the line
+ *   really comes up. A long line counts only through its hard positions.
  */
-export function replyWeights(replies: RepMove[], stats: ExplorerResponse | null | undefined): number[] {
+export const FREQUENCY_POWER = 0.5;
+export const DIFFICULTY_BONUS = 0.5;
+
+export interface ReplyWeighting {
+  /** Expected number of my mistakes behind a reply (its difficulty); none: not counted. */
+  difficulty?: (reply: RepMove) => number;
+}
+
+/**
+ * Weight of each repertoire reply of the opponent: its number of games in the explorer
+ * statistics, smoothed (`FREQUENCY_POWER`) and raised for the replies with hard positions behind
+ * them (`DIFFICULTY_BONUS`). Replies missing from the statistics count 2% of the known games
+ * (before smoothing), so they are played sometimes. Without statistics: main line 2, others 1.
+ */
+export function replyWeights(replies: RepMove[], stats: ExplorerResponse | null | undefined, { difficulty }: ReplyWeighting = {}): number[] {
   const games = new Map((stats?.moves ?? []).map((m) => [m.uci, totalGames(m)]));
   const known = replies.map((m) => games.get(m.uci) ?? 0);
   const sum = known.reduce((a, b) => a + b, 0);
-  if (sum === 0) return replies.map((m) => (m.isMain ? 2 : 1));
   const floor = Math.max(1, 0.02 * sum);
-  return known.map((g) => (g > 0 ? g : floor));
+  const base = sum === 0 ? replies.map((m) => (m.isMain ? 2 : 1)) : known.map((g) => (g > 0 ? g : floor) ** FREQUENCY_POWER);
+  return base.map((w, i) => w * (difficulty ? 1 + DIFFICULTY_BONUS * Math.log2(1 + Math.max(0, difficulty(replies[i]!))) : 1));
 }
 
 /** Picks an opponent reply at random, weighted by `replyWeights`. */
@@ -59,9 +79,10 @@ export function chooseReply(
   replies: RepMove[],
   stats: ExplorerResponse | null | undefined,
   random: () => number = Math.random,
+  weighting: ReplyWeighting = {},
 ): RepMove | undefined {
   if (!replies.length) return undefined;
-  const weights = replyWeights(replies, stats);
+  const weights = replyWeights(replies, stats, weighting);
   let r = random() * weights.reduce((a, b) => a + b, 0);
   for (let i = 0; i < replies.length; i++) {
     r -= weights[i]!;

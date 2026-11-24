@@ -1,4 +1,4 @@
-import { chooseReply, pathTo, START_FEN, type ExplorerResponse, type RepMove } from '@tabiya/core';
+import { chooseReply, pathTo, Repertoire, START_FEN, type Color, type ExplorerResponse, type RepMove, type TrainingPosition } from '@tabiya/core';
 import type { Key } from 'chessground/types';
 import type { DrawShape } from 'chessground/draw';
 import { useNavigate } from 'react-router-dom';
@@ -20,8 +20,89 @@ const NEXT_LINE_MS = 700;
 
 type Phase = 'opponent' | 'ask' | 'end';
 
+/**
+ * The repertoires of one colour, tested together: the cards are shared (a move learnt is learnt
+ * in every repertoire having it), so a line goes on in whichever repertoire its sequel was
+ * learnt (1. e4 e5 2. Nf3 learnt in the Scotch also stands in the Philidor and Petrov ones).
+ */
+interface Side {
+  id: string;
+  color: Color;
+  /** Every move of these repertoires (one per position and move). */
+  rep: Repertoire;
+  positions: TrainingPosition[];
+  /** One of my moves learnt here. */
+  known: (fen: string) => boolean;
+  pausedAt: (fen: string) => RepMove[];
+  cardOf: Source['cardOf'];
+  /** The repertoire a move of mine is recorded in (the first having it). */
+  sourceOf: (fen: string, uci: string) => Source;
+  /**
+   * Expected number of my mistakes from `fen` on, along what can be tested: the sum, over the
+   * positions of mine learnt there, of the chance of missing them today (how hard the line is).
+   */
+  mistakesFrom: (fen: string) => number;
+}
+
+function sideOf(color: Color, group: Source[], rep: Repertoire): Side {
+  const positions = new Map<string, TrainingPosition>();
+  for (const s of group) for (const p of s.positions) if (!positions.has(p.fen)) positions.set(p.fen, p);
+  const known = (fen: string) => group.some((s) => !!s.positionCard(fen));
+  /** Chance of missing a position today: any of my moves is accepted, so the best known one counts. */
+  const missChance = (fen: string) => 1 - Math.max(0, ...rep.movesAt(fen).map((m) => group[0]!.cardOf(fen, m.uci)?.recall ?? 0));
+  const counted = new Map<string, number>();
+  const mistakesFrom = (fen: string) => {
+    let n = counted.get(fen);
+    if (n !== undefined) return n;
+    // The positions reached by my moves and the replies leading to a known position (each
+    // counted once, transpositions included).
+    const seen = new Set<string>();
+    const stack = [fen];
+    n = 0;
+    while (stack.length) {
+      const f = stack.pop()!;
+      if (seen.has(f)) continue;
+      seen.add(f);
+      const mine = rep.isMyTurn(f);
+      if (mine && !known(f)) continue;
+      if (mine) n += missChance(f);
+      for (const m of rep.movesAt(f)) if (mine || known(m.toFen)) stack.push(m.toFen);
+    }
+    counted.set(fen, n);
+    return n;
+  };
+  return {
+    id: `side:${color}`,
+    color,
+    rep,
+    positions: [...positions.values()],
+    known,
+    pausedAt: (fen) => group.flatMap((s) => s.pausedAt(fen)),
+    cardOf: (fen, uci) => group[0]!.cardOf(fen, uci),
+    sourceOf: (fen, uci) => group.find((s) => s.rep.has(fen, uci)) ?? group[0]!,
+    mistakesFrom,
+  };
+}
+
+/** The merged graph of each colour, built again only when a repertoire changes (not after an answer). */
+function useSides(sources: Source[]): Side[] {
+  const reps = useRef<{ list: Repertoire[]; merged: Map<Color, Repertoire> } | null>(null);
+  const list = sources.map((s) => s.rep);
+  if (!reps.current || reps.current.list.length !== list.length || reps.current.list.some((r, i) => r !== list[i])) {
+    const merged = new Map<Color, Repertoire>();
+    for (const s of sources) {
+      const rep = merged.get(s.color) ?? new Repertoire(s.color);
+      for (const m of s.rep.all()) rep.add(m);
+      merged.set(s.color, rep);
+    }
+    reps.current = { list, merged };
+  }
+  const merged = reps.current.merged;
+  return useMemo(() => [...merged].map(([color, rep]) => sideOf(color, sources.filter((s) => s.color === color), rep)), [sources, merged]);
+}
+
 interface LineState {
-  source: Source;
+  side: Side;
   fen: string;
   history: RepMove[];
   phase: Phase;
@@ -47,7 +128,8 @@ const plyOf = (fen: string) => {
 
 /**
  * "Se tester": the app plays the opponent, choosing among the repertoire replies with the
- * frequencies of Lichess players at the selected level; I answer with my repertoire moves until
+ * frequencies of Lichess players at the selected level (smoothed, and raised for the lines with
+ * hard positions behind: core replyWeights); I answer with my repertoire moves until
  * the end of the line. Reviews are recorded only when they inform the schedule: mistakes, new
  * positions, and correct answers on due positions.
  */
@@ -77,26 +159,27 @@ export function PlayMode({
   const qc = useQueryClient();
   /**
    * "Se tester" only covers what is learnt: a position is known once one of my moves there is
-   * learnt. The opponent only plays replies leading to a known position; the line ends when none does.
+   * learnt. The opponent only plays replies leading to a known position; the line ends when none
+   * does. The repertoires of a colour are tested together (`Side`).
    */
-  const known = (source: Source, fen: string) => !!source.positionCard(fen);
-  const knownReplies = (source: Source, fen: string) => source.rep.movesAt(fen).filter((m) => known(source, m.toFen));
+  const sides = useSides(sources);
+  const knownReplies = (side: Side, fen: string) => side.rep.movesAt(fen).filter((m) => side.known(m.toFen));
   /** Where a line goes after a move: opponent to play, my turn, or end of what is known. */
-  const after = (source: Source, fen: string): Phase => {
-    if (source.rep.isMyTurn(fen)) return known(source, fen) ? 'ask' : 'end';
-    return knownReplies(source, fen).length > 0 ? 'opponent' : 'end';
+  const after = (side: Side, fen: string): Phase => {
+    if (side.rep.isMyTurn(fen)) return side.known(fen) ? 'ask' : 'end';
+    return knownReplies(side, fen).length > 0 ? 'opponent' : 'end';
   };
   const playable = useMemo(
-    () => sources.filter((s) => after(s, root) !== 'end').map((s) => ({ s, learnt: s.positions.filter((p) => known(s, p.fen)).length })),
-    [sources, root],
+    () => sides.filter((s) => after(s, root) !== 'end').map((s) => ({ s, learnt: s.positions.filter((p) => s.known(p.fen)).length })),
+    [sides, root],
   );
   /** The session put aside when the page was left (e.g. for the explorer): the same line, the same score. */
   const [saved] = useState(() => {
     const s = sessionKey ? savedSession<{ line: LineState | null; score: PlayScore }>(sessionKey) : undefined;
     if (!s) return undefined;
-    const source = s.line && sources.find((x) => x.id === s.line!.source.id);
-    // A finished line (or a repertoire no longer here): the next one.
-    const line = s.line && source && s.line.phase !== 'end' ? { ...s.line, source } : null;
+    const side = s.line && sides.find((x) => x.id === s.line!.side.id);
+    // A finished line (or a colour no longer here): the next one.
+    const line = s.line && side && s.line.phase !== 'end' ? { ...s.line, side } : null;
     return { line, score: s.score };
   });
   const [line, setLine] = useState<LineState | null>(saved?.line ?? null);
@@ -130,11 +213,11 @@ export function PlayMode({
   const startLine = useCallback(() => {
     token.current++;
     if (!playable.length) return setLine(null);
-    // Repertoires are picked in proportion to what is learnt in them.
+    // Colours are picked in proportion to what is learnt with them.
     const total = playable.reduce((n, p) => n + p.learnt, 0);
     let r = Math.random() * total;
-    const source = (playable.find((p) => (r -= p.learnt) < 0) ?? playable[0]!).s;
-    setLine({ source, fen: root, history: [], phase: after(source, root), mistakes: 0, revealed: false, hinted: false });
+    const side = (playable.find((p) => (r -= p.learnt) < 0) ?? playable[0]!).s;
+    setLine({ side, fen: root, history: [], phase: after(side, root), mistakes: 0, revealed: false, hinted: false });
   }, [playable, root]);
 
   // Latest version (sources change after each review), without restarting timers.
@@ -151,12 +234,13 @@ export function PlayMode({
     const my = ++token.current;
     const started = Date.now();
     void statsOf(line.fen).then((stats) => {
-      const reply = chooseReply(knownReplies(line.source, line.fen), stats);
+      // Real frequency at my level, smoothed, and more often the replies with hard positions behind.
+      const reply = chooseReply(knownReplies(line.side, line.fen), stats, Math.random, { difficulty: (m) => line.side.mistakesFrom(m.toFen) });
       const wait = Math.max(0, REPLY_MS - (Date.now() - started));
       setTimeout(() => {
         if (token.current !== my) return;
         if (!reply) return setLine({ ...line, phase: 'end' });
-        const phase = after(line.source, reply.toFen);
+        const phase = after(line.side, reply.toFen);
         setLine({
           ...line,
           fen: reply.toFen,
@@ -178,8 +262,8 @@ export function PlayMode({
     return () => clearTimeout(t);
   }, [line?.phase]);
 
-  const answers = line && line.phase === 'ask' ? line.source.rep.movesAt(line.fen) : [];
-  const elsewhere = useMyMovesHere(line?.phase === 'ask' ? line.fen : undefined, line?.source.color ?? 'white');
+  const answers = line && line.phase === 'ask' ? line.side.rep.movesAt(line.fen) : [];
+  const elsewhere = useMyMovesHere(line?.phase === 'ask' ? line.fen : undefined, line?.side.color ?? 'white');
 
   // While I think, fetch the statistics of the positions my answers lead to.
   useEffect(() => {
@@ -191,26 +275,26 @@ export function PlayMode({
     if (!line || line.phase !== 'ask') return;
     const answer = answers.find((m) => m.uci === uci);
     // A move of mine put on pause, or of another of my repertoires: not a mistake, try again.
-    if (!answer && (line.source.pausedAt(line.fen).some((m) => m.uci === uci) || elsewhere(uci))) return 'retry';
+    if (!answer && (line.side.pausedAt(line.fen).some((m) => m.uci === uci) || elsewhere(uci))) return 'retry';
     if (!answer) {
       setLine({ ...line, mistakes: line.mistakes + 1, revealed: line.revealed || line.mistakes + 1 >= 2 });
       return false;
     }
     // Any of my moves is accepted; its card is graded (a move not learnt yet, found without
     // help, is left to the review, where it is shown first).
-    const card = line.source.cardOf(line.fen, answer.uci);
+    const card = line.side.cardOf(line.fen, answer.uci);
     const outcome = outcomeOf(false, line.mistakes, line.revealed || line.hinted || helped);
     let grade: Grade | null = null;
     if (outcome !== 'correct') grade = 'again'; // helped or wrong
     else if (card && Date.parse(card.due) <= Date.now()) grade = 'good';
-    if (grade) onReview(line.source, line.fen, answer.uci, grade);
+    if (grade) onReview(line.side.sourceOf(line.fen, answer.uci), line.fen, answer.uci, grade);
     setScore((s) => ({
       ...s,
       moves: s.moves + 1,
       asked: s.asked + (outcome === 'new' ? 0 : 1),
       clean: s.clean + (outcome === 'correct' ? 1 : 0),
     }));
-    setLine({ ...line, fen: answer.toFen, history: [...line.history, answer], phase: after(line.source, answer.toFen), mistakes: 0, revealed: false, hinted: false });
+    setLine({ ...line, fen: answer.toFen, history: [...line.history, answer], phase: after(line.side, answer.toFen), mistakes: 0, revealed: false, hinted: false });
   };
 
   /** One button, like the review's: the pieces to move, then the solution (my main move is played, helped). */
@@ -224,12 +308,12 @@ export function PlayMode({
   const skip = () => startRef.current();
   const toExplorer = () => {
     if (!line) return;
-    const moves = [...(root === START_FEN ? [] : (pathTo(line.source.rep, root) ?? [])), ...line.history];
-    navigate(`/explorer?${new URLSearchParams({ line: moves.map((m) => m.uci).join(','), ...(line.source.color === 'black' ? { color: 'black' } : {}) })}`);
+    const moves = [...(root === START_FEN ? [] : (pathTo(line.side.rep, root) ?? [])), ...line.history];
+    navigate(`/explorer?${new URLSearchParams({ line: moves.map((m) => m.uci).join(','), ...(line.side.color === 'black' ? { color: 'black' } : {}) })}`);
   };
 
   // The answer clock (Paramètres › Temps pour répondre): time up counts as a mistake, the answer is shown.
-  const clock = useAnswerClock(line?.phase === 'ask' && !line.revealed, `${line?.source.id}|${line?.history.length}|${score.lines}`, () =>
+  const clock = useAnswerClock(line?.phase === 'ask' && !line.revealed, `${line?.side.id}|${line?.history.length}|${score.lines}`, () =>
     setLine((l) => (l && l.phase === 'ask' ? { ...l, revealed: true, mistakes: l.mistakes + 1 } : l)),
   );
 
@@ -256,7 +340,7 @@ export function PlayMode({
         <OpeningName ucis={line?.history.map((m) => m.uci) ?? []} />
         <Board
           fen={line?.fen ?? root ?? START_FEN}
-          orientation={line?.source.color ?? playable[0]!.s.color}
+          orientation={line?.side.color ?? playable[0]!.s.color}
           lastMove={line?.history.at(-1)?.uci}
           shapes={shapes}
           onMove={line?.phase === 'ask' && !clock.paused ? (uci) => play(uci) : undefined}

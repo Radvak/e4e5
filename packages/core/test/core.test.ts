@@ -148,11 +148,40 @@ describe('play mode helpers', () => {
         { uci: 'd7d6', san: 'd6', white: 400, draws: 0, black: 0 },
       ],
     };
-    expect(replyWeights(replies, stats)).toEqual([600, 12]);
+    // Smoothed: sqrt(600) and sqrt(2% of 600).
+    const [bc5, nf6] = replyWeights(replies, stats);
+    expect(bc5).toBeCloseTo(Math.sqrt(600));
+    expect(nf6).toBeCloseTo(Math.sqrt(12));
     expect(replyWeights(replies, null)).toEqual([2, 1]);
     expect(chooseReply(replies, stats, () => 0.99)?.san).toBe('Nf6');
     expect(chooseReply(replies, stats, () => 0.5)?.san).toBe('Bc5');
     expect(chooseReply([], stats)).toBeUndefined();
+  });
+
+  it('smooths the real frequencies, keeping their order, and favours the lines with hard positions behind', async () => {
+    const { replyWeights } = await import('../src/index.js');
+    const rep = new Repertoire('white', pgnToMoves(ITALIAN).moves);
+    const afterBc4 = [...rep.all()].find((m) => m.san === 'Bc4')!.toFen;
+    const replies = rep.movesAt(afterBc4); // Bc5, Nf6
+    const share = (w: number[]) => w[0]! / (w[0]! + w[1]!);
+    const stats = (a: number, b: number) => ({
+      white: 0, draws: 0, black: 0,
+      moves: [
+        { uci: replies[0]!.uci, san: 'Bc5', white: a, draws: 0, black: 0 },
+        { uci: replies[1]!.uci, san: 'Nf6', white: b, draws: 0, black: 0 },
+      ],
+    });
+    // 90 % / 10 % in the games: 75 % / 25 %; 97 % / 3 %: 85 % / 15 %.
+    expect(share(replyWeights(replies, stats(900, 100)))).toBeCloseTo(0.75, 2);
+    expect(share(replyWeights(replies, stats(970, 30)))).toBeCloseTo(0.85, 2);
+    // 3 mistakes expected behind Nf6 (× 2), none behind Bc5 (× 1, however long): Bc5 still first.
+    const difficulty = (m: { san: string }) => (m.san === 'Nf6' ? 3 : 0);
+    const w = replyWeights(replies, stats(900, 100), { difficulty });
+    expect(w[1]! / w[0]!).toBeCloseTo((10 * 2) / 30);
+    expect(w[0]!).toBeGreaterThan(w[1]!);
+    // With 7 expected mistakes (× 2.5), the rarer but harder line comes up as often or more.
+    const harder = replyWeights(replies, stats(900, 100), { difficulty: (m) => (m.san === 'Nf6' ? 7 : 0) });
+    expect(harder[1]! / harder[0]!).toBeCloseTo((10 * 2.5) / 30);
   });
 });
 

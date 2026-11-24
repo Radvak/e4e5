@@ -22,8 +22,8 @@ export function useLevelDepth() {
 /**
  * Suggested moves for the side to move: best expected score at my level over the likely lines.
  * On the opponent's turn (`color` my side), each of its moves scored for me, the search starting
- * after it. The deeper positions are fetched in the background by the server, so it asks again
- * meanwhile. Only asked while `enabled`.
+ * after it. On the server's stored statistics (nothing is fetched: `pending` stays 0, else it
+ * would ask again meanwhile). Only asked while `enabled`.
  */
 export function useBestMoves(fen: string, speeds: string[], ratings: number[], enabled: boolean, depth?: number, color?: Color) {
   return useQuery({

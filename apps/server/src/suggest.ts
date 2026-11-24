@@ -7,7 +7,7 @@
  * its last ply): the line ends there, nothing is fetched. Both turns search the same way, so an
  * opponent's move scores exactly the best move shown after it.
  *
- * Without it, positions come from Lichess one request at a time: step by step with a smaller
+ * Without it, on the stored rows only (nothing is fetched any more): step by step with a smaller
  * threshold each time, the ranking returned is the one at the smallest threshold whose positions
  * are all known, so the candidates are compared on the same lines. From the 12% step on, only
  * the best `KEEP_DEEP` moves of the step before are looked at deeper; the others keep their

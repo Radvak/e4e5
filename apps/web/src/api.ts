@@ -9,7 +9,8 @@ export interface StatsMeta {
   source: 'lichess' | 'seed' | 'import' | 'database';
   /** Months of the games counted (YYYY-MM), else the explorer's whole history. */
   period?: { since: string; until: string };
-  reason?: 'no-token' | 'rate-limited' | 'unreachable';
+  /** Nothing stored for the position (Lichess is never asked). */
+  reason?: 'not-stored';
 }
 export interface Stats {
   data: ExplorerResponse;
@@ -139,7 +140,6 @@ export interface GapReport {
   gaps: Gap[];
 }
 export interface GapsResponse {
-  live: boolean;
   white: GapReport | null;
   black: GapReport | null;
 }

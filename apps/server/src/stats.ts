@@ -1,18 +1,15 @@
 /**
- * Position statistics (Lichess opening explorer), backed by the shared `position_stats` table.
+ * Position statistics, from what is stored only: Lichess is never asked (its explorer allows one
+ * request at a time and refuses servers on its site; every number here comes from files built
+ * offline or answers stored before).
  *
- * - Exact match (same position, speeds and rating buckets) and fresh: served from the table.
- * - Otherwise fetched from Lichess when a token is available, and stored.
- * - If Lichess cannot be used (no token, rate limit, network), the closest stored combination
- *   for that position is served instead, flagged `exact: false` so the UI can say so.
- * - First of all, the statistics of the Lichess game database when the position is in it
- *   (gameStats.ts, source 'database'): no Lichess request. With that file, the explorer is asked
- *   for the same months (since/until) and only rows of that period are used, so every number has
- *   the same scale; rows of the explorer's whole history are left aside.
- * - Imported statistics (source 'import': counted from a sample of Lichess games, e.g. one month
- *   of database.lichess.org) are provisional: their counts are far smaller than the explorer's,
- *   so next to explorer answers they look wrong (128 games here, 1 million one move later). They
- *   are served only until Lichess answers for that position, which replaces them.
+ * - First, the statistics of the Lichess game database (gameStats.ts, source 'database') when the
+ *   position is in it, for any speeds and levels.
+ * - Else the shared `position_stats` table: the exact combination (same position, speeds and
+ *   rating buckets) of the period in use (the game database's months), else the closest stored
+ *   combination of that period, else of any period (the explorer's whole history: other scale,
+ *   same shares), flagged `exact: false` so the UI can say so.
+ * - Nothing stored: no statistics (`reason: 'not-stored'`).
  */
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -30,13 +27,7 @@ import { db } from './db/client.js';
 import { gamePeriod, gameStatsOf, periodKey, type Period } from './gameStats.js';
 import { SEED_DIR } from './paths.js';
 import { positionStats, seedImports } from './db/schema.js';
-import { explorerCooldownUntil, explorerFetch, RateLimited } from './lichess.js';
 
-/**
- * Stored statistics older than this are refreshed when Lichess is reachable. Opening statistics
- * move very slowly (millions of games per position), so a year-old answer is still reliable.
- */
-const REFRESH_AFTER_MS = 365 * 86_400_000;
 export const MAX_MOVES = 30;
 
 export interface StatsMeta {
@@ -48,8 +39,8 @@ export interface StatsMeta {
   source: 'lichess' | 'seed' | 'import' | 'database';
   /** Months of the games counted (else the explorer's whole history). */
   period?: Period;
-  /** Why live data could not be used, when relevant. */
-  reason?: 'no-token' | 'rate-limited' | 'unreachable';
+  /** Why there are no statistics: nothing stored for the position. */
+  reason?: 'not-stored';
 }
 
 export type StatsResult = { data: ExplorerResponse; meta: StatsMeta } | { data: null; reason: StatsMeta['reason'] };
@@ -58,7 +49,7 @@ type Row = typeof positionStats.$inferSelect;
 
 const csv = (xs: (string | number)[]) => xs.join(',');
 
-function toResult(row: Row, exact: boolean, reason?: StatsMeta['reason']) {
+function toResult(row: Row, exact: boolean) {
   return {
     data: row.data,
     meta: {
@@ -68,7 +59,6 @@ function toResult(row: Row, exact: boolean, reason?: StatsMeta['reason']) {
       fetchedAt: row.fetchedAt.toISOString(),
       source: row.source,
       ...(row.period ? { period: gamePeriod() ?? undefined } : {}),
-      reason,
     },
   };
 }
@@ -80,9 +70,6 @@ function fromGameStats(fen: string, speeds: string[], ratings: number[]): { data
   if (!data || !period) return null;
   return { data, meta: { speeds, ratings, exact: true, fetchedAt: new Date(`${period.until}-01T00:00:00Z`).toISOString(), source: 'database', period } };
 }
-
-/** Stored rows of the period in use (the game database's, else the whole history). */
-const ofPeriod = () => eq(positionStats.period, periodKey());
 
 /** Keeps only what the app uses (Lichess answers also carry games, per-move openings, …). */
 export function slim(raw: ExplorerResponse): ExplorerResponse {
@@ -120,62 +107,30 @@ function closest(rows: Row[], speeds: string[], ratings: number[]): Row | undefi
   return best;
 }
 
-export async function getStats(
-  fen: string,
-  speeds: string[],
-  ratings: number[],
-  token: string | null,
-  log: { warn: (obj: object, msg: string) => void },
-): Promise<StatsResult> {
+/** The stored statistics of a position (see the top of the file); never asks Lichess. */
+export async function getStats(fen: string, speeds: string[], ratings: number[]): Promise<StatsResult> {
   const fromFile = fromGameStats(fen, speeds, ratings);
   if (fromFile) return fromFile;
-  const rows = await db.select().from(positionStats).where(and(eq(positionStats.fen, fen), ofPeriod()));
-  const exact = rows.find((r) => r.speeds === csv(speeds) && r.ratings === csv(ratings));
-  const settled = exact && (exact.source !== 'import' || !token);
-  if (settled && Date.now() - exact.fetchedAt.getTime() < REFRESH_AFTER_MS) return toResult(exact, true);
-
-  let reason: StatsMeta['reason'] = 'no-token';
-  if (token) {
-    try {
-      const params = new URLSearchParams({
-        variant: 'standard',
-        fen,
-        speeds: csv(speeds),
-        ratings: csv(ratings),
-        moves: String(MAX_MOVES),
-        topGames: '0',
-        recentGames: '0',
-      });
-      const period = gamePeriod();
-      if (period) {
-        params.set('since', period.since);
-        params.set('until', period.until);
-      }
-      const data = slim((await explorerFetch(`/lichess?${params}`, token)) as ExplorerResponse);
-      const row = { fen, speeds: csv(speeds), ratings: csv(ratings), data, fetchedAt: new Date(), source: 'lichess' as const, period: periodKey() };
-      await db
-        .insert(positionStats)
-        .values(row)
-        .onConflictDoUpdate({
-          target: [positionStats.fen, positionStats.speeds, positionStats.ratings, positionStats.period],
-          set: { data: row.data, fetchedAt: row.fetchedAt, source: row.source },
-        });
-      return toResult(row, true);
-    } catch (e) {
-      reason = e instanceof RateLimited ? 'rate-limited' : 'unreachable';
-      if (!(e instanceof RateLimited)) log.warn({ err: e }, 'explorer request failed');
-    }
-  }
-  if (exact) return toResult(exact, true, reason); // stale but exact
-  const near = closest(rows, speeds, ratings);
-  return near ? toResult(near, false, reason) : { data: null, reason };
+  const rows = await db.select().from(positionStats).where(eq(positionStats.fen, fen));
+  const best = bestRow(rows, speeds, ratings);
+  return best ? toResult(best.row, best.exact) : { data: null, reason: 'not-stored' };
 }
 
 /**
- * Stored statistics of many positions, without calling Lichess: the game database file, else the
- * exact combination (even if old), else the closest stored one (`exact: false`). Positions with
- * nothing stored are absent. Imported statistics count as not exact, so the callers fetch the
- * explorer's in the background.
+ * The stored row to use among a position's rows: the exact combination of the period in use,
+ * else the closest of that period, else the closest of any period.
+ */
+function bestRow(rows: Row[], speeds: string[], ratings: number[]): { row: Row; exact: boolean } | null {
+  const period = rows.filter((r) => r.period === periodKey());
+  const exact = period.find((r) => r.speeds === csv(speeds) && r.ratings === csv(ratings));
+  if (exact) return { row: exact, exact: true };
+  const near = closest(period, speeds, ratings) ?? closest(rows, speeds, ratings);
+  return near ? { row: near, exact: false } : null;
+}
+
+/**
+ * Stored statistics of many positions (see `getStats`), at once. Positions with nothing stored
+ * are absent.
  */
 export async function storedStats(
   fens: string[],
@@ -191,80 +146,14 @@ export async function storedStats(
   }
   const byFen = new Map<string, Row[]>();
   for (let i = 0; i < rest.length; i += 500) {
-    const rows = await db.select().from(positionStats).where(and(inArray(positionStats.fen, rest.slice(i, i + 500)), ofPeriod()));
+    const rows = await db.select().from(positionStats).where(inArray(positionStats.fen, rest.slice(i, i + 500)));
     for (const r of rows) byFen.set(r.fen, [...(byFen.get(r.fen) ?? []), r]);
   }
   for (const [fen, rows] of byFen) {
-    const exact = rows.find((r) => r.speeds === csv(speeds) && r.ratings === csv(ratings));
-    const row = exact ?? closest(rows, speeds, ratings);
-    if (row) out.set(fen, { data: row.data, exact: !!exact && exact.source !== 'import' });
+    const best = bestRow(rows, speeds, ratings);
+    if (best) out.set(fen, { data: best.row.data, exact: best.exact });
   }
   return out;
-}
-
-// ---------------------------------------------------------------------------------------------
-// Background prefetch: positions an analysis needs (e.g. the gap finder), fetched one at a time
-// through the same Lichess queue as live requests, waiting out rate limits.
-
-interface Job {
-  fen: string;
-  speeds: string[];
-  ratings: number[];
-  token: string;
-}
-const jobs = new Map<string, Job>();
-/** Failed jobs are not queued again for a while (Lichess down, invalid token, …). */
-const failedAt = new Map<string, number>();
-const RETRY_FAILED_MS = 10 * 60_000;
-let draining = false;
-
-const jobKey = (fen: string, speeds: string[], ratings: number[]) => `${fen}|${csv(speeds)}|${csv(ratings)}`;
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-/** Queues the positions not queued yet; returns how many of `fens` are waiting to be fetched. */
-export function prefetchStats(
-  fens: string[],
-  speeds: string[],
-  ratings: number[],
-  token: string,
-  log: { warn: (obj: object, msg: string) => void },
-): number {
-  let waiting = 0;
-  for (const fen of fens) {
-    const key = jobKey(fen, speeds, ratings);
-    if (Date.now() - (failedAt.get(key) ?? 0) < RETRY_FAILED_MS) continue;
-    if (!jobs.has(key)) jobs.set(key, { fen, speeds, ratings, token });
-    waiting++;
-  }
-  void drain(log);
-  return waiting;
-}
-
-async function drain(log: { warn: (obj: object, msg: string) => void }) {
-  if (draining) return;
-  draining = true;
-  try {
-    while (jobs.size) {
-      const [key, job] = jobs.entries().next().value!;
-      const wait = explorerCooldownUntil() - Date.now();
-      if (wait > 0) {
-        await sleep(wait + 1000);
-        continue;
-      }
-      try {
-        const res = await getStats(job.fen, job.speeds, job.ratings, job.token, log);
-        const reason = res.data ? res.meta.reason : res.reason;
-        if (reason === 'rate-limited') continue; // retried after the cooldown
-        if (reason) failedAt.set(key, Date.now());
-      } catch (e) {
-        log.warn({ err: e }, 'background stats fetch failed');
-        failedAt.set(key, Date.now());
-      }
-      jobs.delete(key);
-    }
-  } finally {
-    draining = false;
-  }
 }
 
 // ---------------------------------------------------------------------------------------------

@@ -5,7 +5,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { api, type Grade, type Me } from '../api';
 import { explorerParams, useSettings } from '../settings';
 import { useTrainingSummary } from '../useTrainingSummary';
-import { useGaps } from '../useGaps';
+import { useGaps, useGapReach } from '../useGaps';
 import { Button, PageHeader, Tabs, plural } from '../ui';
 import { lineText } from '../training/common';
 import { PlayMode, type PlayScore } from '../training/PlayMode';
@@ -40,25 +40,28 @@ export function Training({ me }: { me: Me }) {
   // Reach probabilities at the user's level (gap finder): order of the new positions (when
   // learning by frequency), branch followed to finish a line, and shortened lines.
   const gaps = useGaps(me);
+  // The probabilities for the heavy computations: they change at most once a minute while
+  // statistics are fetched (the report itself changes at every poll).
+  const { reach } = useGapReach(me);
   // Depth of the lines (Paramètres), also when training a chosen part (?from=); whole lines
   // without statistics.
   const shortening = lineDepth > 0;
   const shorten = useMemo(
-    () => (shortening && gaps.data ? { minReach: lineDepth, probs: (color: Color) => gaps.data?.[color]?.reach } : null),
-    [shortening, lineDepth, gaps.data],
+    () => (shortening && reach ? { minReach: lineDepth, probs: (color: Color) => reach[color] } : null),
+    [shortening, lineDepth, reach],
   );
   const { sources, loading, review } = useTrainingSources(ids, from, shorten);
   // The daily limit of new lines is shared by all repertoires: lines learnt today elsewhere count.
   const summary = useTrainingSummary(me);
   const learntElsewhere = (summary.data ?? []).filter((s) => !ids.includes(s.repertoireId)).reduce((n, s) => n + s.learntTodayLines, 0);
   const reachOf = useMemo(() => {
-    if (learnOrder !== 'frequency' || !gaps.data) return undefined;
-    return (source: Source, fen: string) => gaps.data?.[source.color]?.reach[fen];
-  }, [learnOrder, gaps.data]);
+    if (learnOrder !== 'frequency' || !reach) return undefined;
+    return (source: Source, fen: string) => reach[source.color]?.[fen];
+  }, [learnOrder, reach]);
   const chanceOf = useMemo(() => {
-    if (!gaps.data) return undefined;
-    return (source: Source, fen: string) => gaps.data?.[source.color]?.reach[fen];
-  }, [gaps.data]);
+    if (!reach) return undefined;
+    return (source: Source, fen: string) => reach[source.color]?.[fen];
+  }, [reach]);
   const ex = explorerParams(me, speed, range);
   // The session is kept while the page is left (explorer, other mode), per scope.
   const sessionKey = `${ids.join()}|${from ?? ''}`;

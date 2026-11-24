@@ -160,7 +160,7 @@ export function LevelTable({
   else if (levelError) [short, why] = ['erreur', levelError.message];
   else if (computing) [short, why] = ['calcul…', `Calcul : ${plural(level!.pending, 'position', 'positions')} à récupérer sur Lichess (${range}) pour suivre les lignes plus loin.`];
   // Nothing explored: the next positions are not stored (and cannot be fetched now).
-  else if (reached === 0) [short, why] = ['positions manquantes', 'Positions suivantes pas encore récupérées sur Lichess : score de chaque coup seul, pas de ligne à dérouler.'];
+  else if (reached === 0) [short, why] = ['positions manquantes', 'Positions suivantes absentes des statistiques enregistrées : score de chaque coup seul, pas de ligne à dérouler.'];
   else if (reached < depth) [short, why] = [`${threshold(reached)} atteint`, `Lignes suivies jusqu’à ${pct(steps[reached - 1]!)} des parties seulement : descendre à ${pct(steps[depth - 1]!)} demanderait trop de positions.`];
   else [short, why] = ['', ''];
   why ||= `${myTurn ? '' : 'Au tour de l’adversaire : chaque coup adverse est calculé comme si l’analyse commençait après lui (votre meilleure réponse, puis les lignes probables). '}Les lignes sont suivies tant qu’elles arrivent dans au moins ${pct(steps[(reached || depth) - 1]!)} des parties à votre niveau (vos meilleurs coups, les réponses adverses pondérées par leur fréquence)${plies > 1 ? ` : ici jusqu’à ${plies} demi-coups plus loin` : ''}. Plus le seuil est bas, plus les lignes vont loin ; le nombre de coups dépend de la position.`;

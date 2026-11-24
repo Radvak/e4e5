@@ -5,11 +5,10 @@ import { z } from 'zod';
 import { requireUser } from '../auth.js';
 import { db } from '../db/client.js';
 import { repertoires, repMoves } from '../db/schema.js';
-import { env } from '../env.js';
 import { myGameMoves, myGamesAt } from '../myGames.js';
 import { openingOfUcis } from '../openings.js';
 import { getStudy, StudyError, studiesBy } from '../lichessStudies.js';
-import { getStats, prefetchStats } from '../stats.js';
+import { getStats } from '../stats.js';
 import { REACH_STEPS, suggestMoves } from '../suggest.js';
 
 const SPEEDS = ['bullet', 'blitz', 'rapid', 'classical'];
@@ -24,8 +23,8 @@ export const statsParams = z.object({
 const query = statsParams.extend({ fen: z.string().min(10).max(120) });
 
 /**
- * Position statistics: shared table first, then Lichess (user token, else the app token), then
- * the closest stored combination. Answers { data, meta } or 404 { reason } if nothing is known.
+ * Position statistics, from what is stored only (stats.ts: never asks Lichess). Answers
+ * { data, meta } or 404 { reason } if nothing is stored.
  */
 export async function explorerRoutes(app: FastifyInstance) {
   app.get('/api/explorer', { preHandler: requireUser }, async (req, reply) => {
@@ -37,17 +36,15 @@ export async function explorerRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: 'FEN invalide' });
     }
     if (!q.speeds.length || !q.ratings.length) return reply.code(400).send({ error: 'speeds and ratings required' });
-    const token = req.user!.lichessToken ?? env.lichessAppToken;
-    const result = await getStats(fen, q.speeds, q.ratings, token, req.log);
+    const result = await getStats(fen, q.speeds, q.ratings);
     if (!result.data) return reply.code(404).send({ error: 'Aucune statistique pour cette position', reason: result.reason });
     return result;
   });
 
   /**
    * Suggested moves for the side to move: best expected score over the likely lines
-   * (`suggestMoves`); with `color` the other side, the opponent's moves scored for me. The positions of the next step are fetched in the background and
-   * `pending` says to ask again; positions stored for another range are fetched for the asked
-   * one once the search is complete.
+   * (`suggestMoves`); with `color` the other side, the opponent's moves scored for me. On the
+   * stored statistics only: `pending` is always 0 (nothing is fetched).
    */
   app.get('/api/explorer/best', { preHandler: requireUser }, async (req, reply) => {
     const q = query
@@ -60,13 +57,10 @@ export async function explorerRoutes(app: FastifyInstance) {
     const root = parseFen(q.fen);
     if (!root) return reply.code(400).send({ error: 'FEN invalide' });
     if (!q.speeds.length || !q.ratings.length) return reply.code(400).send({ error: 'speeds and ratings required' });
-    const token = req.user!.lichessToken ?? env.lichessAppToken;
-    const first = await getStats(root, q.speeds, q.ratings, token, req.log);
+    const first = await getStats(root, q.speeds, q.ratings);
     if (!first.data) return { moves: [], reach: null, target: REACH_STEPS.at(-1)!, steps: REACH_STEPS, pending: 0 };
-    const { missing, approximate, ...found } = await suggestMoves(root, { data: first.data, exact: first.meta.exact }, q.speeds, q.ratings, q.depth, q.color);
-    const toFetch = missing.length ? missing : found.reach === found.target ? approximate : [];
-    const pending = token && toFetch.length ? prefetchStats(toFetch, q.speeds, q.ratings, token, req.log) : 0;
-    return { ...found, steps: REACH_STEPS, pending };
+    const { missing: _missing, approximate: _approximate, ...found } = await suggestMoves(root, { data: first.data, exact: first.meta.exact }, q.speeds, q.ratings, q.depth, q.color);
+    return { ...found, steps: REACH_STEPS, pending: 0 };
   });
 
   /**
