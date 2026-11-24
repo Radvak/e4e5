@@ -1,0 +1,37 @@
+# Temporary: where the time of the statistics build goes (download, decompression, builder CPU).
+name: Stats probe
+on:
+  push:
+    paths: [.github/workflows/stats-probe.yml]
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --filter stats...
+      - name: Machine
+        run: nproc; free -g; df -h / /mnt
+      - name: Download 2 GB of the month (throughput)
+        run: |
+          cd /mnt && sudo chown $USER /mnt
+          curl -s -o part.zst -r 0-2147483647 -w 'download %{size_download} bytes in %{time_total} s, %{speed_download} B/s\n' https://database.lichess.org/standard/lichess_db_standard_rated_2026-10.pgn.zst
+          curl -sI https://database.lichess.org/standard/lichess_db_standard_rated_2026-10.pgn.zst | grep -i content-length
+      - name: Decompress (speed)
+        run: |
+          cd /mnt
+          /usr/bin/time -v zstd -dc --long=31 part.zst 2>time.txt > part.pgn || true
+          grep -E "Elapsed|Maximum resident" time.txt; ls -la part.pgn
+          grep -c '^\[Event ' part.pgn || true
+      - name: Builder on the local file (CPU profile)
+        env:
+          NODE_OPTIONS: --max-old-space-size=12288
+        run: |
+          cd tools/stats
+          node --cpu-prof --cpu-prof-dir=/mnt/prof --import tsx src/build.ts /mnt/part.pgn --out /mnt/stats.db --max-games 1000000 | grep -E "fini|seconds" | cut -c1-300
+          node scripts/profile-summary.mjs /mnt/prof/*.cpuprofile
