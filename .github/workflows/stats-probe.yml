@@ -1,4 +1,4 @@
-# Temporary: where the time of the statistics build goes (download, decompression, builder CPU).
+# Temporary: where the time of the statistics build goes (download, decompression, builder CPU). Run 2.
 name: Stats probe
 on:
   push:
