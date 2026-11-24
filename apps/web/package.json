@@ -11,7 +11,8 @@
     "preview": "vite preview",
     "test": "vitest run --passWithNoTests",
     "typecheck": "tsc --noEmit",
-    "build:native": "pnpm build && cap sync"
+    "build:native": "pnpm build && cap sync",
+    "android:apk": "pnpm build:native && cd android && ./gradlew assembleDebug"
   },
   "dependencies": {
     "@capacitor/app": "^8.1.2",

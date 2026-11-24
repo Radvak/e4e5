@@ -57,6 +57,23 @@ Application explains it to users (with an install button where the browser offer
 Installing needs HTTPS (or localhost). To try it: `pnpm --filter web build`, run the server, open
 it in Chrome. DevTools → Application shows the manifest and the service worker.
 
+## Mobile app (Capacitor)
+
+The same web app, packaged with Capacitor (`apps/web/android`, `apps/web/ios`, app id
+`com.tabiya`). It runs in local mode only, without the server: data in SQLite on the device,
+games straight from Lichess and Chess.com (native HTTP, no CORS), statistics from the files per
+rating bucket downloaded in Paramètres, Lichess linked by OAuth through
+`com.tabiya://lichess-callback`. iOS 16.4 at least; Android 7 (API 24).
+
+```bash
+VITE_STATS_URL=https://…/stats pnpm --filter web build:native   # web build, copied into android/ and ios/
+pnpm --filter web android:apk                                    # android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+Needs a JDK 21 and the Android SDK (platform 36, build-tools) with `ANDROID_HOME` set, or
+Android Studio (`npx cap open android`); Xcode for iOS (`npx cap open ios`). The statistics
+files must be served with CORS (GitHub Pages does): the app downloads them in a worker.
+
 ## Position statistics
 
 Lichess explorer answers are stored in the `position_stats` table and reused by every user.
