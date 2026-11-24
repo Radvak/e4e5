@@ -23,7 +23,7 @@ import { db } from '../db/client.js';
 const createBody = z.object({
   name: z.string().trim().min(1).max(100),
   color: z.enum(['white', 'black']),
-  /** Set by the sync tool (tools/sync): where the repertoire comes from. */
+  /** Set by a sync tool (outside this repository): where the repertoire comes from. */
   sourceKey: z.string().trim().min(1).max(200).optional(),
 });
 const patchBody = z.object({
@@ -80,7 +80,7 @@ export async function repertoireRoutes(app: FastifyInstance) {
   app.delete<{ Params: MoveParams }>('/api/repertoires/:id/moves/:moveId', async (req) => deleteMove(db, req.user!.id, req.params.id, Number(req.params.moveId)));
 
   /**
-   * Sync from a source (tools/sync), keeping the training progress. ?dryRun=1: only answers
+   * Sync from a source (a sync tool outside this repository), keeping the training progress. ?dryRun=1: only answers
    * what would change. ?mode=hard: the repertoire becomes exactly the source.
    */
   app.put<{ Params: Params; Querystring: { dryRun?: string; mode?: string } }>('/api/repertoires/:id/sync', { bodyLimit: 12_000_000 }, async (req) => {

@@ -144,3 +144,7 @@ docker run -p 3000:3000 -v tabiya-data:/data \
 
 On a corporate network (TLS proxy, npm mirror), pass them as build secrets (not kept in the
 image): `--secret id=ca,src=$NODE_EXTRA_CA_CERTS --secret id=npmrc,src=<npmrc with registry=...>`.
+
+## License
+
+GPL-3.0-or-later (see `LICENSE`): Stockfish, chessground and chessops are GPL too.

@@ -1,5 +1,5 @@
 /**
- * Routes of the sync tool (tools/sync) that are not tied to one user: position statistics
+ * Routes of a sync tool (outside this repository) that are not tied to one user: position statistics
  * computed from Lichess games, shared by every account. Protected by the SYNC_TOKEN secret.
  */
 import { timingSafeEqual } from 'node:crypto';

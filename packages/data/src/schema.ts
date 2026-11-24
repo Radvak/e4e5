@@ -45,7 +45,7 @@ export const repertoires = sqliteTable(
     /** false: paused (left out of "train all", the badge and the games analysis). */
     active: integer('active', { mode: 'boolean' }).notNull().default(true),
     /**
-     * Where the repertoire comes from, for the sync tool (tools/sync), e.g.
+     * Where the repertoire comes from, for a sync tool (outside this repository), e.g.
      * "alphaechecs:sicilienne:Sozin 6.Fc4": matched on each sync, even after a rename.
      */
     sourceKey: text('source_key'),

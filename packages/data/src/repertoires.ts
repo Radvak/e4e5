@@ -213,7 +213,7 @@ export async function deleteMove(db: Db, userId: string, id: string, moveId: num
 }
 
 /**
- * Sync from a source (tools/sync): merges the PGN into the repertoire, keeping the training
+ * Sync from a source (a sync tool outside this repository): merges the PGN into the repertoire, keeping the training
  * progress (see planSync). dryRun: only answers what would change. Mode "hard": the repertoire
  * becomes exactly the source (moves added by hand removed too).
  */

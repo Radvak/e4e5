@@ -2,7 +2,25 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { readGames, sanMoves, type Game } from '../src/lichessGames.js';
+import { bucketOf, monthEnd, readGames, sanMoves, speedOf, type Game } from '../src/lichessGames.js';
+
+describe('game headers', () => {
+  it('gives the speed of a time control and the rating bucket of a game', () => {
+    expect(speedOf('180+2')).toBe('blitz');
+    expect(speedOf('60+0')).toBe('bullet');
+    expect(speedOf('600+5')).toBe('rapid');
+    expect(speedOf('1800+0')).toBe('classical');
+    expect(speedOf('-')).toBeNull();
+    expect(bucketOf(1650, 1580)).toBe(1600);
+    expect(bucketOf(900, 950)).toBe(0);
+    expect(bucketOf(2600, 2500)).toBe(2500);
+  });
+
+  it('dates a month, or a file by the month in its name', () => {
+    expect(monthEnd('2026-10')).toBe(Date.UTC(2026, 10, 1));
+    expect(monthEnd('games/lichess-2026-09-blitz.pgn.zst')).toBe(Date.UTC(2026, 9, 1));
+  });
+});
 
 describe('sanMoves', () => {
   it('leaves out comments, numbers, annotations and the result', () => {
