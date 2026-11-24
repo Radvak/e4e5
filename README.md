@@ -2,19 +2,31 @@
 
 Build and learn chess opening repertoires, with Lichess statistics at your level.
 
-- Import PGN (variations kept), add and edit lines on the board, and export to PGN.
-- Log in with Lichess or a username/password, and link a Chess.com username.
-- Arrows show what Lichess players of a chosen rating range play (blitz, rapid, or both).
-- Coming next: training (spaced repetition), gap finder, and growing your repertoire from your Lichess games. See [PLAN.md](PLAN.md).
+**https://gab23r.github.io/e4e5/** — runs entirely in the browser (no account, no server): the
+data stays on the device.
+
+- Repertoires: create them on the board, import PGN (variations kept) or Lichess studies, export
+  to PGN.
+- Training: spaced repetition (FSRS) on the positions of your repertoires ("Réviser"), and
+  "Se tester" where the opponent plays the replies Lichess players of your level play.
+- Gap finder ("Lacunes"): the frequent opponent moves your repertoires do not answer, and how deep
+  each line goes.
+- Explorer: what Lichess players of a chosen rating range play, the best moves at your level over
+  the likely lines, Stockfish, and your own games.
+- Your games: synced from Lichess and Chess.com, compared with your repertoires (where you or the
+  opponent left them).
+- Works offline once opened; installable on a phone (PWA), and as an Android / iOS app.
 
 ## Stack
 
 pnpm monorepo, TypeScript everywhere.
 
 ```
-packages/core   pure chess logic (chessops): repertoire graph, PGN import/export, game analysis
-apps/server     Fastify API: Lichess OAuth login, repertoires, explorer proxy (SQLite via Drizzle/libsql)
-apps/web        React + Vite + chessground
+packages/core   pure chess logic (chessops): repertoire graph, PGN, FSRS, gap finder, search at your level
+packages/data   the app's data rules on SQLite (Drizzle), shared by the browser and the server
+apps/web        React + Vite + chessground; local mode: SQLite (WASM) in the browser
+apps/server     optional Fastify server (accounts, the same data on a server); self-hosted with Docker
+tools/stats     opening statistics files built from the Lichess game database
 ```
 
 ## Development
@@ -22,17 +34,16 @@ apps/web        React + Vite + chessground
 ```bash
 pnpm install
 cp .env.example .env
-pnpm db:generate      # after changing apps/server/src/db/schema.ts
-pnpm dev              # server on :3000, web on http://localhost:5173
+pnpm dev              # web on http://localhost:5173 (and the server on :3000)
 pnpm test
 pnpm typecheck
 ```
 
-The main commands are also in the `justfile` (`just` lists them): `just check`, `just deploy`
-(local image build, push, Fly deploy), `just logs`, `just backup` (database copy to `backups/`), …
+Open http://localhost:5173/?local=1 for the version without a server (as on GitHub Pages);
+`?local=0` goes back to the server. The main commands are also in the `justfile` (`just` lists
+them): `just check`, `just build-pages` (the GitHub Pages build), …
 
 There is no Lichess app to register: OAuth uses PKCE, and the client id is just a name.
-Set `LICHESS_APP_TOKEN` (see `.env.example`) so users without a linked Lichess account get statistics.
 
 ## Installable app (PWA)
 
@@ -44,18 +55,20 @@ Application explains it to users (with an install button where the browser offer
 - `apps/web/public/sw.js`: service worker (production builds only). The app shell and the
   hashed `/assets/` are cached, so the app opens offline; `/api/` is never cached by it. Bump
   `VERSION` in it to drop every cache.
-- Offline mode (`apps/web/src/offline/`): the data the app needs (account, repertoires, move
-  cards, gap report, position statistics already seen) is kept in IndexedDB, for 20 days and
-  until the next build. Training works offline: each answer is scheduled on the device (FSRS in
-  `packages/core/src/fsrs.ts`) and queued, then sent in order when the server can be reached,
-  with its own id (counted once) and its time (the server computes the same card). The training
-  summary is computed on the device (`core/src/summary.ts`). Changes to repertoires need the
-  network.
+- Local mode (GitHub Pages, mobile app; `apps/web/src/local/`): everything is on the device, in
+  SQLite (WASM, origin private file system, one tab at a time), with the statistics files of
+  the chosen rating buckets downloaded in Paramètres. Only Lichess and Chess.com (games,
+  studies) need the network.
+- With the server (`apps/web/src/offline/`): the data the app needs is kept in IndexedDB, for 20
+  days and until the next build. Training works offline: each answer is scheduled on the device
+  (FSRS in `packages/core/src/fsrs.ts`) and queued, then sent in order when the server can be
+  reached, with its own id (counted once) and its time (the server computes the same card).
+  Changes to repertoires need the network.
 - Icons: `apps/web/scripts/icons/*.svg` → `apps/web/scripts/make-icons.sh` (rsvg-convert) →
   `apps/web/public/icons/` (committed).
 
-Installing needs HTTPS (or localhost). To try it: `pnpm --filter web build`, run the server, open
-it in Chrome. DevTools → Application shows the manifest and the service worker.
+Installing needs HTTPS (or localhost). To try it: `just build-pages`, then
+`VITE_BASE=/e4e5/ pnpm --filter web exec vite preview` and open it in Chrome. DevTools → Application shows the manifest and the service worker.
 
 ## Mobile app (Capacitor)
 
@@ -88,9 +101,11 @@ pnpm --filter stats build-stats 2026-10 --out stats.db [--max-games N]   # needs
 pnpm --filter stats split --in stats.db --out stats-files [--min 50]
 ```
 
-## Position statistics
+## Position statistics on the server
 
-Lichess explorer answers are stored in the `position_stats` table and reused by every user.
+The server never asks Lichess: statistics come from the game database file (`STATS_DB`, built by
+`tools/stats`) and, for the positions not in it, from the `position_stats` table (explorer answers
+stored before, imports and seeds; the closest rating range when the exact one is missing).
 Bundled seeds (`apps/server/seed/*.json.gz`) are imported at startup, once per file.
 
 ```bash
@@ -100,46 +115,22 @@ pnpm --filter server stats:export-seed my-seed-name                   # table ->
 
 ## Deployment
 
-The app runs as a single container (the server also serves the built web app), with the SQLite
-file on a volume at `/data`.
+### GitHub Pages (the app)
 
-### Fly.io
+`.github/workflows/pages.yml` builds the app without a server (`VITE_SERVERLESS=1`, base
+`/<repository>/`) on every push to `main` that touches the app, adds the statistics files of the
+latest `stats-YYYY-MM` release under `/stats/`, and publishes it at
+https://gab23r.github.io/e4e5/. Locally: `just build-pages`.
 
-`fly.toml` describes one machine in Paris (`cdg`) with a 1 GB volume. First time:
+### Self-hosted server (optional)
 
-```bash
-fly auth login
-fly apps create tabiya
-fly volumes create data --region cdg --size 1
-fly secrets set COOKIE_SECRET=$(openssl rand -hex 32)
-# optional: statistics for users without a linked Lichess account
-fly secrets set LICHESS_APP_TOKEN=lip_...
-fly deploy
-```
-
-It is then at https://tabiya.fly.dev. Then `fly deploy` for each new version. Fly keeps daily snapshots of the volume (5 days); a copy
-of the database: `fly ssh sftp get /data/tabiya.db`.
-
-Where Fly's remote builder cannot be reached (corporate TLS proxy), build locally for Fly's
-x86 machines and deploy the image:
+The server also serves the built web app, as a single container with the SQLite file on a volume
+at `/data`:
 
 ```bash
-TAG=registry.fly.io/tabiya:$(git rev-parse --short HEAD)
-docker build --platform linux/amd64 --secret id=ca,src=$NODE_EXTRA_CA_CERTS --secret id=npmrc,src=<npmrc> -t $TAG .
-fly auth docker && docker push $TAG
-fly deploy --image $TAG
-```
-
-Own domain (e.g. tabiya.fr): `fly certs add tabiya.fr`, add the DNS records it prints at
-the registrar, then set `PUBLIC_URL = "https://tabiya.fr"` in `fly.toml` (session cookies and
-the Lichess login redirect use it) and `fly deploy`.
-
-### Any Docker host
-
-```bash
-docker build -t tabiya .
-docker run -p 3000:3000 -v tabiya-data:/data \
-  -e PUBLIC_URL=https://your.domain -e COOKIE_SECRET=$(openssl rand -hex 32) tabiya
+docker build -t e4e5 .
+docker run -p 3000:3000 -v e4e5-data:/data \
+  -e PUBLIC_URL=https://your.domain -e COOKIE_SECRET=$(openssl rand -hex 32) e4e5
 ```
 
 On a corporate network (TLS proxy, npm mirror), pass them as build secrets (not kept in the
