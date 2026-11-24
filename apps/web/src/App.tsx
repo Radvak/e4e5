@@ -2,6 +2,7 @@ import { useIsRestoring, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react';
 import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { api, ApiError } from './api';
+import { isLocalMode } from './local/mode';
 import { clearOfflineData } from './offline/persist';
 import { dropPendingReviews, pendingReviews, startReviewSync } from './offline/reviews';
 import { useOnline, usePendingReviews } from './offline/useOffline';
@@ -40,7 +41,7 @@ function Redirect({ to }: { to: string }) {
  * The server cannot be reached. The installed app still opens offline (service worker), so say
  * whether the phone is offline, and try again by itself when the connection comes back.
  */
-function Unreachable({ retry, retrying }: { retry: () => void; retrying: boolean }) {
+function Unreachable({ retry, retrying, error }: { retry: () => void; retrying: boolean; error: unknown }) {
   useEffect(() => {
     window.addEventListener('online', retry);
     return () => window.removeEventListener('online', retry);
@@ -48,9 +49,11 @@ function Unreachable({ retry, retrying }: { retry: () => void; retrying: boolean
   return (
     <div className="page narrow stack">
       <p className="notice error">
-        {navigator.onLine
-          ? 'Le serveur ne répond pas.'
-          : 'Pas de connexion Internet. Ouvrez Tabiya une fois en ligne : vos répertoires sont alors gardés sur l’appareil pour vous entraîner hors ligne.'}
+        {isLocalMode()
+          ? localProblem(error)
+          : navigator.onLine
+            ? 'Le serveur ne répond pas.'
+            : 'Pas de connexion Internet. Ouvrez Tabiya une fois en ligne : vos répertoires sont alors gardés sur l’appareil pour vous entraîner hors ligne.'}
       </p>
       <div>
         <Button onClick={retry} disabled={retrying}>
@@ -62,12 +65,31 @@ function Unreachable({ retry, retrying }: { retry: () => void; retrying: boolean
 }
 
 /**
+ * Without a server (local mode), the database of this device could not be opened: most often
+ * Tabiya is open in another tab (the browser lets one tab at a time hold it). The app asks again
+ * every 30 s, so closing the other tab is enough.
+ */
+function localProblem(error: unknown): string {
+  const why = error instanceof Error ? error.message : String(error);
+  return why.includes('autre onglet')
+    ? 'Tabiya est déjà ouvert dans un autre onglet : fermez-le, cette page reprend d’elle-même (ou rechargez-la).'
+    : `Les données de cet appareil n’ont pas pu être ouvertes (${why}). Rechargez la page.`;
+}
+
+/**
  * Offline (no network, or the server does not answer): the app runs on the data kept on the
  * device. Training works and the answers are sent later; changes and live statistics wait.
+ * Without a server (local mode), everything is on the device: only its database failing to open
+ * is said (`error`), and being offline matters only for Lichess and Chess.com.
  */
-function OfflineBanner({ serverDown }: { serverDown: boolean }) {
+function OfflineBanner({ serverDown, error }: { serverDown: boolean; error: unknown }) {
   const online = useOnline();
   const pending = usePendingReviews();
+  if (isLocalMode()) {
+    if (serverDown) return <p className="notice error offline-banner" role="status">{localProblem(error)}</p>;
+    if (!online) return <p className="notice offline-banner" role="status">Hors ligne : tout fonctionne sur l’appareil, sauf ce qui passe par Lichess et Chess.com (parties, études).</p>;
+    return null;
+  }
   if (online && !serverDown) return null;
   return (
     <p className="notice offline-banner" role="status">
@@ -122,7 +144,7 @@ export function App() {
 
   if (restoring || me.isLoading) return null;
   if (unauthorized) return <Login />;
-  if (!me.data) return <Unreachable retry={() => void me.refetch()} retrying={me.isFetching} />;
+  if (!me.data) return <Unreachable retry={() => void me.refetch()} retrying={me.isFetching} error={me.error} />;
 
   const logout = async () => {
     const pending = pendingReviews();
@@ -172,7 +194,7 @@ export function App() {
         />
       </header>
 
-      <OfflineBanner serverDown={!!me.error} />
+      <OfflineBanner serverDown={!!me.error} error={me.error} />
 
       <main className="page">
         <Routes>
