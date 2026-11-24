@@ -170,7 +170,7 @@ function Catalogue({ me, onOpen, onCreated }: { me: Me; onOpen: (ref: { studyId:
         )}
       </div>
       {source === 'lichess' && <LichessResults q={q} onOpen={onOpen} />}
-      {source === 'mine' && <MyStudies username={mine!} name={name} onOpen={onOpen} />}
+      {source === 'mine' && <MyStudies username={mine!} local={!!me.local} name={name} onOpen={onOpen} />}
       {!source && (
         <p className="muted catalogue-empty">
           {t('Collez le lien d’une étude Lichess (lichess.org/study/…) pour l’importer', 'Paste the link to a Lichess study (lichess.org/study/…) to import it')}
@@ -236,8 +236,20 @@ function LichessResults({ q, onOpen }: { q: string; onOpen: (ref: { studyId: str
   );
 }
 
-/** My public Lichess studies (official API), most recent first, filtered by what is typed. */
-function MyStudies({ username, name, onOpen }: { username: string; name: string; onOpen: (ref: { studyId: string }) => void }) {
+/**
+ * Authorises Lichess again, now with the scope study:read: accounts linked before it was asked
+ * only see their public studies.
+ */
+function relinkLichess(local: boolean) {
+  if (local) void import('../local/lichessLogin').then((m) => m.startLichessLogin());
+  else location.href = '/api/auth/login';
+}
+
+/**
+ * My Lichess studies (official API, with my token: the private ones too), most recent first,
+ * filtered by what is typed.
+ */
+function MyStudies({ username, local, name, onOpen }: { username: string; local: boolean; name: string; onOpen: (ref: { studyId: string }) => void }) {
   const [all, setAll] = useState(false);
   useEffect(() => setAll(false), [name]);
   const list = useQuery({
@@ -259,12 +271,12 @@ function MyStudies({ username, name, onOpen }: { username: string; name: string;
               ? matching.length
                 ? t(`${plural(matching.length, 'de vos études contient', 'de vos études contiennent')} « ${name} ».`, `${plural(matching.length, 'of your studies contains', 'of your studies contain')} “${name}”.`)
                 : ''
-              : t(`Vos ${plural(list.data.length, 'étude publique', 'études publiques')} sur Lichess, les plus récentes d’abord.`, `Your ${plural(list.data.length, 'public study', 'public studies')} on Lichess, most recent first.`)
+              : t(`Vos ${plural(list.data.length, 'étude', 'études')} sur Lichess, les plus récentes d’abord.`, `Your ${plural(list.data.length, 'study', 'studies')} on Lichess, most recent first.`)
             : ''}
       </p>
       {list.error && <p className="error">{list.error.message}</p>}
       {list.data && matching.length === 0 && (
-        <p className="muted catalogue-empty">{name && list.data.length ? t(`Aucune de vos études ne contient « ${name} ».`, `None of your studies contains “${name}”.`) : t('Vous n’avez pas d’étude publique sur Lichess.', 'You have no public study on Lichess.')}</p>
+        <p className="muted catalogue-empty">{name && list.data.length ? t(`Aucune de vos études ne contient « ${name} ».`, `None of your studies contains “${name}”.`) : t('Vous n’avez pas d’étude sur Lichess.', 'You have no study on Lichess.')}</p>
       )}
       {shown.length > 0 && (
         <ul className="study-rows">
@@ -285,6 +297,14 @@ function MyStudies({ username, name, onOpen }: { username: string; name: string;
         <div className="catalogue-more">
           <Button onClick={() => setAll(true)}>{t(plural(matching.length - SHOWN, 'autre étude', 'autres études'), plural(matching.length - SHOWN, 'more study', 'more studies'))}</Button>
         </div>
+      )}
+      {list.data && (
+        <p className="muted small-text catalogue-note">
+          {t('Vos études privées n’apparaissent pas ?', 'Your private studies are missing?')}{' '}
+          <button type="button" className="link" onClick={() => relinkLichess(local)}>
+            {t('Autoriser e4e5 à les lire sur Lichess', 'Let e4e5 read them on Lichess')}
+          </button>
+        </p>
       )}
     </>
   );

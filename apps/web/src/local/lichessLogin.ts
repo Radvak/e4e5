@@ -33,6 +33,8 @@ export async function startLichessLogin(): Promise<void> {
     redirect_uri: redirectUri(),
     code_challenge_method: 'S256',
     code_challenge: challenge,
+    // Reading the user's studies, the private ones included (to create a repertoire from one).
+    scope: 'study:read',
     state,
   });
   const url = `${PUBLIC_SOURCES.lichessHost}/oauth?${params}`;

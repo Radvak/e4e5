@@ -4,6 +4,9 @@
  * other web pages): the studies of a player, listed, and one study exported in PGN. Shared by
  * the server (its addresses, User-Agent and lichess.org queue, see GameSources) and the app
  * without a server (the official API allows other web pages: CORS *). Answers are kept a while.
+ *
+ * With the user's Lichess token (scope study:read), Lichess also answers their private studies:
+ * the answers are then kept apart, under that token.
  */
 import { pgnChapters, type Color, type PgnChapter } from '@e4e5/core';
 import type { GameSources } from './gameSources.js';
@@ -39,7 +42,8 @@ function lichessGet(src: GameSources, path: string, accept: string, notFound: st
   return queue(async () => {
     let res: Response;
     try {
-      res = await fetch(`${src.lichessHost}${path}`, { headers: { ...src.headers, Accept: accept } });
+      const auth: Record<string, string> = src.lichessToken ? { Authorization: `Bearer ${src.lichessToken}` } : {};
+      res = await fetch(`${src.lichessHost}${path}`, { headers: { ...src.headers, Accept: accept, ...auth } });
     } catch {
       throw new StudyError(502, 'Lichess est injoignable, réessayez plus tard');
     }
@@ -51,13 +55,17 @@ function lichessGet(src: GameSources, path: string, accept: string, notFound: st
   });
 }
 
-/** Answers kept for all users (`ms`), the `max` last; failures are not kept (ask again later). */
+/**
+ * Answers kept (`ms`), the `max` last, per token (a token can see its owner's private studies);
+ * failures are not kept (ask again later).
+ */
 function memo<T>(ms: number, max: number, load: (src: GameSources, key: string) => Promise<T>) {
   const cache = new Map<string, { at: number; value: Promise<T> }>();
-  const get = (src: GameSources, key: string): Promise<T> => {
+  const get = (src: GameSources, id: string): Promise<T> => {
+    const key = `${src.lichessToken ?? ''}\n${id}`;
     const hit = cache.get(key);
     if (hit && Date.now() - hit.at < ms) return hit.value;
-    const value = load(src, key);
+    const value = load(src, id);
     cache.delete(key);
     cache.set(key, { at: Date.now(), value });
     value.catch(() => cache.get(key)?.value === value && cache.delete(key));
@@ -67,7 +75,10 @@ function memo<T>(ms: number, max: number, load: (src: GameSources, key: string) 
   return { get, clear: () => cache.clear() };
 }
 
-/** The public studies of a player, most recently updated first (the known authors are asked by everyone). */
+/**
+ * The studies of a player, most recently updated first: the public ones, and the private ones too
+ * when asked with the player's own token (scope study:read).
+ */
 const byPlayer = memo(30 * 60_000, 200, async (src, username) => {
   const text = await lichessGet(src, `/api/study/by/${encodeURIComponent(username)}`, 'application/x-ndjson', 'Joueur Lichess introuvable');
   return text
@@ -82,7 +93,7 @@ const byPlayer = memo(30 * 60_000, 200, async (src, username) => {
 
 export const studiesBy = (src: GameSources, username: string): Promise<StudyListItem[]> => byPlayer.get(src, username.toLowerCase());
 
-/** A public study, chapter by chapter (each with its PGN, side and whether it joins the others). */
+/** A study (private: with its owner's token), chapter by chapter (each with its PGN, side and whether it joins the others). */
 const studies = memo(60 * 60_000, 300, async (src, id): Promise<StudyDetail> => {
   const params = new URLSearchParams({ orientation: 'true', clocks: 'false', comments: 'true', variations: 'true' });
   const pgn = await lichessGet(src, `/api/study/${id}.pgn?${params}`, 'application/x-chess-pgn', 'Étude introuvable ou privée');

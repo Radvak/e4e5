@@ -87,23 +87,23 @@ export async function explorerRoutes(app: FastifyInstance) {
     return myGamesAt(db, user.id, { lichess: user.lichessUsername, chesscom: user.chesscomUsername }, { ...q, fen });
   });
 
-  /** The public studies of a Lichess player (to create a repertoire from one), most recently updated first. */
+  /** The studies of a Lichess player (to create a repertoire from one), most recently updated first; the user's own private ones too. */
   app.get('/api/lichess/studies', { preHandler: requireUser }, async (req, reply) => {
     const q = z.object({ by: z.string().regex(/^[A-Za-z0-9_-]{2,30}$/) }).safeParse(req.query);
     if (!q.success) return reply.code(400).send({ error: 'Pseudo Lichess invalide' });
     try {
-      return await studiesBy(q.data.by);
+      return await studiesBy(q.data.by, req.user!.lichessToken);
     } catch (e) {
       if (e instanceof StudyError) return reply.code(e.status).send({ error: e.message });
       throw e;
     }
   });
 
-  /** A public Lichess study, chapter by chapter (PGN, side, whether it joins the others). */
+  /** A Lichess study (public, or private of the user), chapter by chapter (PGN, side, whether it joins the others). */
   app.get<{ Params: { id: string } }>('/api/lichess/studies/:id', { preHandler: requireUser }, async (req, reply) => {
     if (!/^[A-Za-z0-9]{8}$/.test(req.params.id)) return reply.code(400).send({ error: 'Identifiant d’étude invalide' });
     try {
-      return await getStudy(req.params.id);
+      return await getStudy(req.params.id, req.user!.lichessToken);
     } catch (e) {
       if (e instanceof StudyError) return reply.code(e.status).send({ error: e.message });
       throw e;

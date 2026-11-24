@@ -127,6 +127,8 @@ export async function authRoutes(app: FastifyInstance) {
       redirect_uri: redirectUri(),
       code_challenge_method: 'S256',
       code_challenge: b64url(createHash('sha256').update(verifier).digest()),
+      // Reading the user's studies, the private ones included (to create a repertoire from one).
+      scope: 'study:read',
       state,
     });
     return reply.redirect(`${env.lichessHost}/oauth?${params}`);

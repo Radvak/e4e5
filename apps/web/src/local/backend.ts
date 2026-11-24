@@ -100,6 +100,12 @@ const lichessQueue = <T>(task: () => Promise<T>): Promise<T> => {
 /** The sites as the device reaches them (public addresses, no custom header). */
 const SOURCES = { ...PUBLIC_SOURCES, lichessQueue };
 
+/** The sites with the Lichess token of the device's account, if linked: its private studies too. */
+async function withLichessToken(db: LocalDb) {
+  const [u] = await db.select({ token: users.lichessToken }).from(users).where(eq(users.id, LOCAL_USER));
+  return { ...SOURCES, lichessToken: u?.token ?? null };
+}
+
 /** The local user with its accounts. */
 async function localUser(db: LocalDb) {
   const [u] = await db.select().from(users).where(eq(users.id, LOCAL_USER));
@@ -212,8 +218,8 @@ export const localApi = {
     if (!s) return fromServer(() => serverApi.gaps(speeds, ratings, cutoff));
     return run(async (db) => gapsAnalysis(db, LOCAL_USER, { speeds, ratings, cutoff }, s.stored));
   },
-  lichessStudiesBy: (username) => run(async () => studiesBy(SOURCES, username)),
-  lichessStudy: (id) => run(async () => getStudy(SOURCES, id)),
+  lichessStudiesBy: (username) => run(async (db) => studiesBy(await withLichessToken(db), username)),
+  lichessStudy: (id) => run(async (db) => getStudy(await withLichessToken(db), id)),
   opening: (line) =>
     run(async () => {
       await loadOpenings();

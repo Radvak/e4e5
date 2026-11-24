@@ -4,5 +4,6 @@ import { gameSources } from './gameSources.js';
 
 export { clearStudyCache, StudyError, type StudyDetail, type StudyListItem };
 
-export const studiesBy = (username: string): Promise<StudyListItem[]> => sharedStudiesBy(gameSources(null), username);
-export const getStudy = (id: string): Promise<StudyDetail> => sharedGetStudy(gameSources(null), id);
+/** With the user's Lichess token (if linked): their private studies too. */
+export const studiesBy = (username: string, token?: string | null): Promise<StudyListItem[]> => sharedStudiesBy(gameSources(token), username);
+export const getStudy = (id: string, token?: string | null): Promise<StudyDetail> => sharedGetStudy(gameSources(token), id);
