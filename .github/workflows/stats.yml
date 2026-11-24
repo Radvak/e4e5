@@ -62,6 +62,6 @@ jobs:
           MONTH: ${{ steps.month.outputs.month }}
         run: |
           gh release delete "$TAG" --yes --cleanup-tag || true
-          gh release create "$TAG" "$RUNNER_TEMP"/stats-files/* --latest=false \
+          gh release create "$TAG" "$RUNNER_TEMP"/stats-files/* --target "$GITHUB_SHA" --latest=false \
             --title "Statistiques d'ouvertures $MONTH" \
             --notes "Base de parties Lichess de $MONTH (database.lichess.org, CC0), un fichier par tranche Elo pour l'app (tools/stats). Liste : index.json."
