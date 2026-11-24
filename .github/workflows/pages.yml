@@ -59,8 +59,8 @@ jobs:
           echo "Statistiques : $tag"
           mkdir -p site/stats
           gh release download "$tag" -R "$GITHUB_REPOSITORY" -D site/stats
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: site
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
