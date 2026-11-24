@@ -17,21 +17,20 @@ jobs:
       - run: pnpm install --frozen-lockfile --filter stats...
       - name: Machine
         run: nproc; free -g; df -h / /mnt
-      - name: Download 2 GB of the month (throughput)
+      - name: Download 1 GB of the month (throughput)
         run: |
-          cd /mnt && sudo chown $USER /mnt
-          curl -s -o part.zst -r 0-2147483647 -w 'download %{size_download} bytes in %{time_total} s, %{speed_download} B/s\n' https://database.lichess.org/standard/lichess_db_standard_rated_2026-10.pgn.zst
-          curl -sI https://database.lichess.org/standard/lichess_db_standard_rated_2026-10.pgn.zst | grep -i content-length
-      - name: Decompress (speed)
+          curl -s -o "$RUNNER_TEMP/part.zst" -r 0-1073741823 -w 'download %{size_download} bytes in %{time_total} s, %{speed_download} B/s\n' https://database.lichess.org/standard/lichess_db_standard_rated_2026-10.pgn.zst | tee -a "$GITHUB_STEP_SUMMARY"
+          curl -sI https://database.lichess.org/standard/lichess_db_standard_rated_2026-10.pgn.zst | grep -i content-length | tee -a "$GITHUB_STEP_SUMMARY"
+          df -h / | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Decompress (speed, to nowhere)
         run: |
-          cd /mnt
-          /usr/bin/time -v zstd -dc --long=31 part.zst 2>time.txt > part.pgn || true
-          grep -E "Elapsed|Maximum resident" time.txt; ls -la part.pgn
-          grep -c '^\[Event ' part.pgn || true
+          start=$(date +%s.%N)
+          bytes=$( (zstd -dc --long=31 "$RUNNER_TEMP/part.zst" 2>/dev/null || true) | wc -c)
+          echo "decompressed $bytes bytes in $(echo "$(date +%s.%N) - $start" | bc) s" | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Builder on the local file (CPU profile)
         env:
           NODE_OPTIONS: --max-old-space-size=12288
         run: |
           cd tools/stats
-          node --cpu-prof --cpu-prof-dir=/mnt/prof --import tsx src/build.ts /mnt/part.pgn --out /mnt/stats.db --max-games 1000000 | grep -E "fini|seconds" | cut -c1-300
-          node scripts/profile-summary.mjs /mnt/prof/*.cpuprofile
+          node --cpu-prof --cpu-prof-dir="$RUNNER_TEMP/prof" --import tsx src/build.ts "$RUNNER_TEMP/part.zst" --out "$RUNNER_TEMP/stats.db" --max-games 1000000 | grep -E "fini|seconds" | cut -c1-300 | tee -a "$GITHUB_STEP_SUMMARY"
+          node scripts/profile-summary.mjs "$RUNNER_TEMP"/prof/*.cpuprofile | tee -a "$GITHUB_STEP_SUMMARY"
