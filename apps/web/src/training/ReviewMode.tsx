@@ -859,7 +859,7 @@ function Drill({
         )}
         {alternative && asking && !pausedMove && (
           <div key={retries} className="alt-bubble" role="status">
-            👍 <strong><San san={alternative.san} nags={alternative.nags} /></strong> {' '}
+            👍 <strong><San san={alternative.san} nags={alternative.nags} /></strong>{' '}
             {t('est un bon coup, mais ici on révise', 'is a good move, but here we review')}{' '}
             <strong><San san={expected.san} nags={expected.nags} /></strong>
           </div>

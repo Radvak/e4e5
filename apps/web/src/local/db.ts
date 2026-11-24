@@ -48,6 +48,14 @@ async function open(): Promise<LocalDb> {
     worker.terminate();
     throw new Error(ready.error);
   }
+  // Asks the browser not to evict the database under disk pressure (granted silently to an
+  // installed PWA by Chrome/Edge; Firefox asks the user). Not awaited: refusal changes nothing.
+  if (ready.persistent && navigator.storage?.persist) {
+    void navigator.storage
+      .persisted()
+      .then((already) => already || navigator.storage.persist())
+      .catch(() => {});
+  }
 
   let nextId = 1;
   const pending = new Map<
