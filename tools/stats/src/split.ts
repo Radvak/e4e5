@@ -2,7 +2,7 @@
  * Splits the statistics of the Lichess game database (stats.db, see gameStats.ts) into one file
  * per rating bucket, for the app to download and read on the device (without a server).
  *
- *   pnpm --filter server stats:split --in data/stats.db --out data/stats-files [--min 50]
+ *   pnpm --filter stats split --in stats.db --out stats-files [--min 50]
  *
  * Each file keeps the cells of its bucket (every speed), with their global numbers, so the same
  * decoder reads it, and the positions played at least `--min` times in that bucket. Written
@@ -17,7 +17,7 @@ import { bucketCells, decodePositionCounts, encodePositionStats, gamesOf, keepCe
 
 const { values } = parseArgs({ options: { in: { type: 'string' }, out: { type: 'string' }, min: { type: 'string', default: '50' } } });
 if (!values.in || !values.out) {
-  console.error('Usage: stats:split --in <stats.db> --out <folder> [--min 50]');
+  console.error('Usage: pnpm --filter stats split --in <stats.db> --out <folder> [--min 50]');
   process.exit(1);
 }
 const min = Number(values.min);

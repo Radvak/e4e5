@@ -3,16 +3,19 @@
  * bucket (scripts/split-stats.ts on the server), downloaded into the local SQLite. Read by their
  * Zobrist keys, the cells of the buckets asked added up (core statsFromRows).
  *
- * The files are listed in `index.json` at STATS_URL: the server during the migration, static
- * hosting later (VITE_STATS_URL at build time).
+ * The files are listed in `index.json` at STATS_URL: the project's GitHub Pages in the mobile app,
+ * the server for the web app during the migration (VITE_STATS_URL at build time to change it).
  */
 import { statsFromRows, zobristOfFen, type ExplorerResponse, type StoredStats } from '@tabiya/core';
+import { isNative } from '../native';
 import { localDb } from './db';
 import type { StatsFile } from './sqlite.worker';
 
 export type { StatsFile };
 
-const STATS_URL = (import.meta.env.VITE_STATS_URL as string | undefined)?.replace(/\/$/, '') ?? '/api/stats-files';
+/** GitHub Pages of the project (workflows stats.yml and pages.yml). */
+const PAGES_STATS = 'https://gab23r.github.io/tabiya/stats';
+const STATS_URL = (import.meta.env.VITE_STATS_URL as string | undefined)?.replace(/\/$/, '') ?? (isNative() ? PAGES_STATS : '/api/stats-files');
 const MAX_MOVES = 30;
 /** Positions read per message to the worker. */
 const BATCH = 500;

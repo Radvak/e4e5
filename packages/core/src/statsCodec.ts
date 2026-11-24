@@ -15,7 +15,7 @@ import { parseSquare, makeSquare } from 'chessops';
 import { RATING_BUCKETS, type ExplorerMove, type ExplorerResponse } from './explorer.js';
 import { playUci } from './position.js';
 
-/** UltraBullet is no longer counted (buildStats), but keeps its place: the cells keep their numbers. */
+/** UltraBullet is no longer counted (tools/stats build.ts), but keeps its place: the cells keep their numbers. */
 export const STATS_SPEEDS = ['ultraBullet', 'bullet', 'blitz', 'rapid', 'classical'] as const;
 export const CELL_COUNT = STATS_SPEEDS.length * RATING_BUCKETS.length;
 

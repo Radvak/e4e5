@@ -66,13 +66,27 @@ rating bucket downloaded in Paramètres, Lichess linked by OAuth through
 `com.tabiya://lichess-callback`. iOS 16.4 at least; Android 7 (API 24).
 
 ```bash
-VITE_STATS_URL=https://…/stats pnpm --filter web build:native   # web build, copied into android/ and ios/
+pnpm --filter web build:native   # web build, copied into android/ and ios/
 pnpm --filter web android:apk                                    # android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
 Needs a JDK 21 and the Android SDK (platform 36, build-tools) with `ANDROID_HOME` set, or
-Android Studio (`npx cap open android`); Xcode for iOS (`npx cap open ios`). The statistics
-files must be served with CORS (GitHub Pages does): the app downloads them in a worker.
+Android Studio (`npx cap open android`); Xcode for iOS (`npx cap open ios`). The app downloads
+the statistics files from the project's GitHub Pages (`VITE_STATS_URL` to change it; CORS needed,
+the download runs in a worker).
+
+## Opening statistics files
+
+`tools/stats` builds the statistics of one month of the Lichess game database
+(database.lichess.org, streamed: nothing written but the result) and splits them per rating
+bucket for the app. GitHub Actions does it (`.github/workflows/stats.yml`: by hand, or the 8th of
+each month for last month), keeps the files in a release `stats-YYYY-MM`, and `pages.yml`
+publishes the latest one on GitHub Pages under `/stats/`.
+
+```bash
+pnpm --filter stats build-stats 2026-10 --out stats.db [--max-games N]   # needs zstd
+pnpm --filter stats split --in stats.db --out stats-files [--min 50]
+```
 
 ## Position statistics
 

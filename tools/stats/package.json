@@ -1,0 +1,21 @@
+{
+  "name": "stats",
+  "private": true,
+  "type": "module",
+  "description": "Opening statistics from the Lichess game database (database.lichess.org): built per month, split per rating bucket for the app",
+  "scripts": {
+    "build-stats": "tsx src/build.ts",
+    "split": "tsx src/split.ts",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@tabiya/core": "workspace:*",
+    "tsx": "^4.19.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0",
+    "vitest": "^3.0.0"
+  }
+}

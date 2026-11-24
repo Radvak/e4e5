@@ -31,7 +31,7 @@ export const env = {
    */
   syncToken: process.env.SYNC_TOKEN || null,
   /**
-   * Position statistics of the Lichess game database built by tools/sync (buildStats.ts), served
+   * Position statistics of the Lichess game database built by tools/stats (build.ts), served
    * before the Lichess explorer; absent file: explorer only.
    */
   statsDb: get('STATS_DB', isProd ? '/data/stats.db' : './data/stats.db'),
