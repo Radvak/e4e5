@@ -20,15 +20,16 @@ import { NewRepertoire } from './pages/NewRepertoire';
 import { Account } from './pages/Account';
 import { Settings } from './pages/Settings';
 import { Training } from './pages/Training';
+import { t } from './i18n';
 import { Button, Icon, Menu, plural, type IconName } from './ui';
 
 /** The five sections: build, learn, the gaps (games and training), explore, and what the games show. */
 const SECTIONS: { to: string; label: string; icon: IconName; active: (path: string) => boolean }[] = [
-  { to: '/repertoires', label: 'Répertoires', icon: 'book', active: (p) => p.startsWith('/repertoires') || (p.startsWith('/r/') && !p.endsWith('/train')) },
-  { to: '/train', label: 'Entraîner', icon: 'target', active: (p) => p.endsWith('/train') },
-  { to: '/lacunes', label: 'Lacunes', icon: 'level', active: (p) => p.startsWith('/lacunes') },
-  { to: '/explorer', label: 'Explorer', icon: 'compass', active: (p) => p.startsWith('/explorer') },
-  { to: '/parties', label: 'Mes parties', icon: 'games', active: (p) => p.startsWith('/parties') },
+  { to: '/repertoires', label: t('Répertoires', 'Repertoires'), icon: 'book', active: (p) => p.startsWith('/repertoires') || (p.startsWith('/r/') && !p.endsWith('/train')) },
+  { to: '/train', label: t('Entraîner', 'Train'), icon: 'target', active: (p) => p.endsWith('/train') },
+  { to: '/lacunes', label: t('Lacunes', 'Gaps'), icon: 'level', active: (p) => p.startsWith('/lacunes') },
+  { to: '/explorer', label: t('Explorer', 'Explore'), icon: 'compass', active: (p) => p.startsWith('/explorer') },
+  { to: '/parties', label: t('Mes parties', 'My games'), icon: 'games', active: (p) => p.startsWith('/parties') },
 ];
 
 /** Old addresses, kept working. */
@@ -52,12 +53,15 @@ function Unreachable({ retry, retrying, error }: { retry: () => void; retrying: 
         {isLocalMode()
           ? localProblem(error)
           : navigator.onLine
-            ? 'Le serveur ne répond pas.'
-            : 'Pas de connexion Internet. Ouvrez Tabiya une fois en ligne : vos répertoires sont alors gardés sur l’appareil pour vous entraîner hors ligne.'}
+            ? t('Le serveur ne répond pas.', 'The server does not answer.')
+            : t(
+                'Pas de connexion Internet. Ouvrez e4e5 une fois en ligne : vos répertoires sont alors gardés sur l’appareil pour vous entraîner hors ligne.',
+                'No Internet connection. Open e4e5 once online: your repertoires are then kept on the device so you can train offline.',
+              )}
       </p>
       <div>
         <Button onClick={retry} disabled={retrying}>
-          Réessayer
+          {t('Réessayer', 'Try again')}
         </Button>
       </div>
     </div>
@@ -66,14 +70,15 @@ function Unreachable({ retry, retrying, error }: { retry: () => void; retrying: 
 
 /**
  * Without a server (local mode), the database of this device could not be opened: most often
- * Tabiya is open in another tab (the browser lets one tab at a time hold it). The app asks again
+ * e4e5 is open in another tab (the browser lets one tab at a time hold it). The app asks again
  * every 30 s, so closing the other tab is enough.
  */
 function localProblem(error: unknown): string {
   const why = error instanceof Error ? error.message : String(error);
+  // The worker's message (local/sqlite.worker.ts) is always in French.
   return why.includes('autre onglet')
-    ? 'Tabiya est déjà ouvert dans un autre onglet : fermez-le, cette page reprend d’elle-même (ou rechargez-la).'
-    : `Les données de cet appareil n’ont pas pu être ouvertes (${why}). Rechargez la page.`;
+    ? t('e4e5 est déjà ouvert dans un autre onglet : fermez-le, cette page reprend d’elle-même (ou rechargez-la).', 'e4e5 is already open in another tab: close it, this page resumes by itself (or reload it).')
+    : t(`Les données de cet appareil n’ont pas pu être ouvertes (${why}). Rechargez la page.`, `The data of this device could not be opened (${why}). Reload the page.`);
 }
 
 /**
@@ -87,14 +92,22 @@ function OfflineBanner({ serverDown, error }: { serverDown: boolean; error: unkn
   const pending = usePendingReviews();
   if (isLocalMode()) {
     if (serverDown) return <p className="notice error offline-banner" role="status">{localProblem(error)}</p>;
-    if (!online) return <p className="notice offline-banner" role="status">Hors ligne : tout fonctionne sur l’appareil, sauf ce qui passe par Lichess et Chess.com (parties, études).</p>;
+    if (!online) return <p className="notice offline-banner" role="status">{t('Hors ligne : tout fonctionne sur l’appareil, sauf ce qui passe par Lichess et Chess.com (parties, études).', 'Offline: everything works on the device, except what goes through Lichess and Chess.com (games, studies).')}</p>;
     return null;
   }
   if (online && !serverDown) return null;
   return (
     <p className="notice offline-banner" role="status">
-      {online ? 'Le serveur ne répond pas' : 'Hors ligne'} : vous pouvez vous entraîner, vos réponses seront envoyées au retour de la connexion
-      {pending > 0 && ` (${plural(pending, 'réponse', 'réponses')} en attente)`}. Modifier un répertoire et les statistiques Lichess demandent le réseau.
+      {t(
+        <>
+          {online ? 'Le serveur ne répond pas' : 'Hors ligne'} : vous pouvez vous entraîner, vos réponses seront envoyées au retour de la connexion
+          {pending > 0 && ` (${plural(pending, 'réponse', 'réponses')} en attente)`}. Modifier un répertoire et les statistiques Lichess demandent le réseau.
+        </>,
+        <>
+          {online ? 'The server does not answer' : 'Offline'}: you can train, your answers will be sent when the connection is back
+          {pending > 0 && ` (${plural(pending, 'answer', 'answers')} waiting)`}. Editing a repertoire and the Lichess statistics need the network.
+        </>,
+      )}
     </p>
   );
 }
@@ -111,7 +124,7 @@ function Badge({ n, label }: { n: number; label: string }) {
 /** Lacunes: the errors of my games (moves played instead of the prepared ones), not ignored. */
 function GamesBadge() {
   const n = useGamesReport().data?.inbox.errorCount ?? 0;
-  return <Badge n={n} label={`${plural(n, 'erreur', 'erreurs')} dans vos parties`} />;
+  return <Badge n={n} label={t(`${plural(n, 'erreur', 'erreurs')} dans vos parties`, `${plural(n, 'error', 'errors')} in your games`)} />;
 }
 
 export function App() {
@@ -137,7 +150,7 @@ export function App() {
     Math.min(summary.data?.[0]?.remainingNewLines ?? 0, active.reduce((n, s) => n + s.availableLines, 0));
   const badge = (to: string) =>
     to === '/train' ? (
-      <Badge n={toTrain} label={`${toTrain} lignes à revoir aujourd’hui`} />
+      <Badge n={toTrain} label={t(`${toTrain} lignes à revoir aujourd’hui`, `${toTrain} lines to review today`)} />
     ) : to === '/lacunes' ? (
       <GamesBadge />
     ) : null;
@@ -148,11 +161,15 @@ export function App() {
 
   const logout = async () => {
     const pending = pendingReviews();
-    if (pending && !confirm(`${plural(pending, 'réponse d’entraînement n’est', 'réponses d’entraînement ne sont')} pas encore envoyée${pending > 1 ? 's' : ''} (hors ligne) : se déconnecter maintenant les perd. Continuer ?`)) return;
+    const warning = t(
+      `${plural(pending, 'réponse d’entraînement n’est', 'réponses d’entraînement ne sont')} pas encore envoyée${pending > 1 ? 's' : ''} (hors ligne) : se déconnecter maintenant les perd. Continuer ?`,
+      `${plural(pending, 'training answer has', 'training answers have')} not been sent yet (offline): signing out now loses ${pending === 1 ? 'it' : 'them'}. Continue?`,
+    );
+    if (pending && !confirm(warning)) return;
     try {
       await api.logout();
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'Déconnexion impossible');
+      alert(e instanceof Error ? e.message : t('Déconnexion impossible', 'Could not sign out'));
       return;
     }
     await dropPendingReviews();
@@ -165,7 +182,7 @@ export function App() {
       <header className="appbar">
         <Link to="/repertoires" className="brand">
           <img className="brand-mark" src={`${import.meta.env.BASE_URL}icons/icon.svg`} alt="" />
-          Tabiya
+          e4e5
         </Link>
         <nav className="appnav">
           {SECTIONS.map((s) => (
@@ -178,18 +195,18 @@ export function App() {
         <div className="spacer" />
         <Menu
           trigger={me.data.username.slice(0, 1).toUpperCase()}
-          title="Compte"
+          title={t('Compte', 'Account')}
           label={
             <>
               {me.data.username}
-              {me.data.guest && ' (invité)'}
+              {me.data.guest && t(' (invité)', ' (guest)')}
             </>
           }
           items={[
-            { label: 'Mon compte', to: '/compte' },
-            { label: 'Paramètres', to: '/settings' },
+            { label: t('Mon compte', 'My account'), to: '/compte' },
+            { label: t('Paramètres', 'Settings'), to: '/settings' },
             // Local mode: no login, the accounts are on the device.
-            ...(me.data.local ? [] : [{ label: 'Se déconnecter', onClick: logout, danger: true }]),
+            ...(me.data.local ? [] : [{ label: t('Se déconnecter', 'Sign out'), onClick: logout, danger: true }]),
           ]}
         />
       </header>

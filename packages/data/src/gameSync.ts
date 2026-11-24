@@ -3,7 +3,7 @@
  * background (one job per user and source), newest games only after the first sync. Runs on the
  * server, or in the app without a server (the job then lives while the page is open).
  */
-import { gameMovesFromPgn } from '@tabiya/core';
+import { gameMovesFromPgn } from '@e4e5/core';
 import { and, eq, gte, sql } from 'drizzle-orm';
 import { DataError, type Db } from './db.js';
 import { analyseGames, loadRepertoires } from './gameAnalysis.js';

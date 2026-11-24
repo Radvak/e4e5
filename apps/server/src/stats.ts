@@ -21,7 +21,7 @@ import {
   START_FEN,
   positionFromFen,
   type ExplorerResponse,
-} from '@tabiya/core';
+} from '@e4e5/core';
 import { and, eq, inArray } from 'drizzle-orm';
 import { db } from './db/client.js';
 import { gamePeriod, gameStatsOf, periodKey, type Period } from './gameStats.js';

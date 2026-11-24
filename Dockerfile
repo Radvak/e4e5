@@ -1,6 +1,6 @@
 # Dependencies first, from the package files only: this stage (and the large node_modules
 # layer of the final image) stays cached until a package.json or the lockfile changes, so a
-# normal deploy only uploads the small layers with the code.
+# new version only rebuilds the small layers with the code.
 FROM node:22-slim AS deps
 WORKDIR /app
 RUN corepack enable
@@ -29,10 +29,11 @@ RUN pnpm build
 
 FROM node:22-slim
 WORKDIR /app
-ENV NODE_ENV=production PORT=3000 DATABASE_URL=file:/data/tabiya.db
+ENV NODE_ENV=production PORT=3000 DATABASE_URL=file:/data/e4e5.db
 COPY --from=deps /app/node_modules /app/node_modules
 COPY --from=build /app/package.json /app/pnpm-workspace.yaml /app/
 COPY --from=build /app/packages/core /app/packages/core
+COPY --from=build /app/packages/data /app/packages/data
 COPY --from=build /app/apps/server /app/apps/server
 COPY --from=build /app/apps/web/dist /app/apps/web/dist
 VOLUME /data

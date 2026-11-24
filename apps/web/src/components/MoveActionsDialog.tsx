@@ -4,6 +4,7 @@
  * follows it).
  */
 import { useEffect, useRef, useState } from 'react';
+import { t } from '../i18n';
 import { Button, Icon } from '../ui';
 import { San } from './Nag';
 
@@ -20,7 +21,7 @@ export function MoveActionsDialog({
   nags?: readonly number[] | null;
   /** The move is paused: the action trains it again. */
   paused: boolean;
-  /** Where it is deleted from, e.g. "de ce répertoire". */
+  /** Where it is deleted from, e.g. "de ce répertoire" / "from this repertoire". */
   where: string;
   /** Pause (true) or train again (false). */
   onPause: (pause: boolean) => void;
@@ -65,26 +66,29 @@ export function MoveActionsDialog({
                 }}
               >
                 <Icon name={paused ? 'play' : 'pause'} size={18} />
-                {paused ? 'Reprendre l’entraînement' : 'Mettre en pause'}
-                <span className="muted small-text">{paused ? 'ce coup et sa suite seront entraînés' : 'ce coup et sa suite ne sont plus entraînés'}</span>
+                {paused ? t('Reprendre l’entraînement', 'Resume training') : t('Mettre en pause', 'Pause')}
+                <span className="muted small-text">{paused ? t('ce coup et sa suite seront entraînés', 'this move and what follows will be trained') : t('ce coup et sa suite ne sont plus entraînés', 'this move and what follows are no longer trained')}</span>
               </button>
               <button type="button" className="move-action danger" onClick={() => setConfirming(true)}>
                 <Icon name="close" size={18} />
-                Supprimer…
+                {t('Supprimer…', 'Delete…')}
               </button>
             </div>
             <div className="row move-actions-footer">
-              <Button variant="ghost" onClick={close}>Annuler</Button>
+              <Button variant="ghost" onClick={close}>{t('Annuler', 'Cancel')}</Button>
             </div>
           </>
         ) : (
           <>
             <p className="move-actions-title">
-              Supprimer <strong><San san={san} nags={nags} /></strong> {where} ?
+              {t(
+                <>Supprimer <strong><San san={san} nags={nags} /></strong> {where} ?</>,
+                <>Delete <strong><San san={san} nags={nags} /></strong> {where}?</>,
+              )}
             </p>
-            <p className="muted small-text">Ce coup et la suite de la ligne qui ne passe que par lui seront supprimés.</p>
+            <p className="muted small-text">{t('Ce coup et la suite de la ligne qui ne passe que par lui seront supprimés.', 'This move and the rest of the line that only goes through it will be deleted.')}</p>
             <div className="row move-actions-footer">
-              <Button variant="ghost" onClick={() => setConfirming(false)}>Retour</Button>
+              <Button variant="ghost" onClick={() => setConfirming(false)}>{t('Retour', 'Back')}</Button>
               <Button
                 variant="danger"
                 onClick={() => {
@@ -92,7 +96,7 @@ export function MoveActionsDialog({
                   close();
                 }}
               >
-                Supprimer
+                {t('Supprimer', 'Delete')}
               </Button>
             </div>
           </>

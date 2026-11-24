@@ -2,11 +2,13 @@
  * Search of the public Lichess studies, from the device: all authors, most liked first.
  *
  * Lichess has no study search in its official API; only its site has one (/study/search,
- * /study/all/popular, JSON when asked). Those pages refuse servers (Cloudflare: 403 from Fly) and
+ * /study/all/popular, JSON when asked). Those pages refuse servers (Cloudflare: 403 from datacenters) and
  * are closed to other web pages (Lichess sends CORS headers on /api/ only), so they are asked
  * directly from the device, and only in a native app (Capacitor: its network calls are not bound
  * by CORS). In the browser, `canSearchLichess()` is false and the search is not offered.
  */
+
+import { t } from './i18n';
 
 /** A study in Lichess's search (the site's fields used). */
 export interface FoundStudy {
@@ -48,10 +50,10 @@ export async function searchLichessStudies(q: string, page: number, fetcher: typ
   try {
     res = await fetcher(url, { headers: { Accept: 'application/json' } });
   } catch {
-    throw new Error('Lichess est injoignable');
+    throw new Error(t('Lichess est injoignable', 'Lichess cannot be reached'));
   }
-  if (res.status === 429) throw new Error('Lichess limite le nombre de requêtes : réessayez dans une minute');
-  if (!res.ok) throw new Error(`La recherche Lichess a répondu ${res.status}`);
+  if (res.status === 429) throw new Error(t('Lichess limite le nombre de requêtes : réessayez dans une minute', 'Lichess limits the number of requests: try again in a minute'));
+  if (!res.ok) throw new Error(t(`La recherche Lichess a répondu ${res.status}`, `The Lichess search answered ${res.status}`));
   const { paginator: p } = (await res.json()) as SitePaginator;
   return {
     page: p.currentPage,
@@ -63,9 +65,9 @@ export async function searchLichessStudies(q: string, page: number, fetcher: typ
 
 /** Topics that say what a study is about besides openings, and the label shown for each. */
 const OTHER_TOPICS: [RegExp, string][] = [
-  [/endgame|ending|finale/i, 'Finales'],
-  [/tacti|puzzle|combinaison|checkmate|mate in|\bmats?\b|calcul/i, 'Tactique'],
-  [/middlegame|milieu|strateg|structure|plan/i, 'Milieu de jeu'],
+  [/endgame|ending|finale/i, t('Finales', 'Endgames')],
+  [/tacti|puzzle|combinaison|checkmate|mate in|\bmats?\b|calcul/i, t('Tactique', 'Tactics')],
+  [/middlegame|milieu|strateg|structure|plan/i, t('Milieu de jeu', 'Middlegame')],
 ];
 /** Topics of an opening study (Lichess's opening topics: names of openings, "Defenses"…). */
 const OPENING_TOPIC = /opening|ouverture|defen[cs]e|défense|gambit|attack|attaque|variation|variante|system|système|repertoire|répertoire/i;

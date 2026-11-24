@@ -44,7 +44,7 @@ describe('accounts on the device', () => {
   });
 
   it('links Lichess with a PKCE code, and unlinks it', async () => {
-    const token = await exchangeCode(SRC, 'tabiya', 'c', 'v', 'http://localhost/lichess-callback');
+    const token = await exchangeCode(SRC, 'e4e5', 'c', 'v', 'http://localhost/lichess-callback');
     await linkLichess(db, 'local', token, SRC);
     expect(await getProfile(db, 'local')).toMatchObject({ username: 'Moi', lichess: { id: 'moi', username: 'Moi' }, lichessToken: 'tok' });
     await unlinkLichess(db, 'local');

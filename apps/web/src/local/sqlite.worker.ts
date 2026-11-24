@@ -55,13 +55,38 @@ let pool: Pool | null = null;
 const statsDbs = new Map<number, Database>();
 const statsPath = (bucket: number) => `/stats-${bucket}.sqlite3`;
 
+/** The app's database in the pool. */
+const APP_DB = '/e4e5.sqlite3';
+
+/**
+ * The pool of the app's former name (Tabiya: pool 'tabiya' in /tabiya-db, app database
+ * /tabiya.sqlite3) moved into this one, once, while this one has no app database yet: each
+ * database file exported, then imported under its new name; the old pool then removed. Throws
+ * (as opening does) when another tab still holds the old pool.
+ */
+async function moveFormerPool(sqlite3: Awaited<ReturnType<typeof sqlite3InitModule>>, target: Pool) {
+  if (target.getFileNames().includes(APP_DB)) return;
+  try {
+    await (await navigator.storage.getDirectory()).getDirectoryHandle('tabiya-db');
+  } catch {
+    return; // nothing stored under the former name
+  }
+  const old = await sqlite3.installOpfsSAHPoolVfs({ name: 'tabiya', directory: '/tabiya-db' });
+  for (const name of old.getFileNames()) {
+    if (!name.endsWith('.sqlite3')) continue; // journals
+    await target.importDb(name === '/tabiya.sqlite3' ? APP_DB : name, old.exportFile(name));
+  }
+  await old.removeVfs();
+}
+
 const opened = (async (): Promise<Ready> => {
   const sqlite3 = await sqlite3InitModule();
   try {
     // The app's database and up to 9 statistics files, each with its journal.
-    pool = await sqlite3.installOpfsSAHPoolVfs({ name: 'tabiya', directory: '/tabiya-db', initialCapacity: 24 });
+    pool = await sqlite3.installOpfsSAHPoolVfs({ name: 'e4e5', directory: '/e4e5-db', initialCapacity: 24 });
     await pool.reserveMinimumCapacity(24);
-    db = new pool.OpfsSAHPoolDb('/tabiya.sqlite3');
+    await moveFormerPool(sqlite3, pool);
+    db = new pool.OpfsSAHPoolDb(APP_DB);
     db.exec('PRAGMA foreign_keys = ON; PRAGMA journal_mode = TRUNCATE;');
     for (const name of pool.getFileNames()) {
       const bucket = /^\/stats-(\d+)\.sqlite3$/.exec(name)?.[1];
@@ -71,7 +96,7 @@ const opened = (async (): Promise<Ready> => {
   } catch (e) {
     // Another tab holds the database: refused rather than working on an empty copy.
     if (String(e).includes('NoModificationAllowedError') || String(e).includes('Access Handles')) {
-      return { ready: false, error: 'Tabiya est déjà ouvert dans un autre onglet.' };
+      return { ready: false, error: 'e4e5 est déjà ouvert dans un autre onglet.' };
     }
     pool = null;
     db = new sqlite3.oo1.DB(':memory:', 'c');

@@ -6,7 +6,7 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { ChesscomUserNotFound, chesscomRatings } from '@tabiya/data';
+import { ChesscomUserNotFound, chesscomRatings } from '@e4e5/data';
 import { gameSources } from './gameSources.js';
 import { db } from './db/client.js';
 import { sessions, users, type User } from './db/schema.js';

@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@tabiya/core": "workspace:*",
+    "@e4e5/core": "workspace:*",
     "tsx": "^4.19.0"
   },
   "devDependencies": {

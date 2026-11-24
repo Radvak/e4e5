@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSettings } from '../settings';
+import { t } from '../i18n';
 
 /**
  * The answer clock of "Se tester" (Paramètres › Temps pour répondre): runs while `running`, for
@@ -41,8 +42,8 @@ export function AnswerTimer({ clock }: { clock: ReturnType<typeof useAnswerClock
       <button
         className="pause-btn"
         onClick={() => setPaused(!paused)}
-        title={paused ? 'Reprendre' : 'Pause (cache l’échiquier)'}
-        aria-label={paused ? 'Reprendre' : 'Pause'}
+        title={paused ? t('Reprendre', 'Resume') : t('Pause (cache l’échiquier)', 'Pause (hides the board)')}
+        aria-label={paused ? t('Reprendre', 'Resume') : t('Pause', 'Pause')}
       >
         {paused ? '▶' : '❚❚'}
       </button>

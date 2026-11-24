@@ -6,7 +6,7 @@
  * kept until the user's games change (count / latest insert) or after a while without use.
  * Shared by the server and the app running without a server.
  */
-import { GameLine, type ExplorerResponse } from '@tabiya/core';
+import { GameLine, type ExplorerResponse } from '@e4e5/core';
 import { eq, sql } from 'drizzle-orm';
 import type { Db } from './db.js';
 import { games } from './schema.js';

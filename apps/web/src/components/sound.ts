@@ -1,4 +1,4 @@
-import { positionFromFen } from '@tabiya/core';
+import { positionFromFen } from '@e4e5/core';
 import { parseSquare } from 'chessops';
 import captureUrl from '../sounds/Capture.mp3';
 import { SOUND_KEY } from '../settings';

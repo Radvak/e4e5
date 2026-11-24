@@ -35,7 +35,7 @@ import {
   zobristHalves,
   zobristOfFen,
   type CellCounts,
-} from '@tabiya/core';
+} from '@e4e5/core';
 import { bucketOf, monthEnd, monthUrl, readGames, sanMoves, speedOf } from './lichessGames.js';
 
 type Position = ReturnType<typeof positionFromFen>;

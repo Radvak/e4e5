@@ -1,5 +1,5 @@
 /*
- * Service worker of Tabiya: makes the app installable and opens it without network.
+ * Service worker of e4e5: makes the app installable and opens it without network.
  *
  * - Pages (navigations): network first, the cached app shell (index.html) when offline.
  * - /assets/ (content-hashed names) and /stockfish/: cache first, fetched once.
@@ -10,10 +10,10 @@
  * request for one simply goes to the network). Bump VERSION to drop every cache.
  *
  * Paths are relative to the worker's scope: the app is served at / or under a base path
- * (GitHub Pages: /tabiya/).
+ * (GitHub Pages: /e4e5/).
  */
 const VERSION = 'v1';
-const CACHE = `tabiya-${VERSION}`;
+const CACHE = `e4e5-${VERSION}`;
 const BASE = new URL(self.registration.scope).pathname;
 const SHELL = `${BASE}index.html`;
 const under = (path, dir) => path.startsWith(BASE + dir);
@@ -26,7 +26,8 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((k) => k.startsWith('tabiya-') && k !== CACHE).map((k) => caches.delete(k))))
+      // Also the caches of the app's former name (tabiya-…).
+      .then((keys) => Promise.all(keys.filter((k) => (k.startsWith('e4e5-') || k.startsWith('tabiya-')) && k !== CACHE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim()),
   );
 });

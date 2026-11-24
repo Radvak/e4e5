@@ -1,4 +1,4 @@
-import { playUci, Repertoire, START_FEN, totalGames, pathTo, type PlayedMove } from '@tabiya/core';
+import { playUci, Repertoire, START_FEN, totalGames, pathTo, type PlayedMove } from '@e4e5/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { DrawShape } from 'chessground/draw';
 import type { Key } from 'chessground/types';
@@ -20,6 +20,7 @@ import { AnalysisToggle, ToolCards, useAnalysisToggle } from '../components/Tool
 import { explorerParams, rangeLabel, useSettings } from '../settings';
 import { LEVEL_STEPS, topLevelMove, useBestMoves, useLevelDepth } from '../components/BestMoves';
 import { Suggestions } from '../components/Suggestions';
+import { t } from '../i18n';
 import { Button, Icon, PageHeader, plural } from '../ui';
 import { useGaps } from '../useGaps';
 
@@ -97,7 +98,7 @@ export function RepertoireEditor({ me }: { me: Me }) {
     mutationFn: () => api.saveLine(id, shown.map((m) => m.uci)),
     onSuccess: async (r) => {
       await refresh();
-      setNotice(`${plural(r.added, 'coup enregistré', 'coups enregistrés')}.`);
+      setNotice(t(`${plural(r.added, 'coup enregistré', 'coups enregistrés')}.`, `${plural(r.added, 'move saved', 'moves saved')}.`));
     },
   });
   const renameRep = useMutation({
@@ -313,7 +314,7 @@ export function RepertoireEditor({ me }: { me: Me }) {
     return out;
   }, [explorer.data, rep, fen, here, engineOn, engine.lines[0]?.pv[0]?.uci, levelBest?.uci, options, selected, missingHere]);
 
-  if (isLoading) return <p className="muted">Chargement…</p>;
+  if (isLoading) return <p className="muted">{t('Chargement…', 'Loading…')}</p>;
   const colorReport = data ? gapReport.data?.[data.color] : undefined;
   // Without the holes the repertoire covers now (saved since the report: hidden at once, until the
   // report is computed again): the opponent move added (or a transposition), or my answer.
@@ -323,7 +324,7 @@ export function RepertoireEditor({ me }: { me: Me }) {
     return rep.has(g.fen, g.move.uci) || (!!after && rep.movesAt(after).length > 0);
   };
   const holes = colorReport?.gaps.filter((g) => g.repertoireId === id && !covered(g));
-  if (error || !data) return <p className="error">Impossible de charger le répertoire.</p>;
+  if (error || !data) return <p className="error">{t('Impossible de charger le répertoire.', 'Could not load the repertoire.')}</p>;
 
   const last = line[ply - 1];
   const lastStored = last ? storedMove(last) : undefined;
@@ -333,26 +334,29 @@ export function RepertoireEditor({ me }: { me: Me }) {
     <PageHeader
       back="/repertoires"
       title={data.name}
-      subtitle={`${data.color === 'white' ? 'Blancs' : 'Noirs'} · ${plural(rep.size, 'coup', 'coups')}${data.active ? '' : ' · en pause'}`}
-      actions={<Button variant="primary" icon="play" to={`/r/${id}/train`}>S’entraîner</Button>}
+      subtitle={t(
+        `${data.color === 'white' ? 'Blancs' : 'Noirs'} · ${plural(rep.size, 'coup', 'coups')}${data.active ? '' : ' · en pause'}`,
+        `${data.color === 'white' ? 'White' : 'Black'} · ${plural(rep.size, 'move', 'moves')}${data.active ? '' : ' · paused'}`,
+      )}
+      actions={<Button variant="primary" icon="play" to={`/r/${id}/train`}>{t('S’entraîner', 'Train')}</Button>}
       menu={[
         ...(ply > 0 && unsaved.length === 0
-          ? [{ label: 'S’entraîner à partir d’ici', to: `/r/${id}/train?from=${encodeURIComponent(fen)}` }]
+          ? [{ label: t('S’entraîner à partir d’ici', 'Train from here'), to: `/r/${id}/train?from=${encodeURIComponent(fen)}` }]
           : []),
-        { label: 'Importer un PGN', onClick: () => setImportOpen(true) },
-        { label: 'Exporter en PGN', onClick: () => (location.href = `/api/repertoires/${id}/pgn`) },
-        { label: data.active ? 'Mettre en pause' : 'Reprendre l’entraînement', onClick: () => toggleActive.mutate() },
+        { label: t('Importer un PGN', 'Import a PGN'), onClick: () => setImportOpen(true) },
+        { label: t('Exporter en PGN', 'Export as PGN'), onClick: () => (location.href = `/api/repertoires/${id}/pgn`) },
+        { label: data.active ? t('Mettre en pause', 'Pause') : t('Reprendre l’entraînement', 'Resume training'), onClick: () => toggleActive.mutate() },
         {
-          label: 'Renommer',
+          label: t('Renommer', 'Rename'),
           onClick: () => {
-            const next = prompt('Nouveau nom', data.name)?.trim();
+            const next = prompt(t('Nouveau nom', 'New name'), data.name)?.trim();
             if (next && next !== data.name) renameRep.mutate(next);
           },
         },
         {
-          label: 'Supprimer le répertoire',
+          label: t('Supprimer le répertoire', 'Delete the repertoire'),
           danger: true,
-          onClick: () => confirm(`Supprimer le répertoire « ${data.name} » et tous ses coups ?`) && deleteRep.mutate(),
+          onClick: () => confirm(t(`Supprimer le répertoire « ${data.name} » et tous ses coups ?`, `Delete the repertoire “${data.name}” and all its moves?`)) && deleteRep.mutate(),
         },
       ]}
     />
@@ -362,7 +366,7 @@ export function RepertoireEditor({ me }: { me: Me }) {
         san={acting.san}
         nags={acting.nags}
         paused={!!acting.paused}
-        where="de ce répertoire"
+        where={t('de ce répertoire', 'from this repertoire')}
         onPause={(pause) => arrange.mutate([{ m: acting, patch: { paused: pause } }])}
         onDelete={() => deleteMove.mutate(acting)}
         onClose={() => setActing(null)}
@@ -376,10 +380,10 @@ export function RepertoireEditor({ me }: { me: Me }) {
           <Board fen={fen} orientation={data.color} lastMove={last?.uci} shapes={shapes} onMove={play} />
         </div>
         <div className="nav">
-          <button onClick={() => goTo(0)} title="Début (Origine)">⏮</button>
-          <button onClick={() => goTo(ply - 1)} title="Reculer (←)">◀</button>
-          <button onClick={forward} title="Avancer (→)">▶</button>
-          <button onClick={() => goTo(line.length)} title="Fin de la ligne (Fin)">⏭</button>
+          <button onClick={() => goTo(0)} title={t('Début (Origine)', 'Start (Home)')}>⏮</button>
+          <button onClick={() => goTo(ply - 1)} title={t('Reculer (←)', 'Back (←)')}>◀</button>
+          <button onClick={forward} title={t('Avancer (→)', 'Forward (→)')}>▶</button>
+          <button onClick={() => goTo(line.length)} title={t('Fin de la ligne (Fin)', 'End of the line (End)')}>⏭</button>
           <AnalysisToggle enabled={analysisOn} onToggle={toggleAnalysis} />
         </div>
         {/* The two tools in swipeable cards, one in view at a time (ToolCards). */}
@@ -431,7 +435,7 @@ export function RepertoireEditor({ me }: { me: Me }) {
 
       <div className="editor-side">
         <section className="panel">
-          <h3>Dans votre répertoire</h3>
+          <h3>{t('Dans votre répertoire', 'In your repertoire')}</h3>
           {line.length > 0 && (
           <div className="line-row">
           <div className="moves-path">
@@ -452,7 +456,7 @@ export function RepertoireEditor({ me }: { me: Me }) {
                     .filter(Boolean)
                     .join(' ')}
                   onClick={() => goTo(i + 1)}
-                  title={stored?.paused ? 'En pause : ce coup et sa suite ne sont pas entraînés' : stored ? 'Dans votre répertoire' : 'Pas enregistré'}
+                  title={stored?.paused ? t('En pause : ce coup et sa suite ne sont pas entraînés', 'Paused: this move and what follows are not trained') : stored ? t('Dans votre répertoire', 'In your repertoire') : t('Pas enregistré', 'Not saved')}
                 >
                   {i % 2 === 0 ? `${i / 2 + 1}. ` : ''}
                   {stored?.paused && <span className="pause-mark"><Icon name="pause" size={13} /></span>}
@@ -462,7 +466,7 @@ export function RepertoireEditor({ me }: { me: Me }) {
             })}
           </div>
           {lastStored && !lastStored.comment && commentEdit !== lastStored.id && (
-            <Button size="sm" variant="ghost" icon="pencil" title={`Commenter ou annoter ${lastStored.san} (!, ?…)`} onClick={() => setCommentEdit(lastStored.id)} />
+            <Button size="sm" variant="ghost" icon="pencil" title={t(`Commenter ou annoter ${lastStored.san} (!, ?…)`, `Comment or annotate ${lastStored.san} (!, ?…)`)} onClick={() => setCommentEdit(lastStored.id)} />
           )}
           </div>
           )}
@@ -470,15 +474,15 @@ export function RepertoireEditor({ me }: { me: Me }) {
           {unsaved.length > 0 && (
             <div className="draft">
               <button className="primary" disabled={saveLine.isPending} onClick={() => saveLine.mutate()}>
-                Enregistrer la variante
+                {t('Enregistrer la variante', 'Save the line')}
               </button>
-              <Button size="sm" variant="ghost" onClick={discard}>Annuler</Button>
+              <Button size="sm" variant="ghost" onClick={discard}>{t('Annuler', 'Cancel')}</Button>
             </div>
           )}
           {notice && <p className="muted small-text">{notice}</p>}
           {shownStored.some((m) => m.paused) && (
             <p className="muted small-text">
-              <Icon name="pause" size={12} /> Ligne en pause : pas entraînée.
+              <Icon name="pause" size={12} /> {t('Ligne en pause : pas entraînée.', 'Line paused: not trained.')}
             </p>
           )}
           {saveLine.error && <p className="error">{saveLine.error.message}</p>}
@@ -494,19 +498,19 @@ export function RepertoireEditor({ me }: { me: Me }) {
           )}
           {here.length === 0 && !hasDraft && (
             <>
-              <p className="muted">Jouez des coups pour continuer la variante.</p>
+              <p className="muted">{t('Jouez des coups pour continuer la variante.', 'Play moves to continue the line.')}</p>
               {/* End of the line on my turn: what to play next, from the engine or at my level. */}
               {myTurn && !analysisOn && (
                 <div className="suggest-start muted small-text">
-                  Suggérer un coup :
-                  <Button size="sm" icon="analysis" onClick={() => toggleAnalysis(true)}>Analyser</Button>
+                  {t('Suggérer un coup :', 'Suggest a move:')}
+                  <Button size="sm" icon="analysis" onClick={() => toggleAnalysis(true)}>{t('Analyser', 'Analyse')}</Button>
                 </div>
               )}
             </>
           )}
           <ul className={`rep-moves next-moves ${drag ? 'dragging-list' : ''}`} ref={listRef}>
             {options[0] && !rep.has(options[0].fromFen, options[0].uci) && (
-              <li className="next-move clickable draft-move" onClick={() => play(options[0]!.uci)} title="Suite de votre ligne, pas encore enregistrée">
+              <li className="next-move clickable draft-move" onClick={() => play(options[0]!.uci)} title={t('Suite de votre ligne, pas encore enregistrée', 'Continuation of your line, not saved yet')}>
                 <div className="move-main">
                   <button className="link unsaved san">
                     <span className="move-num">{moveNumber}</span>
@@ -518,7 +522,7 @@ export function RepertoireEditor({ me }: { me: Me }) {
                     size="sm"
                     variant="ghost"
                     icon="close"
-                    title="Annuler la suite non enregistrée à partir d’ici"
+                    title={t('Annuler la suite non enregistrée à partir d’ici', 'Discard the unsaved continuation from here')}
                     onClick={() => setLine(line.slice(0, ply))}
                   />
                 </div>
@@ -549,7 +553,7 @@ export function RepertoireEditor({ me }: { me: Me }) {
                     ].filter(Boolean).join(' ')}
                     style={drag?.id === m.id ? { transform: `translateY(${drag.dy}px)` } : undefined}
                     onClick={() => play(m.uci)}
-                    title="Appui long : mettre en pause, supprimer"
+                    title={t('Appui long : mettre en pause, supprimer', 'Long press: pause, delete')}
                     {...longPress(() => setActing(m))}
                   >
                     <div className="move-main">
@@ -557,10 +561,10 @@ export function RepertoireEditor({ me }: { me: Me }) {
                         <span className="move-num">{moveNumber}</span>
                         <San san={m.san} nags={m.nags} />
                       </button>
-                      {m.isMain && !m.paused && here.filter((x) => !x.paused).length > 1 && <span className="badge">principal</span>}
+                      {m.isMain && !m.paused && here.filter((x) => !x.paused).length > 1 && <span className="badge">{t('principal', 'main')}</span>}
                       {m.comment && <div className="comment move-comment">{m.comment}</div>}
                     </div>
-                    <span className="grip" title="Glisser : en haut, coup principal ; en bas, en pause" {...handle(m.id)}>
+                    <span className="grip" title={t('Glisser : en haut, coup principal ; en bas, en pause', 'Drag: to the top, main move; to the bottom, paused')} {...handle(m.id)}>
                       <Icon name="grip" size={16} />
                     </span>
                   </li>
@@ -571,7 +575,7 @@ export function RepertoireEditor({ me }: { me: Me }) {
           </ul>
           {options.length > 0 && (
             <p className="muted small-text keys">
-              <kbd>→</kbd> jouer · <kbd>←</kbd> reculer
+              {t(<><kbd>→</kbd> jouer · <kbd>←</kbd> reculer</>, <><kbd>→</kbd> play · <kbd>←</kbd> back</>)}
             </p>
           )}
         </section>
@@ -632,7 +636,7 @@ function CommentNote({ move, editing, onEdit, onSave, onNag }: { move: StoredMov
     return (
       <div className="comment-note">
         <span className="comment">{move.comment}</span>
-        <Button size="sm" variant="ghost" icon="pencil" title="Modifier le commentaire" onClick={() => onEdit(true)} />
+        <Button size="sm" variant="ghost" icon="pencil" title={t('Modifier le commentaire', 'Edit the comment')} onClick={() => onEdit(true)} />
       </div>
     );
   }
@@ -643,21 +647,21 @@ function CommentNote({ move, editing, onEdit, onSave, onNag }: { move: StoredMov
   return (
     <div className="comment-box">
       {/* The move's annotation: saved at once; the one chosen again removes it. */}
-      <div className="nag-picker" role="group" aria-label={`Annotation de ${move.san}`}>
+      <div className="nag-picker" role="group" aria-label={t(`Annotation de ${move.san}`, `Annotation of ${move.san}`)}>
         {NAG_CHOICES.map((n) => {
           const nag = MOVE_NAGS[n]!;
           const on = current?.symbol === nag.symbol;
           return (
-            <button key={n} type="button" className={`nag-choice nag-${nag.kind} ${on ? 'on' : ''}`} aria-pressed={on} title={on ? `Retirer « ${nag.label} »` : nag.label} onClick={() => onNag(on ? null : n)}>
+            <button key={n} type="button" className={`nag-choice nag-${nag.kind} ${on ? 'on' : ''}`} aria-pressed={on} title={on ? t(`Retirer « ${nag.label} »`, `Remove “${nag.label}”`) : nag.label} onClick={() => onNag(on ? null : n)}>
               {nag.symbol}
             </button>
           );
         })}
       </div>
-      <textarea autoFocus placeholder={`Commentaire sur ${move.san}…`} value={text} onChange={(e) => setText(e.target.value)} rows={3} />
+      <textarea autoFocus placeholder={t(`Commentaire sur ${move.san}…`, `Comment on ${move.san}…`)} value={text} onChange={(e) => setText(e.target.value)} rows={3} />
       <div className="row">
-        <Button size="sm" variant="primary" onClick={save}>Enregistrer</Button>
-        <Button size="sm" variant="ghost" onClick={() => (setText(move.comment ?? ''), onEdit(false))}>Annuler</Button>
+        <Button size="sm" variant="primary" onClick={save}>{t('Enregistrer', 'Save')}</Button>
+        <Button size="sm" variant="ghost" onClick={() => (setText(move.comment ?? ''), onEdit(false))}>{t('Annuler', 'Cancel')}</Button>
       </div>
     </div>
   );
@@ -678,8 +682,8 @@ function PgnImport({ repertoireId, onDone, onClose }: { repertoireId: string; on
   return (
     <section className="card pgn-import">
       <div className="card-head">
-        <h3>Importer un PGN</h3>
-        <Button size="sm" variant="ghost" onClick={onClose}>Fermer</Button>
+        <h3>{t('Importer un PGN', 'Import a PGN')}</h3>
+        <Button size="sm" variant="ghost" onClick={onClose}>{t('Fermer', 'Close')}</Button>
       </div>
       <input
         type="file"
@@ -689,16 +693,25 @@ function PgnImport({ repertoireId, onDone, onClose }: { repertoireId: string; on
           if (file) setPgn(await file.text());
         }}
       />
-      <textarea rows={6} placeholder="… ou collez le PGN ici (les variantes sont gardées)" value={pgn} onChange={(e) => setPgn(e.target.value)} />
+      <textarea rows={6} placeholder={t('… ou collez le PGN ici (les variantes sont gardées)', '… or paste the PGN here (variations are kept)')} value={pgn} onChange={(e) => setPgn(e.target.value)} />
       <button disabled={!pgn.trim() || mutation.isPending} onClick={() => mutation.mutate()}>
-        {mutation.isPending ? 'Import…' : 'Importer'}
+        {mutation.isPending ? t('Import…', 'Importing…') : t('Importer', 'Import')}
       </button>
       {mutation.error && <p className="error">{String(mutation.error)}</p>}
       {result && (
         <p>
-          {plural(result.games, 'partie', 'parties')} : {plural(result.added, 'coup ajouté', 'coups ajoutés')}, {result.duplicates} déjà connus
-          {result.unreachable > 0 && `, ${result.unreachable} ignorés (inaccessibles depuis la position initiale)`}
-          .
+          {t(
+            <>
+              {plural(result.games, 'partie', 'parties')} : {plural(result.added, 'coup ajouté', 'coups ajoutés')}, {result.duplicates} déjà connus
+              {result.unreachable > 0 && `, ${result.unreachable} ignorés (inaccessibles depuis la position initiale)`}
+              .
+            </>,
+            <>
+              {plural(result.games, 'game', 'games')}: {plural(result.added, 'move added', 'moves added')}, {result.duplicates} already known
+              {result.unreachable > 0 && `, ${result.unreachable} skipped (unreachable from the starting position)`}
+              .
+            </>,
+          )}
           {result.errors.length > 0 && <span className="error"> {result.errors.join('; ')}</span>}
         </p>
       )}

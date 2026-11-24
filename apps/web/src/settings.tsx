@@ -1,6 +1,7 @@
-import { bucketsFor, gapCutoffFor, RATING_BUCKETS, type Speed } from '@tabiya/core';
+import { bucketsFor, gapCutoffFor, RATING_BUCKETS, type Speed } from '@e4e5/core';
 import { createContext, useContext, useState, type ReactNode } from 'react';
 import type { Me } from './api';
+import { fmt, t } from './i18n';
 
 export type SpeedChoice = 'blitz' | 'rapid' | 'both' | 'all';
 
@@ -14,14 +15,15 @@ export const SPEEDS: Record<SpeedChoice, Speed[]> = {
 /** Lichess explorer rating range, as [lowest bucket, highest bucket] (e.g. [1600, 1800] = 1600-1999). */
 export type RatingRange = [number, number];
 
-/** French names of the speeds, e.g. for "blitz+rapid". */
-export const SPEED_NAMES: Record<string, string> = { bullet: 'bullet', blitz: 'blitz', rapid: 'rapide', classical: 'classique', daily: 'par correspondance' };
-export const SPEED_CHOICES: Record<SpeedChoice, string> = {
-  blitz: 'Blitz',
-  rapid: 'Rapide',
-  both: 'Blitz + rapide',
-  all: 'Blitz + rapide + classique',
-};
+/** Names of the speeds in the interface's language, e.g. for "blitz+rapid". */
+export const SPEED_NAMES: Record<string, string> = t(
+  { bullet: 'bullet', blitz: 'blitz', rapid: 'rapide', classical: 'classique', daily: 'par correspondance' },
+  { bullet: 'bullet', blitz: 'blitz', rapid: 'rapid', classical: 'classical', daily: 'correspondence' },
+);
+export const SPEED_CHOICES: Record<SpeedChoice, string> = t(
+  { blitz: 'Blitz', rapid: 'Rapide', both: 'Blitz + rapide', all: 'Blitz + rapide + classique' },
+  { blitz: 'Blitz', rapid: 'Rapid', both: 'Blitz + rapid', all: 'Blitz + rapid + classical' },
+);
 export const speedsLabel = (speeds: string[]) => speeds.map((s) => SPEED_NAMES[s] ?? s).join(' + ');
 
 interface Settings {
@@ -60,8 +62,8 @@ interface Settings {
   setAnswerSeconds: (n: number) => void;
 }
 
-/** A depth of the lines (share of the games) as a percentage: "0,5 %". */
-export const depthPct = (x: number) => `${(100 * x).toLocaleString('fr-FR')} %`;
+/** A depth of the lines (share of the games) as a percentage: "0,5 %" / "0.5%". */
+export const depthPct = (x: number) => t(`${fmt(100 * x)} %`, `${fmt(100 * x)}%`);
 
 export type LearnOrder = 'frequency' | 'repertoire';
 /** "Sans limite" for the new lines per day. */

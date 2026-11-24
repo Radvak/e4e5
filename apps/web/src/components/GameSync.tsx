@@ -1,10 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { api, type SyncState } from '../api';
+import { locale, t } from '../i18n';
 import { Button, plural } from '../ui';
 
 const SOURCES = { chesscom: 'Chess.com', lichess: 'Lichess' } as const;
-const date = (iso: string) => new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+const date = (iso: string) => new Date(iso).toLocaleDateString(locale, { day: 'numeric', month: 'short' });
 
 /** Sync state of the user's games; polls while a sync runs. */
 export function useGameSync() {
@@ -36,18 +37,26 @@ export function GameSyncRows({ state, onSync }: { state: SyncState; onSync: (s: 
               <strong>{SOURCES[source]}</strong>{' '}
               {account ? <span className="muted">· {account}</span> : null}
               <div className="muted small-text">
-                {!account && (source === 'chesscom' ? 'Indiquez votre pseudo Chess.com ci-dessus.' : 'Liez votre compte Lichess ci-dessus.')}
-                {account && plural(state.counts[source] ?? 0, 'partie importée', 'parties importées')}
-                {last && ` · dernière synchro le ${date(last.syncedAt)}`}
+                {!account &&
+                  (source === 'chesscom'
+                    ? t('Indiquez votre pseudo Chess.com ci-dessus.', 'Enter your Chess.com username above.')
+                    : t('Liez votre compte Lichess ci-dessus.', 'Link your Lichess account above.'))}
+                {account && t(plural(state.counts[source] ?? 0, 'partie importée', 'parties importées'), plural(state.counts[source] ?? 0, 'game imported', 'games imported'))}
+                {last && t(` · dernière synchro le ${date(last.syncedAt)}`, ` · last synced ${date(last.syncedAt)}`)}
                 {job?.status === 'running' &&
-                  ` · synchro… ${job.progress ? `mois ${job.progress.done}/${job.progress.total}, ` : ''}${plural(job.added, 'nouvelle', 'nouvelles')}`}
-                {job?.status === 'done' && ` · ${plural(job.added, 'nouvelle partie', 'nouvelles parties')}`}
-                {job?.status === 'done' && job.reviews ? ` · ${plural(job.reviews, 'position à revoir', 'positions à revoir')}` : ''}
+                  t(
+                    ` · synchro… ${job.progress ? `mois ${job.progress.done}/${job.progress.total}, ` : ''}${plural(job.added, 'nouvelle', 'nouvelles')}`,
+                    ` · syncing… ${job.progress ? `month ${job.progress.done}/${job.progress.total}, ` : ''}${plural(job.added, 'new', 'new')}`,
+                  )}
+                {job?.status === 'done' && ` · ${t(plural(job.added, 'nouvelle partie', 'nouvelles parties'), plural(job.added, 'new game', 'new games'))}`}
+                {job?.status === 'done' && job.reviews
+                  ? ` · ${t(plural(job.reviews, 'position à revoir', 'positions à revoir'), plural(job.reviews, 'position to review', 'positions to review'))}`
+                  : ''}
               </div>
               {job?.status === 'error' && <div className="error small-text">{job.error}</div>}
             </div>
             <Button size="sm" icon="sync" disabled={!account || job?.status === 'running'} onClick={() => onSync(source)}>
-              {last ? 'Synchroniser' : 'Importer mes parties'}
+              {last ? t('Synchroniser', 'Sync') : t('Importer mes parties', 'Import my games')}
             </Button>
           </div>
         );
@@ -64,7 +73,14 @@ export function GameSyncInline() {
   if (!linked.length) {
     return (
       <p className="muted small-text">
-        <Link to="/compte#comptes">Liez Chess.com ou Lichess</Link> pour analyser vos parties.
+        {t(
+          <>
+            <Link to="/compte#comptes">Liez Chess.com ou Lichess</Link> pour analyser vos parties.
+          </>,
+          <>
+            <Link to="/compte#comptes">Link Chess.com or Lichess</Link> to analyse your games.
+          </>,
+        )}
       </p>
     );
   }
@@ -72,10 +88,14 @@ export function GameSyncInline() {
   return (
     <div className="row">
       <span className="muted small-text" style={{ margin: 0, flex: 1 }}>
-        {running ? 'Synchronisation en cours…' : last ? `Dernière synchro le ${date(last)}` : 'Parties pas encore importées'}
+        {running
+          ? t('Synchronisation en cours…', 'Syncing…')
+          : last
+            ? t(`Dernière synchro le ${date(last)}`, `Last synced ${date(last)}`)
+            : t('Parties pas encore importées', 'Games not imported yet')}
       </span>
       <Button size="sm" variant="ghost" icon="sync" disabled={running} onClick={() => linked.forEach((s) => start.mutate(s))}>
-        Synchroniser
+        {t('Synchroniser', 'Sync')}
       </Button>
     </div>
   );

@@ -1,4 +1,5 @@
-import type { Color } from '@tabiya/core';
+import type { Color } from '@e4e5/core';
+import { t } from '../i18n';
 
 const pct = (n: number, total: number) => (total ? (100 * n) / total : 0);
 
@@ -13,10 +14,14 @@ export function WdlBar({ white, draws, black, color, expected }: { white: number
   const [mine, theirs] = color === 'white' ? [white, black] : [black, white];
   const [mineClass, theirsClass] = color === 'white' ? ['w', 'b'] : ['b', 'w'];
   const own = pct(mine + draws / 2, n);
-  const title =
+  const title = t(
     `Vos victoires ${pct(mine, n).toFixed(0)} % · nulles ${pct(draws, n).toFixed(0)} % · défaites ${pct(theirs, n).toFixed(0)} %` +
-    ` (score ${own.toFixed(0)} %)` +
-    (expected !== undefined ? ` · repère violet : score espéré à votre niveau, ${Math.round(100 * expected)} %` : '');
+      ` (score ${own.toFixed(0)} %)` +
+      (expected !== undefined ? ` · repère violet : score espéré à votre niveau, ${Math.round(100 * expected)} %` : ''),
+    `Your wins ${pct(mine, n).toFixed(0)}% · draws ${pct(draws, n).toFixed(0)}% · losses ${pct(theirs, n).toFixed(0)}%` +
+      ` (score ${own.toFixed(0)}%)` +
+      (expected !== undefined ? ` · purple mark: expected score at your level, ${Math.round(100 * expected)}%` : ''),
+  );
   return (
     <div className="bar" title={title}>
       <span className={mineClass} style={{ width: `${pct(mine, n)}%` }} />

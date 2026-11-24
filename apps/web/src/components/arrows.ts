@@ -1,20 +1,22 @@
+import { t } from '../i18n';
+
 /**
  * Arrow colours on the board. The same colours mark the moves around the board (repertoire
  * moves, moves to complete, engine line: see --rep, --hole, --engine in styles.css), which
  * acts as the legend.
  */
 export const ARROWS = {
-  repertoire: { color: '#3a9a62', label: 'dans votre répertoire' },
-  next: { color: '#3a9a62', label: 'coup suivant (→)' },
-  nextDraft: { color: '#f0883e', label: 'coup suivant, pas encore enregistré (→)' },
-  popular: { color: '#f0883e', label: 'coup manquant : joué souvent, pas encore dans votre répertoire' },
+  repertoire: { color: '#3a9a62', label: t('dans votre répertoire', 'in your repertoire') },
+  next: { color: '#3a9a62', label: t('coup suivant (→)', 'next move (→)') },
+  nextDraft: { color: '#f0883e', label: t('coup suivant, pas encore enregistré (→)', 'next move, not saved yet (→)') },
+  popular: { color: '#f0883e', label: t('coup manquant : joué souvent, pas encore dans votre répertoire', 'missing move: often played, not in your repertoire yet') },
   // Dark grey: the blues are taken (?! light blue), and it stands out from every other colour.
-  engine: { color: '#2b2b2b', label: 'meilleur coup du moteur' },
-  level: { color: '#bc8cff', label: 'meilleur coup à votre niveau' },
+  engine: { color: '#2b2b2b', label: t('meilleur coup du moteur', 'best engine move') },
+  level: { color: '#bc8cff', label: t('meilleur coup à votre niveau', 'best move at your level') },
   // Same green as the paused move in the list (--rep, faded there too), almost transparent.
-  paused: { color: '#5cb380', label: 'en pause, pas entraîné' },
-  pausedNext: { color: '#5cb380', label: 'coup suivant, en pause (→)' },
-  mistake: { color: '#e5534b', label: 'coup joué à la place du coup préparé' },
+  paused: { color: '#5cb380', label: t('en pause, pas entraîné', 'paused, not trained') },
+  pausedNext: { color: '#5cb380', label: t('coup suivant, en pause (→)', 'next move, paused (→)') },
+  mistake: { color: '#e5534b', label: t('coup joué à la place du coup préparé', 'move played instead of the prepared move') },
 } as const;
 
 export type ArrowKind = keyof typeof ARROWS;

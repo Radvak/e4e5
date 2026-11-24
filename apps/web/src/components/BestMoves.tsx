@@ -1,4 +1,4 @@
-import type { Color } from '@tabiya/core';
+import type { Color } from '@e4e5/core';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { api, type BestMovesResponse } from '../api';

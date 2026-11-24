@@ -1,4 +1,5 @@
-import { formatScore, type Color, type EngineLine, type PlayedMove } from '@tabiya/core';
+import { formatScore, type Color, type EngineLine, type PlayedMove } from '@e4e5/core';
+import { t } from '../i18n';
 
 /** On/off button of the engine, next to the board navigation. */
 /**
@@ -27,14 +28,14 @@ export function EngineLines({
   return (
     <div className="engine-lines">
       {lines.slice(0, 3).map((l) => (
-        <div key={l.multipv} className={`engine-line ${l.multipv === 1 ? 'best' : ''}`} title={l.multipv === 1 ? 'Meilleure ligne (flèche bleue)' : undefined}>
+        <div key={l.multipv} className={`engine-line ${l.multipv === 1 ? 'best' : ''}`} title={l.multipv === 1 ? t('Meilleure ligne (flèche bleue)', 'Best line (blue arrow)') : undefined}>
           <span className={`eval ${('mate' in l.score ? l.score.mate : l.score.cp) >= 0 ? 'w' : 'b'}`}>{formatScore(l.score)}</span>
           <span className="pv">
             {l.pv.slice(0, 10).map((m, i) => {
               const ply = firstMoveNumber + i;
               const num = ply % 2 === 0 ? `${ply / 2 + 1}. ` : i === 0 ? `${(ply + 1) / 2}… ` : '';
               return (
-                <button key={i} className="link" onClick={() => onPlay(l.pv.slice(0, i + 1))} title="Jouer jusqu’à ce coup">
+                <button key={i} className="link" onClick={() => onPlay(l.pv.slice(0, i + 1))} title={t('Jouer jusqu’à ce coup', 'Play up to this move')}>
                   {num}
                   {m.san}
                 </button>
@@ -46,10 +47,10 @@ export function EngineLines({
       {Array.from({ length: placeholders }, (_, i) => (
         <div key={`p${i}`} className="engine-line placeholder">
           <span className="eval">…</span>
-          <span className="pv muted">{i === 0 && lines.length === 0 ? 'Stockfish réfléchit…' : ''}</span>
+          <span className="pv muted">{i === 0 && lines.length === 0 ? t('Stockfish réfléchit…', 'Stockfish is thinking…') : ''}</span>
         </div>
       ))}
-      <div className="engine-depth muted">Stockfish 19 · profondeur {depth}/{maxDepth}</div>
+      <div className="engine-depth muted">Stockfish 19 · {t('profondeur', 'depth')} {depth}/{maxDepth}</div>
     </div>
   );
 }
@@ -87,7 +88,7 @@ export function EvalBar({ line, orientation, off = false }: { line: EngineLine |
   // White at the bottom when the board is seen from White, at the top otherwise.
   const whiteAtBottom = orientation === 'white';
   return (
-    <div className="eval-bar" role="img" aria-label={line ? `Évaluation ${formatScore(line.score)}` : 'Évaluation en cours'}>
+    <div className="eval-bar" role="img" aria-label={line ? t(`Évaluation ${formatScore(line.score)}`, `Evaluation ${formatScore(line.score)}`) : t('Évaluation en cours', 'Evaluating')}>
       <div className={`eval-white ${whiteAtBottom ? 'bottom' : 'top'}`} style={{ height: `${share * 100}%` }} />
       <div className="eval-mid" />
       {label && (

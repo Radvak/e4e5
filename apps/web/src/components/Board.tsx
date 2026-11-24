@@ -1,4 +1,4 @@
-import { positionFromFen } from '@tabiya/core';
+import { positionFromFen } from '@e4e5/core';
 import { Chessground } from 'chessground';
 import type { Api } from 'chessground/api';
 import type { DrawBrushes, DrawShape } from 'chessground/draw';

@@ -24,10 +24,10 @@ importers:
       '@libsql/client':
         specifier: ^0.15.0
         version: 0.15.15
-      '@tabiya/core':
+      '@e4e5/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@tabiya/data':
+      '@e4e5/data':
         specifier: workspace:*
         version: link:../../packages/data
       drizzle-orm:
@@ -73,10 +73,10 @@ importers:
       '@sqlite.org/sqlite-wasm':
         specifier: 3.54.1-build1
         version: 3.54.1-build1
-      '@tabiya/core':
+      '@e4e5/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@tabiya/data':
+      '@e4e5/data':
         specifier: workspace:*
         version: link:../../packages/data
       '@tanstack/query-async-storage-persister':
@@ -159,7 +159,7 @@ importers:
 
   packages/data:
     dependencies:
-      '@tabiya/core':
+      '@e4e5/core':
         specifier: workspace:*
         version: link:../core
       drizzle-orm:
@@ -178,7 +178,7 @@ importers:
 
   tools/stats:
     dependencies:
-      '@tabiya/core':
+      '@e4e5/core':
         specifier: workspace:*
         version: link:../../packages/core
       tsx:

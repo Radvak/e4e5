@@ -3,11 +3,12 @@
  * look and work the same: the line of the quiz, the swipe bar, the end-of-line badge and the
  * Indice / Solution and Explorer buttons.
  */
-import type { Color, RepMove } from '@tabiya/core';
+import type { Color, RepMove } from '@e4e5/core';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api';
 import { useLayoutEffect, useRef } from 'react';
 import { San } from '../components/Nag';
+import { t } from '../i18n';
 
 /** Dots of the trail shown left of the swipe bar, the latest ones (older ones: "+N"). */
 const MAX_DOTS = 10;
@@ -18,7 +19,10 @@ export interface TrailDot {
   id: number;
   result: TrailResult;
 }
-const TRAIL_LABELS: Record<TrailResult, string> = { right: 'réussie', wrong: 'ratée', new: 'apprise', passed: 'passée' };
+const TRAIL_LABELS: Record<TrailResult, string> = t(
+  { right: 'réussie', wrong: 'ratée', new: 'apprise', passed: 'passée' },
+  { right: 'right', wrong: 'missed', new: 'learnt', passed: 'skipped' },
+);
 
 /**
  * The quiz's line (`moves`, the first one at ply `firstPly`), annotations in colour, on one line:
@@ -33,7 +37,7 @@ export function QuizLine({ moves, firstPly }: { moves: RepMove[]; firstPly: numb
     e.classList.toggle('cut', e.scrollWidth > e.clientWidth);
   });
   return (
-    <div ref={el} className="quiz-line" aria-label="Ligne du quiz">
+    <div ref={el} className="quiz-line" aria-label={t('Ligne du quiz', 'Quiz line')}>
       <span>
         {moves.map((m, k) => {
           const ply = firstPly + k;
@@ -65,7 +69,7 @@ export function SwipeBar({
   onSkip,
   onBack,
   canBack = false,
-  label = 'passer',
+  label = t('passer', 'skip'),
   browsing = false,
   before = [],
   after = [],
@@ -112,8 +116,11 @@ export function SwipeBar({
       key={d.id}
       type="button"
       className={`trail-dot ${d.result}`}
-      title={`Ligne ${TRAIL_LABELS[d.result]} — la revoir depuis le début (pas compté)`}
-      aria-label={`Revoir la ligne ${TRAIL_LABELS[d.result]}`}
+      title={t(
+        `Ligne ${TRAIL_LABELS[d.result]} — la revoir depuis le début (pas compté)`,
+        `Line ${TRAIL_LABELS[d.result]}: replay it from the start (not counted)`,
+      )}
+      aria-label={t(`Revoir la ligne ${TRAIL_LABELS[d.result]}`, `Replay the ${TRAIL_LABELS[d.result]} line`)}
       onClick={() => onOpen?.(d.id)}
     >
       <span />
@@ -121,11 +128,11 @@ export function SwipeBar({
   );
   const hint = hintText ?? (browsing
     ? back
-      ? '← suivante · précédente →'
-      : '← suivante'
+      ? t('← suivante · précédente →', '← next · previous →')
+      : t('← suivante', '← next')
     : back
-      ? `← ${label} · revenir →`
-      : `← balayez pour ${label}`);
+      ? t(`← ${label} · revenir →`, `← ${label} · back →`)
+      : t(`← balayez pour ${label}`, `← swipe to ${label}`));
   return (
     <div
       className={`swipe-bar${before.length || browsing ? ' has-trail' : ''}`}
@@ -151,17 +158,17 @@ export function SwipeBar({
       title={hint}
     >
       {before.length > 0 && (
-        <span className="swipe-trail before" aria-label="Lignes précédentes">
+        <span className="swipe-trail before" aria-label={t('Lignes précédentes', 'Previous lines')}>
           {before.length > MAX_DOTS && <span className="more">+{before.length - MAX_DOTS}</span>}
           {before.slice(-MAX_DOTS).map(dot)}
         </span>
       )}
       <span ref={handle} className={`swipe-handle${viewing ? ` ${viewing.result}` : ''}`} aria-hidden="true" />
       {browsing && (
-        <span className="swipe-trail after" aria-label="Lignes suivantes">
+        <span className="swipe-trail after" aria-label={t('Lignes suivantes', 'Next lines')}>
           {after.slice(0, MAX_DOTS).map(dot)}
           {after.length > MAX_DOTS && <span className="more">+{after.length - MAX_DOTS}</span>}
-          <button type="button" className="trail-dot training" title="Revenir à l’entraînement en cours" aria-label="Revenir à l’entraînement en cours" onClick={onTraining}>
+          <button type="button" className="trail-dot training" title={t('Revenir à l’entraînement en cours', 'Back to the current training')} aria-label={t('Revenir à l’entraînement en cours', 'Back to the current training')} onClick={onTraining}>
             <span />
           </button>
         </span>
@@ -201,11 +208,11 @@ export function DrillActions({
 }) {
   return (
     <div className="drill-actions">
-      <button onClick={onHint} disabled={disabled} title={hinted ? solutionTitle : 'Montrer la pièce à jouer'}>
-        {hinted ? '🏳 Solution' : '💡 Indice'}
+      <button onClick={onHint} disabled={disabled} title={hinted ? solutionTitle : t('Montrer la pièce à jouer', 'Show the piece to move')}>
+        {hinted ? t('🏳 Solution', '🏳 Solution') : t('💡 Indice', '💡 Hint')}
       </button>
-      <button onClick={onExplorer} title="Ouvrir cette position dans l’Explorer">
-        🧭 Explorer
+      <button onClick={onExplorer} title={t('Ouvrir cette position dans l’Explorer', 'Open this position in Explore')}>
+        🧭 {t('Explorer', 'Explore')}
       </button>
     </div>
   );

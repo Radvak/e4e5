@@ -6,11 +6,12 @@
  * side. The strip is as high as the card in view.
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { t } from '../i18n';
 import { Icon } from '../ui';
 
 export type Tool = 'level' | 'engine';
 const TOOLS: { id: Tool; label: string }[] = [
-  { id: 'level', label: 'Lichess à votre niveau' },
+  { id: 'level', label: t('Lichess à votre niveau', 'Lichess at your level') },
   { id: 'engine', label: 'Stockfish' },
 ];
 
@@ -33,8 +34,12 @@ export function AnalysisToggle({ enabled, onToggle }: { enabled: boolean; onTogg
     <button
       className={`analysis-toggle ${enabled ? 'on' : ''}`}
       onClick={() => onToggle(!enabled)}
-      title={enabled ? 'Arrêter l’analyse (a)' : 'Analyser : coups des joueurs Lichess à votre niveau et Stockfish (a)'}
-      aria-label={enabled ? 'Arrêter l’analyse' : 'Analyser la position'}
+      title={
+        enabled
+          ? t('Arrêter l’analyse (a)', 'Stop the analysis (a)')
+          : t('Analyser : coups des joueurs Lichess à votre niveau et Stockfish (a)', 'Analyse: moves of Lichess players at your level and Stockfish (a)')
+      }
+      aria-label={enabled ? t('Arrêter l’analyse', 'Stop the analysis') : t('Analyser la position', 'Analyse the position')}
       aria-pressed={enabled}
     >
       <Icon name="analysis" />

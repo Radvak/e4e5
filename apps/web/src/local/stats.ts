@@ -6,8 +6,9 @@
  * The files are listed in `index.json` at STATS_URL: the project's GitHub Pages in the mobile app,
  * the server for the web app during the migration (VITE_STATS_URL at build time to change it).
  */
-import { statsFromRows, zobristOfFen, type ExplorerResponse, type StoredStats } from '@tabiya/core';
+import { statsFromRows, zobristOfFen, type ExplorerResponse, type StoredStats } from '@e4e5/core';
 import { isNative, isServerless } from '../native';
+import { t } from '../i18n';
 import { localDb } from './db';
 import type { StatsFile } from './sqlite.worker';
 
@@ -35,7 +36,11 @@ export interface StatsIndex {
 /** The files offered for download. */
 export async function statsIndex(): Promise<StatsIndex> {
   const res = await fetch(`${STATS_URL}/index.json`);
-  if (!res.ok) throw new Error(res.status === 404 ? 'Aucun fichier de statistiques publié' : `Liste des statistiques illisible (${res.status})`);
+  if (!res.ok) throw new Error(
+      res.status === 404
+        ? t('Aucun fichier de statistiques publié', 'No statistics file published')
+        : t(`Liste des statistiques illisible (${res.status})`, `Statistics list unreadable (${res.status})`),
+    );
   return (await res.json()) as StatsIndex;
 }
 
@@ -56,9 +61,24 @@ export async function downloadStats(file: StatsIndex['files'][number], onProgres
   try {
     const [info] = await (await localDb()).stats({ op: 'download', bucket: file.bucket, url: `${STATS_URL}/${file.file}` }, onProgress);
     return info as StatsFile;
+  } catch (e) {
+    throw workerError(e);
   } finally {
     listed = null;
   }
+}
+
+/**
+ * The worker's messages are written in French (a worker has no localStorage to read the language
+ * from): in the interface's language.
+ */
+function workerError(e: unknown): unknown {
+  if (!(e instanceof Error)) return e;
+  if (e.message.startsWith('Stockage de l’appareil indisponible'))
+    return new Error(t(e.message, 'Device storage unavailable (private browsing?): statistics cannot be saved'));
+  const m = /^Téléchargement impossible \((\d+)\)$/.exec(e.message);
+  if (m) return new Error(t(e.message, `Download failed (${m[1]})`));
+  return e;
 }
 
 export async function deleteStats(bucket: number): Promise<void> {

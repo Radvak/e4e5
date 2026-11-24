@@ -4,9 +4,11 @@
  * statistics are read in files downloaded on it; the rest still goes to the server. Turned on
  * and off in Paramètres, or with ?local=1 / ?local=0 in the address.
  */
+// The keys of the app's former name (tabiya.…) are moved first.
+import '../legacyNames';
 import { isServerless } from '../native';
 
-const KEY = 'tabiya.backend';
+const KEY = 'e4e5.backend';
 
 /** The API methods answered on this device in local mode (local/backend.ts). */
 export const LOCAL_METHODS = [

@@ -1,4 +1,4 @@
-import type { EngineLine } from '@tabiya/core';
+import type { EngineLine } from '@e4e5/core';
 import { useEffect, useState } from 'react';
 import { getEngine } from './stockfish';
 

@@ -1,10 +1,11 @@
-import { lichessStudyRef, pgnToMoves, trunkOf, type ChapterKind, type Color, type Thumbnail } from '@tabiya/core';
+import { lichessStudyRef, pgnToMoves, trunkOf, type ChapterKind, type Color, type Thumbnail } from '@e4e5/core';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api, type LichessStudy, type Me, type RepertoireSummary } from '../api';
 import { lineText } from '../chessText';
 import { MiniBoard } from '../components/MiniBoard';
+import { locale, t } from '../i18n';
 import { canSearchLichess, searchLichessStudies, studyHint } from '../lichessSearch';
 import { Button, Icon, PageHeader, Tabs, plural } from '../ui';
 
@@ -20,8 +21,8 @@ function useDebounced<T>(value: T, ms: number): T {
 
 const arrowsOf = (t: Thumbnail) => t.branches.map((uci) => ({ uci, kind: 'repertoire' as const }));
 const COLOR_TABS = [
-  { id: 'white' as const, label: <><span className="dot white" /> Blancs</> },
-  { id: 'black' as const, label: <><span className="dot black" /> Noirs</> },
+  { id: 'white' as const, label: <><span className="dot white" /> {t('Blancs', 'White')}</> },
+  { id: 'black' as const, label: <><span className="dot black" /> {t('Noirs', 'Black')}</> },
 ];
 
 /**
@@ -61,7 +62,7 @@ export function NewRepertoire({ me }: { me: Me }) {
 
   return (
     <div className="new-rep-page">
-      <PageHeader title="Nouveau répertoire" back={studyId ? undefined : '/repertoires'} />
+      <PageHeader title={t('Nouveau répertoire', 'New repertoire')} back={studyId ? undefined : '/repertoires'} />
       {studyId ? (
         <StudyImport key={studyId} studyId={studyId} chapterId={chapterId} onBack={closeStudy} onCreated={created} />
       ) : (
@@ -73,8 +74,8 @@ export function NewRepertoire({ me }: { me: Me }) {
 
 /** Lower case without accents, for the search. */
 const norm = (s: string) => s.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
-const monthYear = (ms: number) => new Date(ms).toLocaleDateString('fr-FR', { month: 'short', year: 'numeric' });
-const likes = (n: number) => (n >= 1000 ? `${(n / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} k` : String(n));
+const monthYear = (ms: number) => new Date(ms).toLocaleDateString(locale, { month: 'short', year: 'numeric' });
+const likes = (n: number) => (n >= 1000 ? t(`${(n / 1000).toLocaleString(locale, { maximumFractionDigits: 1 })} k`, `${(n / 1000).toLocaleString(locale, { maximumFractionDigits: 1 })}k`) : String(n));
 /** Rows shown before "Afficher plus" (my studies). */
 const SHOWN = 40;
 
@@ -117,7 +118,7 @@ function Catalogue({ me, onOpen, onCreated }: { me: Me; onOpen: (ref: { studyId:
   const sources: Source[] = [...(native ? (['lichess'] as const) : []), ...(mine ? (['mine'] as const) : [])];
   const source: Source | undefined = sources.find((x) => x === params.get('source')) ?? sources[0];
   const create = useMutation({ mutationFn: () => api.createRepertoire(name, color), onSuccess: onCreated });
-  const side = color === 'white' ? 'Blancs' : 'Noirs';
+  const side = color === 'white' ? t('Blancs', 'White') : t('Noirs', 'Black');
 
   return (
     <section className="catalogue">
@@ -134,8 +135,8 @@ function Catalogue({ me, onOpen, onCreated }: { me: Me; onOpen: (ref: { studyId:
           <input
             autoFocus
             type="search"
-            placeholder={native ? 'Nom du répertoire ou ouverture à chercher (Caro-Kann…)' : 'Nom du répertoire, ou lien d’une étude Lichess'}
-            aria-label="Nom du répertoire, ou étude Lichess à chercher"
+            placeholder={native ? t('Nom du répertoire ou ouverture à chercher (Caro-Kann…)', 'Repertoire name, or opening to search (Caro-Kann…)') : t('Nom du répertoire, ou lien d’une étude Lichess', 'Repertoire name, or link to a Lichess study')}
+            aria-label={t('Nom du répertoire, ou étude Lichess à chercher', 'Repertoire name, or Lichess study to search')}
             value={input}
             onChange={(e) => setInput(e.target.value)}
           />
@@ -148,8 +149,8 @@ function Catalogue({ me, onOpen, onCreated }: { me: Me; onOpen: (ref: { studyId:
         <button type="button" className="create-row" onClick={() => create.mutate()} disabled={create.isPending}>
           <span className="create-icon" aria-hidden="true"><Icon name="plus" size={18} /></span>
           <span className="create-text">
-            <strong>Créer « {name} » avec les {side}</strong>
-            <span className="muted small-text">Répertoire vide : vous ajoutez vos coups dans l’éditeur. Entrée pour créer.</span>
+            <strong>{t(`Créer « ${name} » avec les ${side}`, `Create “${name}” with ${side}`)}</strong>
+            <span className="muted small-text">{t('Répertoire vide : vous ajoutez vos coups dans l’éditeur. Entrée pour créer.', 'Empty repertoire: you add your moves in the editor. Enter to create.')}</span>
           </span>
           <Icon name="chevron" size={18} />
         </button>
@@ -157,12 +158,12 @@ function Catalogue({ me, onOpen, onCreated }: { me: Me; onOpen: (ref: { studyId:
       {create.error && <p className="error">{create.error.message}</p>}
 
       <div className="catalogue-head">
-        <h3>{name ? 'Ou partir d’une étude Lichess' : 'Partir d’une étude Lichess'}</h3>
+        <h3>{name ? t('Ou partir d’une étude Lichess', 'Or start from a Lichess study') : t('Partir d’une étude Lichess', 'Start from a Lichess study')}</h3>
         {sources.length > 1 && (
-          <div className="author-chips" role="tablist" aria-label="Études">
+          <div className="author-chips" role="tablist" aria-label={t('Études', 'Studies')}>
             {sources.map((x) => (
               <button key={x} type="button" role="tab" aria-selected={x === source} className={`chip ${x === source ? 'on' : ''}`} onClick={() => set('source', x === sources[0] ? '' : x)}>
-                {x === 'lichess' ? 'Toutes les études' : 'Mes études'}
+                {x === 'lichess' ? t('Toutes les études', 'All studies') : t('Mes études', 'My studies')}
               </button>
             ))}
           </div>
@@ -172,8 +173,8 @@ function Catalogue({ me, onOpen, onCreated }: { me: Me; onOpen: (ref: { studyId:
       {source === 'mine' && <MyStudies username={mine!} name={name} onOpen={onOpen} />}
       {!source && (
         <p className="muted catalogue-empty">
-          Collez le lien d’une étude Lichess (lichess.org/study/…) pour l’importer
-          {me.lichess ? '.' : ', ou liez votre compte Lichess (Compte) pour retrouver vos études ici.'}
+          {t('Collez le lien d’une étude Lichess (lichess.org/study/…) pour l’importer', 'Paste the link to a Lichess study (lichess.org/study/…) to import it')}
+          {me.lichess ? '.' : t(', ou liez votre compte Lichess (Compte) pour retrouver vos études ici.', ', or link your Lichess account (Account) to find your studies here.')}
         </p>
       )}
     </section>
@@ -195,10 +196,14 @@ function LichessResults({ q, onOpen }: { q: string; onOpen: (ref: { studyId: str
   return (
     <>
       <p className="muted small-text catalogue-note">
-        {list.isLoading ? (q ? `Recherche de « ${q} »…` : 'Chargement…') : q ? `${plural(total, 'étude', 'études')} pour « ${q} », les plus aimées d’abord.` : 'Les plus aimées de Lichess.'}
+        {list.isLoading
+          ? q ? t(`Recherche de « ${q} »…`, `Searching “${q}”…`) : t('Chargement…', 'Loading…')
+          : q
+            ? t(`${plural(total, 'étude', 'études')} pour « ${q} », les plus aimées d’abord.`, `${plural(total, 'study', 'studies')} for “${q}”, most liked first.`)
+            : t('Les plus aimées de Lichess.', 'The most liked on Lichess.')}
       </p>
       {list.error && <p className="error">{list.error.message}</p>}
-      {list.data && studies.length === 0 && <p className="muted catalogue-empty">Aucune étude trouvée.</p>}
+      {list.data && studies.length === 0 && <p className="muted catalogue-empty">{t('Aucune étude trouvée.', 'No study found.')}</p>}
       {studies.length > 0 && (
         <ul className="study-rows">
           {studies.map((s) => {
@@ -209,7 +214,7 @@ function LichessResults({ q, onOpen }: { q: string; onOpen: (ref: { studyId: str
                   <span className="study-text">
                     <span className="study-name">
                       {s.name}
-                      {hint && <span className="study-hint" title="D’après ses thèmes, pas une étude d’ouverture">{hint}</span>}
+                      {hint && <span className="study-hint" title={t('D’après ses thèmes, pas une étude d’ouverture', 'From its topics, not an opening study')}>{hint}</span>}
                     </span>
                     <span className="study-meta">♥ {likes(s.likes)} · {s.owner}{s.topics.length > 0 && ` · ${s.topics.slice(0, 2).join(', ')}`}</span>
                   </span>
@@ -223,7 +228,7 @@ function LichessResults({ q, onOpen }: { q: string; onOpen: (ref: { studyId: str
       {list.hasNextPage && (
         <div className="catalogue-more">
           <Button onClick={() => list.fetchNextPage()} disabled={list.isFetchingNextPage}>
-            {list.isFetchingNextPage ? 'Chargement…' : 'Plus d’études'}
+            {list.isFetchingNextPage ? t('Chargement…', 'Loading…') : t('Plus d’études', 'More studies')}
           </Button>
         </div>
       )}
@@ -248,18 +253,18 @@ function MyStudies({ username, name, onOpen }: { username: string; name: string;
     <>
       <p className="muted small-text catalogue-note">
         {list.isLoading
-          ? 'Chargement de vos études…'
+          ? t('Chargement de vos études…', 'Loading your studies…')
           : list.data && list.data.length > 0
             ? name
               ? matching.length
-                ? `${plural(matching.length, 'de vos études contient', 'de vos études contiennent')} « ${name} ».`
+                ? t(`${plural(matching.length, 'de vos études contient', 'de vos études contiennent')} « ${name} ».`, `${plural(matching.length, 'of your studies contains', 'of your studies contain')} “${name}”.`)
                 : ''
-              : `Vos ${plural(list.data.length, 'étude publique', 'études publiques')} sur Lichess, les plus récentes d’abord.`
+              : t(`Vos ${plural(list.data.length, 'étude publique', 'études publiques')} sur Lichess, les plus récentes d’abord.`, `Your ${plural(list.data.length, 'public study', 'public studies')} on Lichess, most recent first.`)
             : ''}
       </p>
       {list.error && <p className="error">{list.error.message}</p>}
       {list.data && matching.length === 0 && (
-        <p className="muted catalogue-empty">{name && list.data.length ? `Aucune de vos études ne contient « ${name} ».` : 'Vous n’avez pas d’étude publique sur Lichess.'}</p>
+        <p className="muted catalogue-empty">{name && list.data.length ? t(`Aucune de vos études ne contient « ${name} ».`, `None of your studies contains “${name}”.`) : t('Vous n’avez pas d’étude publique sur Lichess.', 'You have no public study on Lichess.')}</p>
       )}
       {shown.length > 0 && (
         <ul className="study-rows">
@@ -278,7 +283,7 @@ function MyStudies({ username, name, onOpen }: { username: string; name: string;
       )}
       {!all && matching.length > SHOWN && (
         <div className="catalogue-more">
-          <Button onClick={() => setAll(true)}>{plural(matching.length - SHOWN, 'autre étude', 'autres études')}</Button>
+          <Button onClick={() => setAll(true)}>{t(plural(matching.length - SHOWN, 'autre étude', 'autres études'), plural(matching.length - SHOWN, 'more study', 'more studies'))}</Button>
         </div>
       )}
     </>
@@ -292,10 +297,10 @@ function MyStudies({ username, name, onOpen }: { username: string; name: string;
  */
 /** The groups of chapters, in this order, and why a kind cannot join a repertoire. */
 const KINDS: { kind: ChapterKind; label: string; why?: string }[] = [
-  { kind: 'opening', label: 'Ouvertures' },
-  { kind: 'game', label: 'Parties commentées' },
-  { kind: 'endgame', label: 'Finales', why: 'Finale : commence à sa propre position, ses coups ne peuvent pas rejoindre un répertoire d’ouverture.' },
-  { kind: 'position', label: 'Positions (milieu de jeu, tactique…)', why: 'Commence à une position qu’aucun autre chapitre n’atteint : ses coups ne peuvent pas rejoindre le répertoire.' },
+  { kind: 'opening', label: t('Ouvertures', 'Openings') },
+  { kind: 'game', label: t('Parties commentées', 'Annotated games') },
+  { kind: 'endgame', label: t('Finales', 'Endgames'), why: t('Finale : commence à sa propre position, ses coups ne peuvent pas rejoindre un répertoire d’ouverture.', 'Endgame: starts from its own position, its moves cannot join an opening repertoire.') },
+  { kind: 'position', label: t('Positions (milieu de jeu, tactique…)', 'Positions (middlegame, tactics…)'), why: t('Commence à une position qu’aucun autre chapitre n’atteint : ses coups ne peuvent pas rejoindre le répertoire.', 'Starts from a position no other chapter reaches: its moves cannot join the repertoire.') },
 ];
 
 function StudyImport({
@@ -369,17 +374,17 @@ function StudyImport({
     });
   const shown = hover !== null && s ? s.chapters[hover]!.trunk : selection.trunk;
   const caption =
-    hover !== null && s ? s.chapters[hover]!.name : selection.trunk.sans.length ? lineText(selection.trunk.sans) : 'Position initiale';
+    hover !== null && s ? s.chapters[hover]!.name : selection.trunk.sans.length ? lineText(selection.trunk.sans) : t('Position initiale', 'Starting position');
 
   return (
     <div className="study-import">
       <div className="study-import-nav">
         <button type="button" className="link" onClick={onBack}>
-          <Icon name="back" size={16} /> Toutes les études
+          <Icon name="back" size={16} /> {t('Toutes les études', 'All studies')}
         </button>
-        <a className="small-text" href={`https://lichess.org/study/${studyId}`} target="_blank" rel="noreferrer">Voir sur Lichess ↗</a>
+        <a className="small-text" href={`https://lichess.org/study/${studyId}`} target="_blank" rel="noreferrer">{t('Voir sur Lichess ↗', 'View on Lichess ↗')}</a>
       </div>
-      {study.isLoading && <p className="muted">Chargement de l’étude…</p>}
+      {study.isLoading && <p className="muted">{t('Chargement de l’étude…', 'Loading the study…')}</p>}
       {study.error && <p className="error">{study.error.message}</p>}
       {s && (
         <div className="study-import-body">
@@ -395,11 +400,11 @@ function StudyImport({
             }}
           >
             <label className="field">
-              <span className="field-label">Nom du répertoire</span>
+              <span className="field-label">{t('Nom du répertoire', 'Repertoire name')}</span>
               <input value={name} maxLength={100} onChange={(e) => setName(e.target.value)} />
             </label>
             <div className="field">
-              <span className="field-label">Je joue</span>
+              <span className="field-label">{t('Je joue', 'I play')}</span>
               <Tabs
                 block
                 value={color}
@@ -411,7 +416,7 @@ function StudyImport({
               />
             </div>
             <div className="field">
-              <span className="field-label">Chapitres</span>
+              <span className="field-label">{t('Chapitres', 'Chapters')}</span>
               <div className="chapter-groups" onMouseLeave={() => setHover(null)}>
                 {KINDS.map(({ kind, label, why }) => {
                   const group = s.chapters.flatMap((c, i) => (c.kind === kind ? [{ c, i }] : []));
@@ -436,9 +441,9 @@ function StudyImport({
                                   !c.joins
                                     ? why ?? KINDS.at(-1)!.why
                                     : c.moves === 0
-                                      ? 'Chapitre sans coups'
+                                      ? t('Chapitre sans coups', 'Chapter without moves')
                                       : kind === 'game'
-                                        ? 'Partie : une longue ligne, pas cochée par défaut'
+                                        ? t('Partie : une longue ligne, pas cochée par défaut', 'Game: one long line, not checked by default')
                                         : undefined
                                 }
                               >
@@ -446,11 +451,11 @@ function StudyImport({
                                 <span className="chapter-name">{c.name}</span>
                                 {/* Only a chapter studied from the other side is marked. */}
                                 {c.orientation && c.orientation !== color && (
-                                  <span className="chapter-side" title="Chapitre étudié avec l’autre couleur">
-                                    <span className={`dot ${c.orientation}`} /> {c.orientation === 'white' ? 'Blancs' : 'Noirs'}
+                                  <span className="chapter-side" title={t('Chapitre étudié avec l’autre couleur', 'Chapter studied with the other colour')}>
+                                    <span className={`dot ${c.orientation}`} /> {c.orientation === 'white' ? t('Blancs', 'White') : t('Noirs', 'Black')}
                                   </span>
                                 )}
-                                <span className="chapter-moves">{c.moves ? plural(c.moves, 'coup', 'coups') : 'sans coups'}</span>
+                                <span className="chapter-moves">{c.moves ? t(plural(c.moves, 'coup', 'coups'), plural(c.moves, 'move', 'moves')) : t('sans coups', 'no moves')}</span>
                               </label>
                             </li>
                           );
@@ -464,15 +469,15 @@ function StudyImport({
             <div className="import-summary">
               {chosen.size ? (
                 <>
-                  <strong>{plural(chosen.size, 'chapitre', 'chapitres')}</strong> · {plural(selection.moves, 'coup', 'coups')}
-                  {selection.maxPly > 0 && <> · lignes jusqu’au {Math.ceil(selection.maxPly / 2)}<sup>e</sup> coup</>}
+                  <strong>{t(plural(chosen.size, 'chapitre', 'chapitres'), plural(chosen.size, 'chapter', 'chapters'))}</strong> · {t(plural(selection.moves, 'coup', 'coups'), plural(selection.moves, 'move', 'moves'))}
+                  {selection.maxPly > 0 && t(<> · lignes jusqu’au {Math.ceil(selection.maxPly / 2)}<sup>e</sup> coup</>, <> · lines up to move {Math.ceil(selection.maxPly / 2)}</>)}
                 </>
               ) : (
-                'Choisissez au moins un chapitre.'
+                t('Choisissez au moins un chapitre.', 'Choose at least one chapter.')
               )}
             </div>
             <Button type="submit" variant="primary" block disabled={!name.trim() || chosen.size === 0 || create.isPending}>
-              {create.isPending ? 'Import…' : 'Importer dans mes répertoires'}
+              {create.isPending ? t('Import…', 'Importing…') : t('Importer dans mes répertoires', 'Import into my repertoires')}
             </Button>
             {create.error && <p className="error">{create.error.message}</p>}
           </form>

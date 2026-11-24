@@ -1,4 +1,4 @@
-# Tabiya
+# e4e5
 
 Build and learn chess opening repertoires, with Lichess statistics at your level.
 
@@ -60,10 +60,10 @@ it in Chrome. DevTools → Application shows the manifest and the service worker
 ## Mobile app (Capacitor)
 
 The same web app, packaged with Capacitor (`apps/web/android`, `apps/web/ios`, app id
-`com.tabiya`). It runs in local mode only, without the server: data in SQLite on the device,
+`com.e4e5`). It runs in local mode only, without the server: data in SQLite on the device,
 games straight from Lichess and Chess.com (native HTTP, no CORS), statistics from the files per
 rating bucket downloaded in Paramètres, Lichess linked by OAuth through
-`com.tabiya://lichess-callback`. iOS 16.4 at least; Android 7 (API 24).
+`com.e4e5://lichess-callback`. iOS 16.4 at least; Android 7 (API 24).
 
 ```bash
 pnpm --filter web build:native   # web build, copied into android/ and ios/

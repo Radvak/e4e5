@@ -1,5 +1,5 @@
 /** Lines typed or pasted as text (Explorer: the moves path turned into a field). */
-import { playSanOn, playUciOn, positionFromFen, START_FEN, type PlayedMove } from '@tabiya/core';
+import { playSanOn, playUciOn, positionFromFen, START_FEN, type PlayedMove } from '@e4e5/core';
 
 const RESULTS = new Set(['*', '1-0', '0-1', '1/2-1/2']);
 

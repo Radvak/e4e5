@@ -22,12 +22,12 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- Back from Lichess OAuth (com.tabiya://lichess-callback, src/native.ts). -->
+            <!-- Back from Lichess OAuth (com.e4e5://lichess-callback, src/native.ts). -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="com.tabiya" android:host="lichess-callback" />
+                <data android:scheme="com.e4e5" android:host="lichess-callback" />
             </intent-filter>
 
         </activity>

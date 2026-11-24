@@ -1,6 +1,6 @@
 /**
  * The API methods answered by the local database (no server), with the shared data functions
- * (@tabiya/data). Same answers as the server's, JSON included (dates as ISO strings), so the
+ * (@e4e5/data). Same answers as the server's, JSON included (dates as ISO strings), so the
  * pages see no difference. The repertoires, the training and the played games for now: the
  * other methods still go to the server (see mode.ts).
  *
@@ -12,7 +12,7 @@
  * on the device (stats.ts) when every rating bucket of the settings is there; otherwise, and for
  * a position not in the files, the server answers as before.
  */
-import { fenKey, positionFromFen, REACH_STEPS, suggestMoves } from '@tabiya/core';
+import { fenKey, positionFromFen, REACH_STEPS, suggestMoves } from '@e4e5/core';
 import {
   createRepertoire,
   DataError,
@@ -47,14 +47,15 @@ import {
   saveLine,
   updateMove,
   updateRepertoire,
-} from '@tabiya/data';
-import { moveCards, repertoires, repMoves, users } from '@tabiya/data/schema';
+} from '@e4e5/data';
+import { moveCards, repertoires, repMoves, users } from '@e4e5/data/schema';
 import { eq } from 'drizzle-orm';
 import { ApiError, serverApi, UNREACHABLE, type api, type Me, type RepertoireDetail, type RepertoireSummary, type ReviewCard } from '../api';
 import { LOCAL_USER, localDb } from './db';
 import type { LocalMethod } from './mode';
 import { isServerless } from '../native';
 import { localStats } from './stats';
+import { t } from '../i18n';
 
 type Api = typeof api;
 type LocalDb = Awaited<ReturnType<typeof localDb>>['db'];
@@ -117,11 +118,15 @@ const loadOpenings = () =>
 async function fromServer<T>(call: () => Promise<T>): Promise<T> {
   try {
     // No server (mobile app, static hosting).
-    if (isServerless()) throw new ApiError(UNREACHABLE, 'Pas de serveur');
+    if (isServerless()) throw new ApiError(UNREACHABLE, t('Pas de serveur', 'No server'));
     return await call();
   } catch (e) {
     if (e instanceof ApiError && (e.status === 401 || e.status === UNREACHABLE)) {
-      throw new ApiError(404, 'Statistiques absentes de cet appareil : téléchargez les tranches de vos réglages (Paramètres › Mode local)', {
+      const message = t(
+        'Statistiques absentes de cet appareil : téléchargez les tranches de vos réglages (Paramètres › Mode local)',
+        'Statistics not on this device: download the ranges of your settings (Settings › Local mode)',
+      );
+      throw new ApiError(404, message, {
         reason: 'local-stats',
       });
     }
@@ -133,7 +138,7 @@ const positionKey = (fen: string) => {
   try {
     return fenKey(positionFromFen(fen));
   } catch {
-    throw new DataError(400, 'FEN invalide');
+    throw new DataError(400, t('FEN invalide', 'Invalid FEN'));
   }
 };
 
@@ -142,7 +147,7 @@ export const localApi = {
   me: () => run(async (db) => localMe(db)),
   updateMe: (patch) =>
     run(async (db) => {
-      if (patch.password) throw new DataError(400, 'Pas de mot de passe en mode local : le compte est sur cet appareil');
+      if (patch.password) throw new DataError(400, t('Pas de mot de passe en mode local : le compte est sur cet appareil', 'No password in local mode: the account is on this device'));
       const { warning } = patch.chesscomUsername !== undefined ? await setChesscom(db, LOCAL_USER, patch.chesscomUsername, PUBLIC_SOURCES) : {};
       return { user: await localMe(db), warning };
     }),
@@ -151,7 +156,7 @@ export const localApi = {
       await unlinkLichess(db, LOCAL_USER);
       return { user: await localMe(db) };
     }),
-  logout: () => Promise.reject(new ApiError(400, 'Pas de déconnexion en mode local : désactivez-le dans Paramètres')),
+  logout: () => Promise.reject(new ApiError(400, t('Pas de déconnexion en mode local : désactivez-le dans Paramètres', 'No sign-out in local mode: turn it off in Settings'))),
   repertoires: () => run(async (db) => listRepertoires(db, LOCAL_USER)),
   createRepertoire: (name, color) => run(async (db) => createRepertoire(db, LOCAL_USER, { name: name.trim(), color })),
   renameRepertoire: (id, name) => run(async (db) => updateRepertoire(db, LOCAL_USER, id, { name: name.trim() })),
@@ -184,7 +189,7 @@ export const localApi = {
   myGameMoves: (id) =>
     run(async (db) => {
       const moves = await myGameMoves(db, LOCAL_USER, id);
-      if (!moves) throw new DataError(404, 'Partie introuvable');
+      if (!moves) throw new DataError(404, t('Partie introuvable', 'Game not found'));
       return { moves };
     }),
   explorer: async (fen, speeds, ratings) => {

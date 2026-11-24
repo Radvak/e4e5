@@ -1,1 +1,1 @@
-export * from '@tabiya/data/schema';
+export * from '@e4e5/data/schema';

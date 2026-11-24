@@ -1,5 +1,6 @@
+import { t, translateError } from './i18n';
 import { isLocalMode, LOCAL_METHODS } from './local/mode';
-import type { Color, ExplorerResponse, FsrsCard, Grade, RepertoireSummaryCounts, PgnChapter, RepMove, SuggestedMove } from '@tabiya/core';
+import type { Color, ExplorerResponse, FsrsCard, Grade, RepertoireSummaryCounts, PgnChapter, RepMove, SuggestedMove } from '@e4e5/core';
 
 export interface StatsMeta {
   speeds: string[];
@@ -27,7 +28,8 @@ export class ApiError extends Error {
     message: string,
     public body: Record<string, unknown> = {},
   ) {
-    super(message);
+    // Messages of @e4e5/data and the server are in French.
+    super(translateError(message));
   }
 }
 
@@ -44,7 +46,7 @@ async function request<T>(method: string, url: string, body?: unknown): Promise<
       credentials: 'same-origin',
     });
   } catch {
-    throw new ApiError(UNREACHABLE, navigator.onLine ? 'Le serveur ne répond pas' : 'Pas de connexion Internet : réessayez une fois en ligne');
+    throw new ApiError(UNREACHABLE, navigator.onLine ? t('Le serveur ne répond pas', 'The server does not answer') : t('Pas de connexion Internet : réessayez une fois en ligne', 'No Internet connection: try again once online'));
   }
   if (!res.ok) {
     const err = (await res.json().catch(() => ({}))) as { error?: string };

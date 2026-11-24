@@ -1,11 +1,11 @@
 /**
  * The app's database when it runs without a server: SQLite in a worker (sqlite.worker.ts), seen
- * through Drizzle's sqlite-proxy driver, so the shared data functions (@tabiya/data) run on it
+ * through Drizzle's sqlite-proxy driver, so the shared data functions (@e4e5/data) run on it
  * exactly as on the server. The schema comes from the server's migrations, replayed here in order.
  * One user only: LOCAL_USER.
  */
-import * as schema from '@tabiya/data/schema';
-import type { Db } from '@tabiya/data';
+import * as schema from '@e4e5/data/schema';
+import type { Db } from '@e4e5/data';
 import { drizzle } from 'drizzle-orm/sqlite-proxy';
 import journal from '../../../server/drizzle/meta/_journal.json';
 import type { Method, Ready, Request, Response, StatsOp, StatsRequest } from './sqlite.worker';

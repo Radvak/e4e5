@@ -2,13 +2,15 @@
  * Move annotations (NAGs of the PGN: !, ?, !!, ??, !?, ?!): the move is coloured and followed by
  * its symbol, with the usual colours (as on Lichess). Other NAGs (positions, ±…) are not shown.
  */
+import { t } from '../i18n';
+
 export const MOVE_NAGS: Record<number, { symbol: string; kind: string; label: string }> = {
-  1: { symbol: '!', kind: 'good', label: 'Bon coup' },
-  2: { symbol: '?', kind: 'mistake', label: 'Erreur' },
-  3: { symbol: '!!', kind: 'brilliant', label: 'Coup brillant' },
-  4: { symbol: '??', kind: 'blunder', label: 'Gaffe' },
-  5: { symbol: '!?', kind: 'interesting', label: 'Coup intéressant' },
-  6: { symbol: '?!', kind: 'dubious', label: 'Coup douteux' },
+  1: { symbol: '!', kind: 'good', label: t('Bon coup', 'Good move') },
+  2: { symbol: '?', kind: 'mistake', label: t('Erreur', 'Mistake') },
+  3: { symbol: '!!', kind: 'brilliant', label: t('Coup brillant', 'Brilliant move') },
+  4: { symbol: '??', kind: 'blunder', label: t('Gaffe', 'Blunder') },
+  5: { symbol: '!?', kind: 'interesting', label: t('Coup intéressant', 'Interesting move') },
+  6: { symbol: '?!', kind: 'dubious', label: t('Coup douteux', 'Dubious move') },
 };
 
 /** The move annotation among the NAGs of a move (the first one, if several). */

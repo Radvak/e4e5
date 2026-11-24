@@ -1,4 +1,4 @@
-package com.tabiya;
+package com.e4e5;
 
 import com.getcapacitor.BridgeActivity;
 

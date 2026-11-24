@@ -13,7 +13,7 @@ import {
   type GameAnalysis,
   type GapCandidate,
   type PlayedMove,
-} from '@tabiya/core';
+} from '@e4e5/core';
 import { eq, inArray } from 'drizzle-orm';
 import type { Db } from './db.js';
 import { games, graphColumns, repertoires, repMoves } from './schema.js';

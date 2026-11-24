@@ -4,7 +4,7 @@
  * The table is given once by its user (setOpeningsTable): the server reads the file, the app
  * loads it with its code.
  */
-import { fenKey, playSanOn, playUciOn, positionFromFen, START_FEN } from '@tabiya/core';
+import { fenKey, playSanOn, playUciOn, positionFromFen, START_FEN } from '@e4e5/core';
 
 export interface Opening {
   eco: string;

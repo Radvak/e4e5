@@ -1,5 +1,6 @@
-import type { Color, PlayedMove } from '@tabiya/core';
+import type { Color, PlayedMove } from '@e4e5/core';
 import { ApiError, type BestMovesResponse, type Stats, type StatsMeta } from '../api';
+import { locale, t } from '../i18n';
 import { rangeLabel, speedsLabel } from '../settings';
 import { LevelTable } from './LevelTable';
 
@@ -35,13 +36,19 @@ interface Props {
   };
 }
 
-export const REASONS: Record<NonNullable<StatsMeta['reason']>, string> = {
-  'not-stored': 'position trop rare, absente des statistiques enregistrées',
-  'local-stats': 'téléchargez les tranches de vos réglages (Paramètres › Mode local)',
-};
+export const REASONS: Record<NonNullable<StatsMeta['reason']>, string> = t(
+  {
+    'not-stored': 'position trop rare, absente des statistiques enregistrées',
+    'local-stats': 'téléchargez les tranches de vos réglages (Paramètres › Mode local)',
+  },
+  {
+    'not-stored': 'position too rare, not in the stored statistics',
+    'local-stats': 'download the ranges of your settings (Settings › Local mode)',
+  },
+);
 
-const monthLabel = (m: string) => new Date(`${m}-01T00:00:00Z`).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
-/** "octobre 2026", "août 2026 – octobre 2026". */
+const monthLabel = (m: string) => new Date(`${m}-01T00:00:00Z`).toLocaleDateString(locale, { month: 'long', year: 'numeric', timeZone: 'UTC' });
+/** "octobre 2026", "août 2026 – octobre 2026" / "October 2026", "August 2026 – October 2026". */
 const periodLabel = (p: NonNullable<StatsMeta['period']>) => (p.since === p.until ? monthLabel(p.since) : `${monthLabel(p.since)} – ${monthLabel(p.until)}`);
 
 /**
@@ -49,13 +56,16 @@ const periodLabel = (p: NonNullable<StatsMeta['period']>) => (p.since === p.unti
  * site, which counts every game), and when they are not live data for the selected range.
  */
 function provenance(meta: StatsMeta): string | null {
-  const date = new Date(meta.fetchedAt).toLocaleDateString('fr-FR');
+  const date = new Date(meta.fetchedAt).toLocaleDateString(locale);
   const why = meta.reason ? ` (${REASONS[meta.reason]})` : '';
   if (!meta.exact) {
-    return `Pas de données pour votre tranche : parties Lichess ${speedsLabel(meta.speeds)} de joueurs ${rangeLabel(meta.ratings)}, du ${date}${why}.`;
+    return t(
+      `Pas de données pour votre tranche : parties Lichess ${speedsLabel(meta.speeds)} de joueurs ${rangeLabel(meta.ratings)}, du ${date}${why}.`,
+      `No data for your range: Lichess ${speedsLabel(meta.speeds)} games of ${rangeLabel(meta.ratings)} players, from ${date}${why}.`,
+    );
   }
-  if (meta.reason) return `Données enregistrées le ${date}${why}.`;
-  if (meta.period) return `Parties Lichess : ${periodLabel(meta.period)}.`;
+  if (meta.reason) return t(`Données enregistrées le ${date}${why}.`, `Data stored on ${date}${why}.`);
+  if (meta.period) return t(`Parties Lichess : ${periodLabel(meta.period)}.`, `Lichess games: ${periodLabel(meta.period)}.`);
   return null;
 }
 
@@ -71,8 +81,13 @@ export function ExplorerPanel({ fen, color, inRep, nagsOf, stats, error, loading
   // Under the board like the engine lines: no heading, the notes in small.
   return (
     <div className="level-lines level-table">
-      {loading && <div className="level-status muted">Chargement…</div>}
-      {missing && <div className="level-status muted">Aucune statistique pour cette position{missingReason ? ` : ${REASONS[missingReason]}` : ''}.</div>}
+      {loading && <div className="level-status muted">{t('Chargement…', 'Loading…')}</div>}
+      {missing && (
+        <div className="level-status muted">
+          {t('Aucune statistique pour cette position', 'No statistics for this position')}
+          {missingReason ? t(` : ${REASONS[missingReason]}`, `: ${REASONS[missingReason]}`) : ''}.
+        </div>
+      )}
       {Boolean(error) && !missing && <div className="level-status error">{String(error)}</div>}
       {data && (
         <LevelTable

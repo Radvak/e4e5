@@ -6,7 +6,7 @@
 import { spawn } from 'node:child_process';
 import { createReadStream, existsSync } from 'node:fs';
 import { Readable } from 'node:stream';
-import { RATING_BUCKETS } from '@tabiya/core';
+import { RATING_BUCKETS } from '@e4e5/core';
 
 /** Lichess speed of a "base+increment" time control (estimated duration base + 40 × increment). */
 export function speedOf(timeControl: string): string | null {

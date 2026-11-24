@@ -1,4 +1,4 @@
-import { recallOf, type RepMove, type TrainingPosition } from '@tabiya/core';
+import { recallOf, type RepMove, type TrainingPosition } from '@e4e5/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -8,11 +8,12 @@ import { MiniBoard, type MiniArrow } from '../components/MiniBoard';
 import { San } from '../components/Nag';
 import { lineText } from '../training/common';
 import { useTrainingSources, type Source } from '../training/useTrainingSources';
+import { t } from '../i18n';
 import { Button, PageHeader, plural, Tabs } from '../ui';
 import { useGamesReport } from './Games';
 
 const PAGE = 20;
-const pct = (x: number) => `${Math.round(100 * x)} %`;
+const pct = (x: number) => t(`${Math.round(100 * x)} %`, `${Math.round(100 * x)}%`);
 
 type Filter = 'games' | 'training';
 
@@ -93,9 +94,9 @@ export function Lacunes() {
   return (
     <div className="games-page stack">
       <PageHeader
-        title="Lacunes"
-        subtitle="Ce qui coince dans vos répertoires, en parties et à l’entraînement"
-        menu={[{ label: 'Réafficher les erreurs de parties ignorées', onClick: () => restore.mutate() }]}
+        title={t('Lacunes', 'Gaps')}
+        subtitle={t('Ce qui coince dans vos répertoires, en parties et à l’entraînement', 'Where your repertoires break down, in games and in training')}
+        menu={[{ label: t('Réafficher les erreurs de parties ignorées', 'Show the ignored game mistakes again'), onClick: () => restore.mutate() }]}
       />
 
       <section className="stack">
@@ -107,26 +108,32 @@ export function Lacunes() {
             setShown(PAGE);
           }}
           tabs={[
-            { id: 'games', label: `En parties (${errors.length})` },
-            { id: 'training', label: `À l’entraînement (${fragile.length})` },
+            { id: 'games', label: t(`En parties (${errors.length})`, `In games (${errors.length})`) },
+            { id: 'training', label: t(`À l’entraînement (${fragile.length})`, `In training (${fragile.length})`) },
           ]}
         />
         <p className="muted small-text" style={{ margin: 0 }}>
           {filter === 'games'
-            ? 'Vous avez joué autre chose que votre coup préparé, du plus fréquent au moins fréquent.'
-            : 'Vos coups appris que vous risquez d’oublier (mémorisation estimée sous 90 %) ou déjà oubliés, les plus fragiles d’abord. Les autres coups d’une position pas encore appris n’en font pas partie.'}
+            ? t(
+                'Vous avez joué autre chose que votre coup préparé, du plus fréquent au moins fréquent.',
+                'You played something other than your prepared move, most frequent first.',
+              )
+            : t(
+                'Vos coups appris que vous risquez d’oublier (mémorisation estimée sous 90 %) ou déjà oubliés, les plus fragiles d’abord. Les autres coups d’une position pas encore appris n’en font pas partie.',
+                'Your learnt moves you may forget (estimated recall under 90%) or already forgot, the most fragile first. The other moves of a position not learnt yet are not included.',
+              )}
         </p>
         {notice && (
           <p className="notice success">
-            {notice} <Link to="/train">Entraîner</Link>
+            {notice} <Link to="/train">{t('Entraîner', 'Train')}</Link>
           </p>
         )}
-        {busy && <p className="muted">Chargement…</p>}
+        {busy && <p className="muted">{t('Chargement…', 'Loading…')}</p>}
         {!busy && items.length === 0 && (
           <p className="muted">
             {filter === 'games'
-              ? 'Aucun écart à votre répertoire dans vos parties.'
-              : 'Aucune : chaque coup appris a une mémorisation estimée d’au moins 90 %.'}
+              ? t('Aucun écart à votre répertoire dans vos parties.', 'No deviation from your repertoire in your games.')
+              : t('Aucune : chaque coup appris a une mémorisation estimée d’au moins 90 %.', 'None: every learnt move has an estimated recall of at least 90%.')}
           </p>
         )}
         {items.slice(0, shown).map((d) =>
@@ -138,7 +145,7 @@ export function Lacunes() {
         )}
         {items.length > shown && (
           <Button variant="ghost" onClick={() => setShown(shown + PAGE)}>
-            Voir plus ({items.length - shown})
+            {t('Voir plus', 'Show more')} ({items.length - shown})
           </Button>
         )}
       </section>
@@ -153,19 +160,23 @@ function FragileCard({ fragile, rep }: { fragile: Fragile; rep: RepertoireSummar
   const arrows: MiniArrow[] = weak.map((w) => ({ uci: w.move.uci, kind: 'repertoire' }));
   const fen = encodeURIComponent(position.fen);
   const explorer = `/explorer?${new URLSearchParams({ ...(position.path.length ? { line: position.path.map((m) => m.uci).join(',') } : {}), ...(source.color === 'black' ? { color: 'black' } : {}) })}`;
-  const memo = (w: WeakMove) => `${pct(w.recall)} de mémorisation${w.lapses > 0 ? ` · oublié ${plural(w.lapses, 'fois', 'fois')}` : ''}`;
+  const memo = (w: WeakMove) =>
+    t(
+      `${pct(w.recall)} de mémorisation${w.lapses > 0 ? ` · oublié ${plural(w.lapses, 'fois', 'fois')}` : ''}`,
+      `${pct(w.recall)} recall${w.lapses > 0 ? ` · forgotten ${plural(w.lapses, 'time', 'times')}` : ''}`,
+    );
   return (
     <article className="card game-card">
-      <Link to={`/r/${source.id}?fen=${fen}`} className="thumb-button" aria-label="Voir dans le répertoire">
+      <Link to={`/r/${source.id}?fen=${fen}`} className="thumb-button" aria-label={t('Voir dans le répertoire', 'See in the repertoire')}>
         <MiniBoard fen={position.fen} orientation={source.color} arrows={arrows} />
       </Link>
       <div className="game-card-body">
         <div className="inbox-head">
-          <span className="muted inbox-line">{lineText(position.path) || 'Position initiale'} </span>
+          <span className="muted inbox-line">{lineText(position.path) || t('Position initiale', 'Starting position')} </span>
           <span className="hole-move">
             {weak.map((w, i) => (
               <span key={w.move.uci}>
-                {i > 0 && ' et '}
+                {i > 0 && t(' et ', ' and ')}
                 <San san={w.move.san} nags={w.move.nags} />
               </span>
             ))}
@@ -176,18 +187,18 @@ function FragileCard({ fragile, rep }: { fragile: Fragile; rep: RepertoireSummar
             <span className={`dot ${source.color}`} /> {rep?.name ?? source.name}
           </span>
           <span className="muted">
-            {weak.length === 1 ? memo(weak[0]!) : weak.map((w) => `${w.move.san} : ${memo(w)}`).join(' · ')}
+            {weak.length === 1 ? memo(weak[0]!) : weak.map((w) => t(`${w.move.san} : ${memo(w)}`, `${w.move.san}: ${memo(w)}`)).join(' · ')}
           </span>
         </div>
         <div className="row inbox-actions">
-          <Button size="sm" variant="primary" to={`/r/${source.id}/train?from=${fen}`} title="S’entraîner sur cette position et la suite de la ligne">
-            S’entraîner
+          <Button size="sm" variant="primary" to={`/r/${source.id}/train?from=${fen}`} title={t('S’entraîner sur cette position et la suite de la ligne', 'Train on this position and the rest of the line')}>
+            {t('S’entraîner', 'Train')}
           </Button>
-          <Button size="sm" to={`/r/${source.id}?fen=${fen}`} title="Voir dans l’éditeur du répertoire">
-            Répertoire
+          <Button size="sm" to={`/r/${source.id}?fen=${fen}`} title={t('Voir dans l’éditeur du répertoire', 'See in the repertoire editor')}>
+            {t('Répertoire', 'Repertoire')}
           </Button>
-          <Button size="sm" variant="ghost" icon="compass" to={explorer} title="Voir cette position dans l’Explorer (statistiques, moteur, vos répertoires)">
-            Explorer
+          <Button size="sm" variant="ghost" icon="compass" to={explorer} title={t('Voir cette position dans l’Explorer (statistiques, moteur, vos répertoires)', 'See this position in Explore (statistics, engine, your repertoires)')}>
+            {t('Explorer', 'Explore')}
           </Button>
         </div>
       </div>

@@ -1,6 +1,7 @@
 /** Small UI kit: icons, buttons, page header, menus, tabs, empty states. Styles: styles.css. */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { t } from './i18n';
 
 // --- Icons (24×24, stroke) ------------------------------------------------------------------------
 const paths = {
@@ -85,7 +86,7 @@ export interface MenuItem {
 }
 
 /** A button opening a list of actions. `trigger`: custom button content (default ⋯). */
-export function Menu({ items, label, trigger, title = 'Plus d’actions' }: { items: MenuItem[]; label?: ReactNode; trigger?: ReactNode; title?: string }) {
+export function Menu({ items, label, trigger, title = t('Plus d’actions', 'More actions') }: { items: MenuItem[]; label?: ReactNode; trigger?: ReactNode; title?: string }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
@@ -137,7 +138,7 @@ export function Menu({ items, label, trigger, title = 'Plus d’actions' }: { it
 export function PageHeader({ title, subtitle, back, actions, menu }: { title: ReactNode; subtitle?: ReactNode; back?: string; actions?: ReactNode; menu?: MenuItem[] }) {
   return (
     <header className="page-header">
-      {back && <Button variant="ghost" icon="back" to={back} title="Retour" className="back" />}
+      {back && <Button variant="ghost" icon="back" to={back} title={t('Retour', 'Back')} className="back" />}
       <div className="titles">
         <h2>{title}</h2>
         {subtitle && <div className="subtitle">{subtitle}</div>}
@@ -185,5 +186,5 @@ export function Switch({ on, onChange, label, disabled }: { on: boolean; onChang
   );
 }
 
-/** French plural: "1 partie", "3 parties". */
-export const plural = (n: number, one: string, many: string) => `${n.toLocaleString('fr-FR')} ${n > 1 ? many : one}`;
+/** Plural in the current language (i18n). */
+export { plural } from './i18n';

@@ -7,7 +7,7 @@
  * here, possibly later: with its own id (an answer recorded twice counts once) and the time it was
  * given, so the same card is computed again.
  */
-import { recallOf, Repertoire, scheduleReview, type Grade } from '@tabiya/core';
+import { recallOf, Repertoire, scheduleReview, type Grade } from '@e4e5/core';
 import { and, eq, inArray } from 'drizzle-orm';
 import { DataError, type Db } from './db.js';
 import { ownRepertoire } from './repertoires.js';

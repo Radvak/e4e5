@@ -1,11 +1,11 @@
 /**
- * Gap finder ("coups manquants"), see @tabiya/data gaps.ts: on the stored statistics only
+ * Gap finder ("coups manquants"), see @e4e5/data gaps.ts: on the stored statistics only
  * (stats.ts: Lichess is never asked), so it answers at once; a position without any ends its line,
  * one stored for another range only is used as such (`approximate`), `pending` is always 0.
  * Answers cached until the repertoires, the settings or the stored statistics change.
  */
-import { LINE_DEPTHS } from '@tabiya/core';
-import { gapsAnalysis } from '@tabiya/data';
+import { LINE_DEPTHS } from '@e4e5/core';
+import { gapsAnalysis } from '@e4e5/data';
 import { eq, inArray, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';

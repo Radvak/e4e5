@@ -14,7 +14,7 @@ import {
   trunkOf,
   type Color,
   type RepMove,
-} from '@tabiya/core';
+} from '@e4e5/core';
 import { and, asc, eq, inArray, ne, or, sql } from 'drizzle-orm';
 import { DataError, newId, type Db } from './db.js';
 import { planSync } from './repertoireSync.js';

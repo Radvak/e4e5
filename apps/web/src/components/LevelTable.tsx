@@ -1,17 +1,18 @@
-import { playUci, totalGames, type Color, type ExplorerResponse, type PlayedMove } from '@tabiya/core';
+import { playUci, totalGames, type Color, type ExplorerResponse, type PlayedMove } from '@e4e5/core';
 import { San } from './Nag';
 import { WdlBar } from './WdlBar';
 import { Fragment, useState } from 'react';
 import type { BestMovesResponse } from '../api';
 import { moveText } from '../chessText';
+import { fmt, t } from '../i18n';
 import { Icon, plural } from '../ui';
 
-const pct = (x: number) => `${Math.round(100 * x)} %`;
+const pct = (x: number) => t(`${Math.round(100 * x)} %`, `${Math.round(100 * x)}%`);
 const share = (n: number, total: number) => (total ? (100 * n) / total : 0);
-/** Games, compact: 950, 12,3 k, 125 k. */
+/** Games, compact: 950, 12,3 k, 125 k / 950, 12.3k, 125k. */
 /** Rows shown before "N autres coups". */
 const SHOWN = 3;
-const games = (n: number) => (n >= 1000 ? `${(n / 1000).toLocaleString('fr-FR', { maximumFractionDigits: n < 100_000 ? 1 : 0 })} k` : String(n));
+const games = (n: number) => (n >= 1000 ? `${fmt(n / 1000, { maximumFractionDigits: n < 100_000 ? 1 : 0 })}${t(' k', 'k')}` : String(n));
 
 export type LevelSort = 'score' | 'freq';
 
@@ -105,7 +106,7 @@ export function LevelTable({
   const [open, setOpen] = useState<string | null>(null);
   const [all, setAll] = useState(false);
   const total = totalGames(data);
-  if (total === 0) return <div className="level-status muted">Aucune partie dans cette position.</div>;
+  if (total === 0) return <div className="level-status muted">{t('Aucune partie dans cette position.', 'No games in this position.')}</div>;
 
   const searching = depth > 0;
   const found = new Map((searching ? level?.moves ?? [] : []).map((m) => [m.uci, m]));
@@ -147,7 +148,7 @@ export function LevelTable({
   // The box sets how likely a line must stay to be followed (thresholds of the search steps),
   // not a number of moves: how far the lines go follows from it, and varies with the position.
   const steps = level?.steps ?? [0.5, 0.25, 0.12, 0.06, 0.03];
-  const threshold = (d: number) => (d > 0 ? `lignes ≥ ${pct(steps[d - 1]!)}` : 'coup seul');
+  const threshold = (d: number) => (d > 0 ? t(`lignes ≥ ${pct(steps[d - 1]!)}`, `lines ≥ ${pct(steps[d - 1]!)}`) : t('coup seul', 'move alone'));
   const reached = reach === null ? 0 : steps.indexOf(reach) + 1;
   const computing = searching && !!level && level.pending > 0;
   // How far ahead the expected lines go at the threshold reached (half-moves).
@@ -155,15 +156,40 @@ export function LevelTable({
   /** Short state for the footer; `why`: the full explanation (tooltip). */
   let short: string;
   let why: string;
-  if (depth === 0) [short, why] = ['', 'Score de chaque coup seul : victoires + nulles / 2, pour vous, dans les parties Lichess.'];
-  else if (levelLoading) [short, why] = ['calcul…', 'Calcul à votre niveau…'];
-  else if (levelError) [short, why] = ['erreur', levelError.message];
-  else if (computing) [short, why] = ['calcul…', `Calcul : ${plural(level!.pending, 'position', 'positions')} à récupérer sur Lichess (${range}) pour suivre les lignes plus loin.`];
+  if (depth === 0)
+    [short, why] = ['', t('Score de chaque coup seul : victoires + nulles / 2, pour vous, dans les parties Lichess.', 'Score of each move alone: wins + draws / 2, for you, in the Lichess games.')];
+  else if (levelLoading) [short, why] = [t('calcul…', 'computing…'), t('Calcul à votre niveau…', 'Computing at your level…')];
+  else if (levelError) [short, why] = [t('erreur', 'error'), levelError.message];
+  else if (computing)
+    [short, why] = [
+      t('calcul…', 'computing…'),
+      t(
+        `Calcul : ${plural(level!.pending, 'position', 'positions')} à récupérer sur Lichess (${range}) pour suivre les lignes plus loin.`,
+        `Computing: ${plural(level!.pending, 'position', 'positions')} to fetch from Lichess (${range}) to follow the lines further.`,
+      ),
+    ];
   // Nothing explored: the next positions are not stored (and cannot be fetched now).
-  else if (reached === 0) [short, why] = ['positions manquantes', 'Positions suivantes absentes des statistiques enregistrées : score de chaque coup seul, pas de ligne à dérouler.'];
-  else if (reached < depth) [short, why] = [`${threshold(reached)} atteint`, `Lignes suivies jusqu’à ${pct(steps[reached - 1]!)} des parties seulement : descendre à ${pct(steps[depth - 1]!)} demanderait trop de positions.`];
+  else if (reached === 0)
+    [short, why] = [
+      t('positions manquantes', 'missing positions'),
+      t(
+        'Positions suivantes absentes des statistiques enregistrées : score de chaque coup seul, pas de ligne à dérouler.',
+        'Next positions missing from the stored statistics: score of each move alone, no line to unfold.',
+      ),
+    ];
+  else if (reached < depth)
+    [short, why] = [
+      t(`${threshold(reached)} atteint`, `${threshold(reached)} reached`),
+      t(
+        `Lignes suivies jusqu’à ${pct(steps[reached - 1]!)} des parties seulement : descendre à ${pct(steps[depth - 1]!)} demanderait trop de positions.`,
+        `Lines followed down to ${pct(steps[reached - 1]!)} of the games only: going down to ${pct(steps[depth - 1]!)} would need too many positions.`,
+      ),
+    ];
   else [short, why] = ['', ''];
-  why ||= `${myTurn ? '' : 'Au tour de l’adversaire : chaque coup adverse est calculé comme si l’analyse commençait après lui (votre meilleure réponse, puis les lignes probables). '}Les lignes sont suivies tant qu’elles arrivent dans au moins ${pct(steps[(reached || depth) - 1]!)} des parties à votre niveau (vos meilleurs coups, les réponses adverses pondérées par leur fréquence)${plies > 1 ? ` : ici jusqu’à ${plies} demi-coups plus loin` : ''}. Plus le seuil est bas, plus les lignes vont loin ; le nombre de coups dépend de la position.`;
+  why ||= t(
+    `${myTurn ? '' : 'Au tour de l’adversaire : chaque coup adverse est calculé comme si l’analyse commençait après lui (votre meilleure réponse, puis les lignes probables). '}Les lignes sont suivies tant qu’elles arrivent dans au moins ${pct(steps[(reached || depth) - 1]!)} des parties à votre niveau (vos meilleurs coups, les réponses adverses pondérées par leur fréquence)${plies > 1 ? ` : ici jusqu’à ${plies} demi-coups plus loin` : ''}. Plus le seuil est bas, plus les lignes vont loin ; le nombre de coups dépend de la position.`,
+    `${myTurn ? '' : "Opponent's turn: each opponent move is computed as if the analysis started after it (your best answer, then the likely lines). "}Lines are followed as long as they occur in at least ${pct(steps[(reached || depth) - 1]!)} of the games at your level (your best moves, the opponent's replies weighted by their frequency)${plies > 1 ? `: here up to ${plies} plies further` : ''}. The lower the threshold, the further the lines go; the number of moves depends on the position.`,
+  );
 
   const header = (key: LevelSort, label: string, title: string, className: string) => (
     <th className={className}>
@@ -172,7 +198,7 @@ export function LevelTable({
         type="button"
         className={`sort ${choice === key ? 'on' : ''}`}
         onClick={() => setChoice(choice === key ? null : key)}
-        title={choice === key ? `${title} — cliquer à nouveau pour revenir au tri par défaut` : title}
+        title={choice === key ? t(`${title} — cliquer à nouveau pour revenir au tri par défaut`, `${title} — click again to go back to the default sort`) : title}
         aria-pressed={choice === key}
       >
         {label} <span aria-hidden="true">{sort === key ? '▼' : '▽'}</span>
@@ -185,9 +211,9 @@ export function LevelTable({
       <table className="explorer">
         <thead>
           <tr>
-            <th className="san">Coup</th>
-            {header('score', 'Score', 'Trier par score (pour vous)', 'score-col')}
-            {header('freq', 'Parties', 'Trier par nombre de parties', 'count')}
+            <th className="san">{t('Coup', 'Move')}</th>
+            {header('score', 'Score', t('Trier par score (pour vous)', 'Sort by score (for you)'), 'score-col')}
+            {header('freq', t('Parties', 'Games'), t('Trier par nombre de parties', 'Sort by number of games'), 'count')}
             <th className="wdl" />
             <th className="unfold-col" />
           </tr>
@@ -203,25 +229,40 @@ export function LevelTable({
             // The moves the replies answer: mine, or on the opponent's turn its move and my answer.
             const before = (best?.line ?? []).slice(0, myTurn ? 1 : 2).map((x) => x.uci);
             const scoreTitle = !searching
-              ? `${pct(direct)} pour vous dans les parties Lichess`
+              ? t(`${pct(direct)} pour vous dans les parties Lichess`, `${pct(direct)} for you in the Lichess games`)
               : !best
-                ? 'Pas assez joué pour être calculé : score brut de ce coup seul, classé après les coups calculés.'
+                ? t(
+                    'Pas assez joué pour être calculé : score brut de ce coup seul, classé après les coups calculés.',
+                    'Not played enough to be computed: raw score of this move alone, ranked after the computed moves.',
+                  )
                 : pruned
-                  ? `Écarté plus tôt : calculé moins loin, score moins précis (${pct(direct)} après ce coup seul).`
+                  ? t(
+                      `Écarté plus tôt : calculé moins loin, score moins précis (${pct(direct)} après ce coup seul).`,
+                      `Dropped earlier: computed less far, less precise score (${pct(direct)} after this move alone).`,
+                    )
                   : myTurn
-                    ? `Score espéré à votre niveau (${pct(direct)} après ce coup seul).`
-                    : `Score espéré à votre niveau après ce coup, avec votre meilleure réponse (${pct(direct)} dans ses parties).`;
+                    ? t(`Score espéré à votre niveau (${pct(direct)} après ce coup seul).`, `Expected score at your level (${pct(direct)} after this move alone).`)
+                    : t(
+                        `Score espéré à votre niveau après ce coup, avec votre meilleure réponse (${pct(direct)} dans ses parties).`,
+                        `Expected score at your level after this move, with your best answer (${pct(direct)} in its games).`,
+                      );
             return (
               <Fragment key={m.uci}>
                 <tr
                   className={[prepared ? 'in-rep' : popular ? 'popular' : '', top?.m.uci === m.uci ? 'level-top' : ''].join(' ')}
                   onClick={() => onPick(m.uci)}
-                  title={prepared ? 'Dans votre répertoire' : popular ? 'Coup manquant : joué souvent, pas encore dans votre répertoire' : 'Jouer ce coup'}
+                  title={
+                    prepared
+                      ? t('Dans votre répertoire', 'In your repertoire')
+                      : popular
+                        ? t('Coup manquant : joué souvent, pas encore dans votre répertoire', 'Missing move: often played, not in your repertoire yet')
+                        : t('Jouer ce coup', 'Play this move')
+                  }
                 >
                   <td className="san">
                     <San san={m.san} nags={nagsOf?.(m.uci)} />
                     {engineBest === m.uci && (
-                      <span className="sf-tag" title="Aussi le meilleur coup de Stockfish" aria-label="Aussi le meilleur coup de Stockfish">
+                      <span className="sf-tag" title={t('Aussi le meilleur coup de Stockfish', 'Also Stockfish’s best move')} aria-label={t('Aussi le meilleur coup de Stockfish', 'Also Stockfish’s best move')}>
                         <Icon name="engine" size={12} />
                       </span>
                     )}
@@ -231,9 +272,13 @@ export function LevelTable({
                       {pct(score)}
                     </span>
                   </td>
-                  <td className="count" title={`${n.toLocaleString('fr-FR')} parties · ${share(n, total).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} % des parties`}>
+                  <td className="count" title={t(
+                      `${fmt(n)} parties · ${fmt(share(n, total), { maximumFractionDigits: 1 })} % des parties`,
+                      `${fmt(n)} games · ${fmt(share(n, total), { maximumFractionDigits: 1 })}% of the games`,
+                    )}
+                  >
                     {games(n)}{' '}
-                    <span className="share">({share(n, total).toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} %)</span>
+                    <span className="share">({fmt(share(n, total), { minimumFractionDigits: 1, maximumFractionDigits: 1 })}{t(' %', '%')})</span>
                   </td>
                   <td className="wdl">
                     <WdlBar white={m.white} draws={m.draws} black={m.black} color={color} expected={searching && best ? best.score : undefined} />
@@ -243,7 +288,7 @@ export function LevelTable({
                       <button
                         className={`unfold ${isOpen ? 'open' : ''}`}
                         onClick={() => setOpen(isOpen ? null : m.uci)}
-                        title={isOpen ? 'Masquer la ligne' : 'Voir la ligne attendue et les réponses adverses'}
+                        title={isOpen ? t('Masquer la ligne', 'Hide the line') : t('Voir la ligne attendue et les réponses adverses', 'See the expected line and the opponent’s replies')}
                         aria-expanded={isOpen}
                       >
                         <Icon name="chevron" size={16} />
@@ -256,7 +301,7 @@ export function LevelTable({
                     <td colSpan={5}>
                       <div className="pv">
                         {best.line.slice(0, 10).map((s, i, line) => (
-                          <button key={i} className="link" onClick={() => onPlay(played(line.slice(0, i + 1).map((x) => x.uci)))} title="Jouer jusqu’à ce coup">
+                          <button key={i} className="link" onClick={() => onPlay(played(line.slice(0, i + 1).map((x) => x.uci)))} title={t('Jouer jusqu’à ce coup', 'Play up to this move')}>
                             {num(i)}
                             {s.san}
                           </button>
@@ -288,7 +333,7 @@ export function LevelTable({
       </table>
       <div className="level-footer muted">
         {rows.length > SHOWN && (
-          <button className="link" onClick={() => setAll(!all)}>{all ? 'Moins' : plural(rows.length - SHOWN, 'autre coup', 'autres coups')}</button>
+          <button className="link" onClick={() => setAll(!all)}>{all ? t('Moins', 'Less') : t(plural(rows.length - SHOWN, 'autre coup', 'autres coups'), plural(rows.length - SHOWN, 'other move', 'other moves'))}</button>
         )}
         <span className="spacer" />
         <label className="level-depth" title={why}>
@@ -297,10 +342,13 @@ export function LevelTable({
             type="checkbox"
             checked={depth > 0}
             onChange={(e) => onDepth(e.target.checked ? maxDepth : 0)}
-            aria-label="Profondeur : suivre les lignes probables à votre niveau (sinon : score de chaque coup seul)"
+            aria-label={t(
+              'Profondeur : suivre les lignes probables à votre niveau (sinon : score de chaque coup seul)',
+              'Depth: follow the likely lines at your level (else: score of each move alone)',
+            )}
           />
           <span className="level-info">
-            {`profondeur${depth > 0 && plies > 1 ? ` · ${plies} ½-coups` : ''}${depth > 0 && short ? ` · ${short}` : ''}`}
+            {`${t('profondeur', 'depth')}${depth > 0 && plies > 1 ? ` · ${plies} ${t('½-coups', 'plies')}` : ''}${depth > 0 && short ? ` · ${short}` : ''}`}
           </span>
         </label>
         <span className="level-range">Lichess {range}</span>

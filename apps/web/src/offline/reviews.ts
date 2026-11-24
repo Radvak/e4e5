@@ -8,9 +8,10 @@
  * Answers still queued are replayed on the cards read from the server, so a refetch never brings
  * back a card answered offline.
  */
-import { recallOf, scheduleReview, type Grade } from '@tabiya/core';
+import { recallOf, scheduleReview, type Grade } from '@e4e5/core';
 import type { QueryClient } from '@tanstack/react-query';
-import { createStore, get, set } from 'idb-keyval';
+import { get, set } from 'idb-keyval';
+import { movedStore } from '../legacyNames';
 import { api, ApiError, UNREACHABLE, type ReviewCard } from '../api';
 
 export interface PendingReview {
@@ -23,7 +24,8 @@ export interface PendingReview {
   reviewedAt: number;
 }
 
-const store = createStore('tabiya-outbox', 'reviews');
+// Formerly 'tabiya-outbox' (the app's former name): moved once, before the first read.
+const { store, ready } = movedStore('tabiya-outbox', 'e4e5-outbox', 'reviews');
 const KEY = 'pending';
 let queue: PendingReview[] | null = null;
 let loading: Promise<PendingReview[]> | null = null;
@@ -35,7 +37,8 @@ const notify = () => listeners.forEach((f) => f());
 
 /** The queue, read from the device once. */
 function load(): Promise<PendingReview[]> {
-  loading ??= get<PendingReview[]>(KEY, store)
+  loading ??= ready
+    .then(() => get<PendingReview[]>(KEY, store))
     .catch(() => undefined)
     .then((saved) => (queue = saved ?? []));
   return loading;

@@ -1,6 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { t } from '../i18n';
 
 /** Back from Lichess after "Lier Lichess" in local mode (local/lichessLogin.ts). */
 export function LichessCallback() {
@@ -19,5 +20,5 @@ export function LichessCallback() {
       })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
   }, [qc, navigate]);
-  return error ? <p className="notice error">{error}</p> : <p className="muted">Connexion à Lichess…</p>;
+  return error ? <p className="notice error">{error}</p> : <p className="muted">{t('Connexion à Lichess…', 'Connecting to Lichess…')}</p>;
 }

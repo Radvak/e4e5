@@ -1,4 +1,4 @@
-import { positionFromFen, START_FEN, type Color } from '@tabiya/core';
+import { positionFromFen, START_FEN, type Color } from '@e4e5/core';
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useMemo, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
@@ -7,6 +7,7 @@ import { explorerParams, useSettings } from '../settings';
 import { useTrainingSummary } from '../useTrainingSummary';
 import { useGaps, useGapReach } from '../useGaps';
 import { Button, PageHeader, Tabs, plural } from '../ui';
+import { fmt, t } from '../i18n';
 import { lineText } from '../training/common';
 import { PlayMode, type PlayScore } from '../training/PlayMode';
 import { Progress } from '../training/Progress';
@@ -83,27 +84,27 @@ export function Training({ me }: { me: Me }) {
   const [playScore, setPlayScore] = useState<PlayScore>({ lines: 0, moves: 0, asked: 0, clean: 0 });
   const onReview = (source: Source, fen: string, uci: string, grade: Grade) => review.mutate({ source, fen, uci, grade });
 
-  if (loading || (!id && all.isLoading) || (shortening && gaps.isLoading)) return <p className="muted">Chargement…</p>;
-  if (id && !sources.length) return <p className="error">Impossible de charger le répertoire.</p>;
+  if (loading || (!id && all.isLoading) || (shortening && gaps.isLoading)) return <p className="muted">{t('Chargement…', 'Loading…')}</p>;
+  if (id && !sources.length) return <p className="error">{t('Impossible de charger le répertoire.', 'Could not load the repertoire.')}</p>;
 
   const fromPath = from && sources[0] ? sources[0].positions.find((p) => p.fen === from)?.path : undefined;
-  const title = id ? sources[0]!.name : 'Tous les répertoires actifs';
+  const title = id ? sources[0]!.name : t('Tous les répertoires actifs', 'All active repertoires');
 
   return (
     <div className="training">
       <PageHeader
         back={id ? `/r/${id}` : undefined}
-        title="Entraînement"
+        title={t('Entraînement', 'Training')}
         subtitle={
           mode === 'review'
-            ? `${title} · ${plural(counts.dueLines, 'ligne', 'lignes')} à revoir · ${plural(counts.freshLines, 'nouvelle', 'nouvelles')}${
+            ? `${title} · ${t(`${plural(counts.dueLines, 'ligne', 'lignes')} à revoir`, `${plural(counts.dueLines, 'line', 'lines')} due`)} · ${t(plural(counts.freshLines, 'nouvelle', 'nouvelles'), `${fmt(counts.freshLines)} new`)}${
                 counts.reviewed > 0
-                  ? ` · ${plural(counts.reviewed, 'réponse', 'réponses')}${counts.asked > 0 ? ` (${Math.round((100 * counts.firstTry) / counts.asked)} % du premier coup)` : ''}`
+                  ? ` · ${t(plural(counts.reviewed, 'réponse', 'réponses'), plural(counts.reviewed, 'answer', 'answers'))}${counts.asked > 0 ? firstTryText(counts.firstTry, counts.asked) : ''}`
                   : ''
               }`
             : `${title}${
                 playScore.moves > 0
-                  ? `${playScore.lines > 0 ? ` · ${plural(playScore.lines, 'ligne', 'lignes')}` : ''} · ${plural(playScore.moves, 'coup', 'coups')}${playScore.asked > 0 ? ` (${Math.round((100 * playScore.clean) / playScore.asked)} % du premier coup)` : ''}`
+                  ? `${playScore.lines > 0 ? ` · ${t(plural(playScore.lines, 'ligne', 'lignes'), plural(playScore.lines, 'line', 'lines'))}` : ''} · ${t(plural(playScore.moves, 'coup', 'coups'), plural(playScore.moves, 'move', 'moves'))}${playScore.asked > 0 ? firstTryText(playScore.clean, playScore.asked) : ''}`
                   : ''
               }`
         }
@@ -114,23 +115,29 @@ export function Training({ me }: { me: Me }) {
           value={mode}
           onChange={setMode}
           tabs={[
-            { id: 'review', label: 'Réviser' },
-            { id: 'play', label: 'Se tester' },
+            { id: 'review', label: t('Réviser', 'Review') },
+            { id: 'play', label: t('Se tester', 'Test yourself') },
           ]}
         />
       </div>
       {from && (
         <p className="muted from">
-          Seulement les lignes après <strong>{fromPath ? lineText(fromPath) : 'cette position'}</strong>.{' '}
-          <Button size="sm" variant="ghost" onClick={() => setParams({})}>Tout entraîner</Button>
+          {t(
+            <>Seulement les lignes après <strong>{fromPath ? lineText(fromPath) : 'cette position'}</strong>.</>,
+            <>Only the lines after <strong>{fromPath ? lineText(fromPath) : 'this position'}</strong>.</>,
+          )}{' '}
+          <Button size="sm" variant="ghost" onClick={() => setParams({})}>{t('Tout entraîner', 'Train everything')}</Button>
         </p>
       )}
       {shortening && <ShortenNotice gaps={gaps} colors={[...new Set(sources.map((s) => s.color))]} />}
 
       <p className="muted small-text mode-hint">
         {mode === 'review'
-          ? 'Les positions à revoir aujourd’hui, au bon moment pour les retenir.'
-          : 'Sur ce que vous avez appris, sans aide : l’adversaire joue les coups les plus fréquents à votre niveau, comme en partie.'}
+          ? t('Les positions à revoir aujourd’hui, au bon moment pour les retenir.', 'The positions due today, at the right time to remember them.')
+          : t(
+              'Sur ce que vous avez appris, sans aide : l’adversaire joue les coups les plus fréquents à votre niveau, comme en partie.',
+              'On what you have learnt, without help: the opponent plays the most frequent moves at your level, as in a game.',
+            )}
       </p>
 
       {mode === 'review' ? (
@@ -165,14 +172,23 @@ export function Training({ me }: { me: Me }) {
   );
 }
 
+/** " (62 % du premier coup)" / " (62% first try)". */
+const firstTryText = (n: number, asked: number) => {
+  const pct = Math.round((100 * n) / asked);
+  return t(` (${pct} % du premier coup)`, ` (${pct}% first try)`);
+};
+
 /** Without statistics (error), nothing is cut: says so. */
 function ShortenNotice({ gaps, colors }: { gaps: ReturnType<typeof useGaps>; colors: Color[] }) {
   const reports = colors.map((c) => gaps.data?.[c]).filter((r) => !!r);
-  const settings = <Link to="/settings#entrainement">Paramètres</Link>;
+  const settings = <Link to="/settings#entrainement">{t('Paramètres', 'Settings')}</Link>;
   if (gaps.isError || (gaps.data && !reports.length)) {
     return (
       <p className="notice error small-text">
-        Statistiques indisponibles : les lignes ne sont pas raccourcies, toutes les positions sont entraînées ({settings}).
+        {t(
+          <>Statistiques indisponibles : les lignes ne sont pas raccourcies, toutes les positions sont entraînées ({settings}).</>,
+          <>Statistics unavailable: the lines are not shortened, all the positions are trained ({settings}).</>,
+        )}
       </p>
     );
   }

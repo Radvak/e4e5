@@ -1,3 +1,5 @@
+// First: the data kept under the app's former name (Tabiya) moves to e4e5's names.
+import './legacyNames';
 import { onlineManager, QueryClient } from '@tanstack/react-query';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { StrictMode } from 'react';

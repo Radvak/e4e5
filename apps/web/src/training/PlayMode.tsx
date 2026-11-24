@@ -1,4 +1,4 @@
-import { chooseReply, pathTo, Repertoire, START_FEN, type Color, type ExplorerResponse, type RepMove, type TrainingPosition } from '@tabiya/core';
+import { chooseReply, pathTo, Repertoire, START_FEN, type Color, type ExplorerResponse, type RepMove, type TrainingPosition } from '@e4e5/core';
 import type { Key } from 'chessground/types';
 import type { DrawShape } from 'chessground/draw';
 import { useNavigate } from 'react-router-dom';
@@ -12,6 +12,7 @@ import { answerArrows, REPLY_MS, savedSession, saveSession } from './common';
 import { DrillActions, LineDone, QuizLine, SwipeBar, useMyMovesHere } from './DrillParts';
 import { outcomeOf } from './Feedback';
 import type { Source } from './useTrainingSources';
+import { t } from '../i18n';
 
 /** Waiting time for statistics before choosing a reply without them. */
 const STATS_TIMEOUT_MS = 1500;
@@ -327,9 +328,14 @@ export function PlayMode({
   if (!playable.length) {
     return (
       <div className="panel done">
-        <h3>Rien à tester pour l’instant</h3>
-        <p className="muted">« Se tester » porte sur ce que vous avez appris. Apprenez d’abord quelques positions dans « Réviser ».</p>
-        {onLearn && <button className="primary" onClick={onLearn}>Réviser</button>}
+        <h3>{t('Rien à tester pour l’instant', 'Nothing to test for now')}</h3>
+        <p className="muted">
+          {t(
+            '« Se tester » porte sur ce que vous avez appris. Apprenez d’abord quelques positions dans « Réviser ».',
+            '“Test yourself” covers what you have learnt. First learn a few positions in “Review”.',
+          )}
+        </p>
+        {onLearn && <button className="primary" onClick={onLearn}>{t('Réviser', 'Review')}</button>}
       </div>
     );
   }
@@ -347,18 +353,18 @@ export function PlayMode({
         />
         {clock.paused && (
           <button className="pause-overlay" onClick={() => clock.setPaused(false)}>
-            ▶ Reprendre
+            ▶ {t('Reprendre', 'Resume')}
           </button>
         )}
-        {line?.phase === 'end' && line.history.length > 0 && <LineDone text="Fin de ce que vous connaissez" />}
+        {line?.phase === 'end' && line.history.length > 0 && <LineDone text={t('Fin de ce que vous connaissez', 'End of what you know')} />}
         <AnswerTimer clock={clock} />
         {/* Same as the review under the board: the line, the swipe bar, Indice / Solution and Explorer. */}
         <QuizLine moves={line?.history ?? []} firstPly={plyOf(root)} />
-        <SwipeBar onSkip={skip} label="changer de ligne" />
+        <SwipeBar onSkip={skip} label={t('changer de ligne', 'change line')} />
         <DrillActions
           hinted={!!line && (line.hinted || line.revealed)}
           disabled={line?.phase !== 'ask' || clock.paused}
-          solutionTitle="Jouer le coup (compté comme aidé), puis la ligne continue"
+          solutionTitle={t('Jouer le coup (compté comme aidé), puis la ligne continue', 'Play the move (counted as helped), then the line goes on')}
           onHint={hint}
           onExplorer={toExplorer}
         />

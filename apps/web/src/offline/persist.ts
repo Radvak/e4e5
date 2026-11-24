@@ -9,15 +9,17 @@
  */
 import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister';
 import type { Query, QueryClient } from '@tanstack/react-query';
-import { createStore, del, get, set } from 'idb-keyval';
+import { del, get, set } from 'idb-keyval';
+import { movedStore } from '../legacyNames';
 
-const store = createStore('tabiya-cache', 'queries');
+// Formerly 'tabiya-cache' (the app's former name): moved once.
+const { store, ready } = movedStore('tabiya-cache', 'e4e5-cache', 'queries');
 
 export const persister = createAsyncStoragePersister({
   storage: {
-    getItem: (key) => get<string>(key, store).then((v) => v ?? null),
-    setItem: (key, value: string) => set(key, value, store),
-    removeItem: (key) => del(key, store),
+    getItem: (key) => ready.then(() => get<string>(key, store)).then((v) => v ?? null),
+    setItem: (key, value: string) => ready.then(() => set(key, value, store)),
+    removeItem: (key) => ready.then(() => del(key, store)),
   },
   key: 'queries',
   throttleTime: 2000,

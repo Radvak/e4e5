@@ -3,22 +3,23 @@
  * prepared ones (green), actions (review now, ignore, Explorer), and a detail with the games.
  * Swipe on touch screens: right to review, left to ignore.
  */
-import { playSanOn, positionFromFen } from '@tabiya/core';
+import { playSanOn, positionFromFen } from '@e4e5/core';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 import { api, ApiError, type GamesReport, type InboxItem, type RepertoireSummary, type Results } from '../api';
 import { lineText, moveText } from '../chessText';
+import { locale, t } from '../i18n';
 import { Button, plural } from '../ui';
 import { MiniBoard, type MiniArrow } from './MiniBoard';
 import { SwipeRow } from './SwipeRow';
 
-const pct = (x: number) => `${Math.round(100 * x)} %`;
+const pct = (x: number) => t(`${Math.round(100 * x)} %`, `${Math.round(100 * x)}%`);
 const score = (r: Results) => {
   const n = r.win + r.draw + r.loss;
   return n ? (r.win + r.draw / 2) / n : 0;
 };
-const date = (iso: string) => new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
-const RESULT = { win: 'gagnée', draw: 'nulle', loss: 'perdue' } as const;
+const date = (iso: string) => new Date(iso).toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' });
+const RESULT = t({ win: 'gagnée', draw: 'nulle', loss: 'perdue' }, { win: 'won', draw: 'draw', loss: 'lost' });
 
 /** The report without one inbox item (shown at once, before the server's new report). */
 function withoutItem(r: GamesReport, item: InboxItem): GamesReport {
@@ -57,15 +58,18 @@ export function GameErrorCard({ item, rep, onDone }: { item: InboxItem; rep: Rep
     await api.dismissInbox(item.key);
     return learnt;
   };
-  const position = lineText(item.line.sans) || 'la position initiale';
+  const position = lineText(item.line.sans) || t('la position initiale', 'the starting position');
   const later = useMutation({
     mutationFn: sendToReview,
     onSuccess: (learnt) => {
       hide();
       onDone(
         learnt
-          ? `Ajoutée à vos révisions du jour : après ${position}.`
-          : `Après ${position} : position pas encore apprise, elle viendra avec vos nouvelles lignes.`,
+          ? t(`Ajoutée à vos révisions du jour : après ${position}.`, `Added to today's reviews: after ${position}.`)
+          : t(
+              `Après ${position} : position pas encore apprise, elle viendra avec vos nouvelles lignes.`,
+              `After ${position}: position not learnt yet, it will come with your new lines.`,
+            ),
       );
     },
   });
@@ -97,18 +101,18 @@ export function GameErrorCard({ item, rep, onDone }: { item: InboxItem; rep: Rep
 
   const head = (
     <div className="inbox-head">
-      <span className="muted inbox-line">{lineText(line) || 'Position initiale'} </span>
+      <span className="muted inbox-line">{lineText(line) || t('Position initiale', 'Starting position')} </span>
       <span className="hole-move">{moveText(line, item.move.san)}</span>
     </div>
   );
   const actions = (
     <div className="row inbox-actions">
-      <Button size="sm" variant="primary" disabled={busy} onClick={() => later.mutate()} title="Ajouter cette position à vos révisions du jour">
-        À réviser
+      <Button size="sm" variant="primary" disabled={busy} onClick={() => later.mutate()} title={t('Ajouter cette position à vos révisions du jour', "Add this position to today's reviews")}>
+        {t('À réviser', 'Review')}
       </Button>
-      <Button size="sm" disabled={busy} onClick={() => dismiss.mutate()} title="Masquer cet élément">Ignorer</Button>
-      <Button size="sm" variant="ghost" icon="compass" to={explorer} title="Voir cette position dans l’Explorer (statistiques, moteur, vos répertoires)">
-        Explorer
+      <Button size="sm" disabled={busy} onClick={() => dismiss.mutate()} title={t('Masquer cet élément', 'Hide this item')}>{t('Ignorer', 'Ignore')}</Button>
+      <Button size="sm" variant="ghost" icon="compass" to={explorer} title={t('Voir cette position dans l’Explorer (statistiques, moteur, vos répertoires)', 'See this position in Explore (statistics, engine, your repertoires)')}>
+        {t('Explorer', 'Explore')}
       </Button>
     </div>
   );
@@ -116,17 +120,17 @@ export function GameErrorCard({ item, rep, onDone }: { item: InboxItem; rep: Rep
 
   return (
     // On touch screens: swipe left to ignore, right to review later.
-    <SwipeRow right={{ label: 'À réviser', action: () => later.mutateAsync() }} left={{ label: 'Ignorer', action: () => dismiss.mutateAsync() }}>
+    <SwipeRow right={{ label: t('À réviser', 'Review'), action: () => later.mutateAsync() }} left={{ label: t('Ignorer', 'Ignore'), action: () => dismiss.mutateAsync() }}>
       {/* The whole card opens the detail, except its buttons and links. */}
       <article className="card game-card clickable" onClick={(e) => !(e.target as HTMLElement).closest('button, a') && open()}>
-        <button type="button" className="thumb-button" onClick={open} aria-label="Voir le détail et les parties">
+        <button type="button" className="thumb-button" onClick={open} aria-label={t('Voir le détail et les parties', 'See the details and the games')}>
           <MiniBoard fen={item.fen} orientation={color} arrows={arrows} />
         </button>
         <div className="game-card-body">
           {head}
           <div className="row small-text game-card-meta">
             <span className="rep-tag"><span className={`dot ${color}`} /> {rep?.name ?? '?'}</span>
-            <span className="muted">{plural(item.games, 'partie', 'parties')} · {pct(score(item.results))}</span>
+            <span className="muted">{t(plural(item.games, 'partie', 'parties'), plural(item.games, 'game', 'games'))} · {pct(score(item.results))}</span>
           </div>
           {actions}
           {errorText}
@@ -146,14 +150,23 @@ export function GameErrorCard({ item, rep, onDone }: { item: InboxItem; rep: Rep
             <div className="game-detail-content stack">
               <div className="game-detail-top">
                 <span className="rep-tag"><span className={`dot ${color}`} /> {rep?.name ?? '?'}</span>
-                <Button size="sm" variant="ghost" onClick={() => dialog.current?.close()} title="Fermer">✕</Button>
+                <Button size="sm" variant="ghost" onClick={() => dialog.current?.close()} title={t('Fermer', 'Close')}>✕</Button>
               </div>
               <MiniBoard fen={item.fen} orientation={color} arrows={arrows} className="mini-board-large" />
               {head}
               <p className="inbox-body">
-                Vous avez joué <strong>{moveText(line, item.move.san, true)}</strong> au lieu de{' '}
-                <strong>{item.expected.map((s) => moveText(line, s, true)).join(' ou ')}</strong>.{' '}
-                {plural(item.games, 'partie', 'parties')}, score {pct(score(item.results))}.
+                {t(
+                  <>
+                    Vous avez joué <strong>{moveText(line, item.move.san, true)}</strong> au lieu de{' '}
+                    <strong>{item.expected.map((s) => moveText(line, s, true)).join(' ou ')}</strong>.{' '}
+                    {plural(item.games, 'partie', 'parties')}, score {pct(score(item.results))}.
+                  </>,
+                  <>
+                    You played <strong>{moveText(line, item.move.san, true)}</strong> instead of{' '}
+                    <strong>{item.expected.map((s) => moveText(line, s, true)).join(' or ')}</strong>.{' '}
+                    {plural(item.games, 'game', 'games')}, score {pct(score(item.results))}.
+                  </>,
+                )}
               </p>
               {actions}
               {errorText}
@@ -168,7 +181,7 @@ export function GameErrorCard({ item, rep, onDone }: { item: InboxItem; rep: Rep
                         </td>
                         <td className={`result ${g.result}`}>{RESULT[g.result]}</td>
                         <td>
-                          <a className="small-text" href={g.url} target="_blank" rel="noreferrer">partie ↗</a>
+                          <a className="small-text" href={g.url} target="_blank" rel="noreferrer">{t('partie', 'game')} ↗</a>
                         </td>
                       </tr>
                     ))}

@@ -13,7 +13,7 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { parseArgs } from 'node:util';
 import { gzipSync } from 'node:zlib';
-import { bucketCells, decodePositionCounts, encodePositionStats, gamesOf, keepCells, RATING_BUCKETS } from '@tabiya/core';
+import { bucketCells, decodePositionCounts, encodePositionStats, gamesOf, keepCells, RATING_BUCKETS } from '@e4e5/core';
 
 const { values } = parseArgs({ options: { in: { type: 'string' }, out: { type: 'string' }, min: { type: 'string', default: '50' } } });
 if (!values.in || !values.out) {

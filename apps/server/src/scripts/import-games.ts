@@ -13,7 +13,7 @@ import { parseArgs } from 'node:util';
 import { eq } from 'drizzle-orm';
 import { db, runMigrations } from '../db/client.js';
 import { gameSyncs, users } from '../db/schema.js';
-import { fromChesscom, store, type ChesscomGame, type SyncJob } from '@tabiya/data';
+import { fromChesscom, store, type ChesscomGame, type SyncJob } from '@e4e5/data';
 
 const { values } = parseArgs({ options: { login: { type: 'string' }, chesscom: { type: 'string' }, dir: { type: 'string' } } });
 if (!values.login || !values.chesscom || !values.dir) {

@@ -1,4 +1,4 @@
-import { countSummary, recallOf, type PreparedSummary, type RepertoireSummaryCounts } from '@tabiya/core';
+import { countSummary, recallOf, type PreparedSummary, type RepertoireSummaryCounts } from '@e4e5/core';
 import { useQueries, useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { api, type Me } from './api';

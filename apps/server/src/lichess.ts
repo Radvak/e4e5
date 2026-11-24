@@ -1,8 +1,8 @@
-/** Minimal Lichess API client (server side): OAuth (shared, @tabiya/data lichessAccount.ts), explorer queue. */
-import { exchangeCode as sharedExchangeCode, getAccount as sharedGetAccount, type LichessAccount } from '@tabiya/data';
+/** Minimal Lichess API client (server side): OAuth (shared, @e4e5/data lichessAccount.ts), explorer queue. */
+import { exchangeCode as sharedExchangeCode, getAccount as sharedGetAccount, type LichessAccount } from '@e4e5/data';
 import { env } from './env.js';
 
-const UA = 'tabiya';
+const UA = 'e4e5';
 
 export type { LichessAccount };
 

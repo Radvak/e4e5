@@ -5,7 +5,7 @@
  * the server (its addresses, User-Agent and lichess.org queue, see GameSources) and the app
  * without a server (the official API allows other web pages: CORS *). Answers are kept a while.
  */
-import { pgnChapters, type Color, type PgnChapter } from '@tabiya/core';
+import { pgnChapters, type Color, type PgnChapter } from '@e4e5/core';
 import type { GameSources } from './gameSources.js';
 
 /** A study in a player's list (the API gives no likes, topics nor side). */

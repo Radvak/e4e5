@@ -10,7 +10,7 @@
  * needs without them can be fetched in the background (`prefetch`, server): the client asks again
  * until nothing is pending, and each pass may reach deeper positions.
  */
-import { findGaps, gapCandidate, LINE_DEPTHS, Repertoire, rankRepertoires, turnOf, type Color, type StoredStats } from '@tabiya/core';
+import { findGaps, gapCandidate, LINE_DEPTHS, Repertoire, rankRepertoires, turnOf, type Color, type StoredStats } from '@e4e5/core';
 import { eq, inArray } from 'drizzle-orm';
 import type { Db } from './db.js';
 import { graphColumns, repertoires, repMoves } from './schema.js';

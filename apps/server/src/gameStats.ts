@@ -9,7 +9,7 @@
  */
 import { existsSync } from 'node:fs';
 import { DatabaseSync, type StatementSync } from 'node:sqlite';
-import { cellsOf, decodePositionStats, playUci, zobristOfFen, type ExplorerResponse } from '@tabiya/core';
+import { cellsOf, decodePositionStats, playUci, zobristOfFen, type ExplorerResponse } from '@e4e5/core';
 import { env } from './env.js';
 
 /** Months of the games (YYYY-MM), the period to ask the Lichess explorer for the same scale. */

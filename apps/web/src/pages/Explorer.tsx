@@ -1,4 +1,4 @@
-import { playSanOn, playUci, positionFromFen, START_FEN, totalGames, type Color, type PlayedMove } from '@tabiya/core';
+import { playSanOn, playUci, positionFromFen, START_FEN, totalGames, type Color, type PlayedMove } from '@e4e5/core';
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { DrawShape } from 'chessground/draw';
 import type { Key } from 'chessground/types';
@@ -21,8 +21,9 @@ import { useMoveDrag, type DropTarget } from '../components/useMoveDrag';
 import { useLongPress } from '../components/useLongPress';
 import { MoveActionsDialog } from '../components/MoveActionsDialog';
 import { useFlip } from '../components/useFlip';
+import { lang, t } from '../i18n';
 import { explorerParams, rangeLabel, speedsLabel, useSettings } from '../settings';
-import { Icon, PageHeader } from '../ui';
+import { Icon, PageHeader, plural } from '../ui';
 
 /** Moves from the initial position, as UCI, for links. */
 const ucis = (line: PlayedMove[]) => line.map((m) => m.uci).join(',');
@@ -322,12 +323,13 @@ export function Explorer({ me }: { me: Me }) {
   });
 
   const last = line[ply - 1];
+  const accounts = [me.lichess && `Lichess ${me.lichess.username}`, me.chesscom && `Chess.com ${me.chesscom.username}`].filter(Boolean).join(', ');
 
   return (
     <>
     <PageHeader
-      title="Explorer"
-      subtitle="Échiquier libre, vos répertoires, statistiques et moteur"
+      title={t('Explorer', 'Explore')}
+      subtitle={t('Échiquier libre, vos répertoires, statistiques et moteur', 'Free board, your repertoires, statistics and engine')}
     />
     <div className="editor">
       <div className="editor-board">
@@ -338,11 +340,11 @@ export function Explorer({ me }: { me: Me }) {
           <Board fen={fen} orientation={orientation} lastMove={last?.uci} shapes={shapes} onMove={play} />
         </div>
         <div className="nav">
-          <button onClick={() => goTo(0)} title="Début (Origine)">⏮</button>
-          <button onClick={() => goTo(ply - 1)} title="Reculer (←)">◀</button>
-          <button onClick={() => goTo(ply + 1)} title="Avancer (→)">▶</button>
-          <button onClick={() => goTo(line.length)} title="Fin de la ligne (Fin)">⏭</button>
-          <button onClick={flip} title="Retourner l’échiquier (f)">⇅</button>
+          <button onClick={() => goTo(0)} title={t('Début (Origine)', 'Start (Home)')}>⏮</button>
+          <button onClick={() => goTo(ply - 1)} title={t('Reculer (←)', 'Back (←)')}>◀</button>
+          <button onClick={() => goTo(ply + 1)} title={t('Avancer (→)', 'Forward (→)')}>▶</button>
+          <button onClick={() => goTo(line.length)} title={t('Fin de la ligne (Fin)', 'End of the line (End)')}>⏭</button>
+          <button onClick={flip} title={t('Retourner l’échiquier (f)', 'Flip the board (f)')}>⇅</button>
           <AnalysisToggle enabled={analysisOn} onToggle={toggleAnalysis} />
         </div>
         {/* The two tools in swipeable cards, one in view at a time (ToolCards). */}
@@ -405,7 +407,7 @@ export function Explorer({ me }: { me: Me }) {
             />
           ) : (
             <div className="moves-path">
-              {line.length === 0 && <span className="muted">Position initiale</span>}
+              {line.length === 0 && <span className="muted">{t('Position initiale', 'Starting position')}</span>}
               {line.map((m, i) => (
                 <button
                   key={i}
@@ -416,21 +418,31 @@ export function Explorer({ me }: { me: Me }) {
                   <San san={m.san} nags={pathNags[i]} />
                 </button>
               ))}
-              <button className="line-edit" onClick={() => setEditing(true)} title="Taper ou coller une ligne (/)" aria-label="Taper ou coller une ligne">
+              <button className="line-edit" onClick={() => setEditing(true)} title={t('Taper ou coller une ligne (/)', 'Type or paste a line (/)')} aria-label={t('Taper ou coller une ligne', 'Type or paste a line')}>
                 <Icon name="pencil" size={15} />
               </button>
             </div>
           )}
           {/* The repertoires containing the position on the board (a link opens each one here). */}
-          {posReps.data && posReps.data.length === 0 && <p className="muted small-text rep-none">Aucun répertoire {orientation === 'white' ? 'Blancs' : 'Noirs'} ne contient cette position.</p>}
+          {posReps.data && posReps.data.length === 0 && (
+            <p className="muted small-text rep-none">
+              {t(
+                `Aucun répertoire ${orientation === 'white' ? 'Blancs' : 'Noirs'} ne contient cette position.`,
+                `No ${orientation === 'white' ? 'White' : 'Black'} repertoire contains this position.`,
+              )}
+            </p>
+          )}
           {posReps.data && posReps.data.length > 0 && (
             <div className="rep-tags rep-at">
-              {[...posReps.data].sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' })).map((r) => (
+              {[...posReps.data].sort((a, b) => a.name.localeCompare(b.name, lang, { sensitivity: 'base' })).map((r) => (
                 <Link
                   key={r.repertoireId}
                   className="rep-tag"
                   to={`/r/${r.repertoireId}${shown.length ? `?${new URLSearchParams({ line: ucis(shown) })}` : ''}`}
-                  title={`Ouvrir ${r.name} sur cette position${r.moves ? ` (${r.moves} coup${r.moves > 1 ? 's' : ''} préparé${r.moves > 1 ? 's' : ''} ici)` : ' (fin de sa ligne)'}`}
+                  title={t(
+                    `Ouvrir ${r.name} sur cette position${r.moves ? ` (${r.moves} coup${r.moves > 1 ? 's' : ''} préparé${r.moves > 1 ? 's' : ''} ici)` : ' (fin de sa ligne)'}`,
+                    `Open ${r.name} at this position${r.moves ? ` (${plural(r.moves, 'move', 'moves')} prepared here)` : ' (end of its line)'}`,
+                  )}
                 >
                   <span className={`dot inline ${r.color}`} /> {r.name}
                 </Link>
@@ -463,7 +475,10 @@ export function Explorer({ me }: { me: Me }) {
                         .filter(Boolean)
                         .join(' ')}
                       style={drag?.id === i ? { transform: `translateY(${drag.dy}px)` } : undefined}
-                      title={`Jouer ${g.san} (${g.reps.map((r) => r.name).join(', ')}) · appui long : mettre en pause, supprimer`}
+                      title={t(
+                        `Jouer ${g.san} (${g.reps.map((r) => r.name).join(', ')}) · appui long : mettre en pause, supprimer`,
+                        `Play ${g.san} (${g.reps.map((r) => r.name).join(', ')}) · long press: pause, delete`,
+                      )}
                       onClick={() => play(g.uci)}
                       {...longPress(() => setActing(g))}
                     >
@@ -472,15 +487,15 @@ export function Explorer({ me }: { me: Me }) {
                           <span className="move-num">{ply % 2 === 0 ? `${ply / 2 + 1}.` : `${(ply + 1) / 2}…`}</span>
                           <San san={g.san} nags={g.nags} />
                         </button>
-                        {g.main && nextMoves.filter((x) => !x.paused).length > 1 && <span className="badge">principal</span>}
+                        {g.main && nextMoves.filter((x) => !x.paused).length > 1 && <span className="badge">{t('principal', 'main')}</span>}
                         {comments.map((r) => (
                           <div key={r.repertoireId} className="comment move-comment">
-                            {comments.length > 1 && <span className="muted">{r.name} : </span>}
+                            {comments.length > 1 && <span className="muted">{t(`${r.name} : `, `${r.name}: `)}</span>}
                             {r.comment}
                           </div>
                         ))}
                       </div>
-                      <span className="grip" title="Glisser : en haut, coup principal ; en bas, en pause" {...handle(i)}>
+                      <span className="grip" title={t('Glisser : en haut, coup principal ; en bas, en pause', 'Drag: to the top, main move; to the bottom, paused')} {...handle(i)}>
                         <Icon name="grip" size={16} />
                       </span>
                     </li>
@@ -497,34 +512,58 @@ export function Explorer({ me }: { me: Me }) {
               san={acting.san}
               nags={acting.nags}
               paused={acting.paused}
-              where="de tous les répertoires"
+              where={t('de tous les répertoires', 'from all repertoires')}
               onPause={(pause) => arrange.mutate(acting.reps.filter((r) => r.paused !== pause).map((r) => ({ r, patch: { paused: pause } })))}
               onDelete={() => removeMove.mutate(acting.reps)}
               onClose={() => setActing(null)}
             />
           )}
           <p className="muted small-text keys">
-            <kbd>←</kbd><kbd>→</kbd> naviguer · <kbd>f</kbd> retourner · <kbd>a</kbd> analyse · <kbd>/</kbd> taper une ligne (ou collez-la)
+            {t(
+              <>
+                <kbd>←</kbd><kbd>→</kbd> naviguer · <kbd>f</kbd> retourner · <kbd>a</kbd> analyse · <kbd>/</kbd> taper une ligne (ou collez-la)
+              </>,
+              <>
+                <kbd>←</kbd><kbd>→</kbd> navigate · <kbd>f</kbd> flip · <kbd>a</kbd> analysis · <kbd>/</kbd> type a line (or paste it)
+              </>,
+            )}
           </p>
         </section>
 
 
         {/* My games in this position: the moves I played, each one unfolding into its games. */}
         <section className="panel">
-          <h3>Mes parties</h3>
+          <h3>{t('Mes parties', 'My games')}</h3>
           {!hasAccount ? (
             <p className="muted">
-              Liez Lichess ou indiquez votre pseudo Chess.com dans <Link to="/compte#comptes">Mon compte</Link> pour voir vos propres parties.
+              {t(
+                <>
+                  Liez Lichess ou indiquez votre pseudo Chess.com dans <Link to="/compte#comptes">Mon compte</Link> pour voir vos propres parties.
+                </>,
+                <>
+                  Link Lichess or enter your Chess.com username in <Link to="/compte#comptes">My account</Link> to see your own games.
+                </>,
+              )}
             </p>
           ) : (
             <p className="muted small-text">
-              Vos parties synchronisées ({[me.lichess && `Lichess ${me.lichess.username}`, me.chesscom && `Chess.com ${me.chesscom.username}`].filter(Boolean).join(', ')}) avec les{' '}
-              <strong>{orientation === 'white' ? 'Blancs' : 'Noirs'}</strong>, {speedsLabel(gamesSpeeds)}, {gamesDays ? `${gamesDays} derniers jours` : 'toutes'} (
-              <Link to="/settings">Parties analysées</Link>) — retournez l’échiquier pour vos parties avec les {orientation === 'white' ? 'Noirs' : 'Blancs'}.
-              {mine.data && ply >= mine.data.maxPly && ` Seuls les ${mine.data.maxPly / 2} premiers coups sont indexés.`}
+              {t(
+                <>
+                  Vos parties synchronisées ({accounts}) avec les{' '}
+                  <strong>{orientation === 'white' ? 'Blancs' : 'Noirs'}</strong>, {speedsLabel(gamesSpeeds)}, {gamesDays ? `${gamesDays} derniers jours` : 'toutes'} (
+                  <Link to="/settings">Parties analysées</Link>) — retournez l’échiquier pour vos parties avec les {orientation === 'white' ? 'Noirs' : 'Blancs'}.
+                  {mine.data && ply >= mine.data.maxPly && ` Seuls les ${mine.data.maxPly / 2} premiers coups sont indexés.`}
+                </>,
+                <>
+                  Your synced games ({accounts}) with{' '}
+                  <strong>{orientation === 'white' ? 'White' : 'Black'}</strong>, {speedsLabel(gamesSpeeds)}, {gamesDays ? `last ${gamesDays} days` : 'all'} (
+                  <Link to="/settings">Analysed games</Link>) — flip the board for your games with {orientation === 'white' ? 'Black' : 'White'}.
+                  {mine.data && ply >= mine.data.maxPly && ` Only the first ${mine.data.maxPly / 2} moves are indexed.`}
+                </>,
+              )}
             </p>
           )}
-          {mine.isLoading && <p className="muted">Chargement de vos parties…</p>}
+          {mine.isLoading && <p className="muted">{t('Chargement de vos parties…', 'Loading your games…')}</p>}
           {mine.error && <ErrorText error={mine.error} />}
           {mine.data && (
             <MoveTable
@@ -537,7 +576,7 @@ export function Explorer({ me }: { me: Me }) {
               detail={(uci) => <GameRows games={mine.data!.recentGames.filter((g) => g.uci === uci)} onOpen={(id) => loadGame.mutate(id)} />}
             />
           )}
-          {loadGame.isPending && <p className="muted small-text">Chargement de la partie…</p>}
+          {loadGame.isPending && <p className="muted small-text">{t('Chargement de la partie…', 'Loading the game…')}</p>}
           {loadGame.error && <ErrorText error={loadGame.error} />}
         </section>
       </div>
@@ -563,12 +602,12 @@ const RESULT = { white: '1-0', black: '0-1' } as const;
 
 /** My games, one per row (the most recent first): tap one to replay it on the board. */
 function GameRows({ games, onOpen }: { games: MyGameRef[]; onOpen: (id: string) => void }) {
-  if (!games.length) return <p className="muted small-text">Aucune partie.</p>;
+  if (!games.length) return <p className="muted small-text">{t('Aucune partie.', 'No games.')}</p>;
   return (
     <table className="lines games">
       <tbody>
         {games.map((g) => (
-          <tr key={g.id} className="clickable" onClick={() => onOpen(g.id)} title="Rejouer cette partie sur l’échiquier">
+          <tr key={g.id} className="clickable" onClick={() => onOpen(g.id)} title={t('Rejouer cette partie sur l’échiquier', 'Replay this game on the board')}>
             <td>
               {g.white.name} <span className="muted">{g.white.rating}</span>
             </td>
@@ -583,7 +622,7 @@ function GameRows({ games, onOpen }: { games: MyGameRef[]; onOpen: (id: string) 
                 target="_blank"
                 rel="noreferrer"
                 onClick={(e) => e.stopPropagation()}
-                title={g.source === 'chesscom' ? 'Ouvrir sur Chess.com' : 'Ouvrir sur Lichess'}
+                title={g.source === 'chesscom' ? t('Ouvrir sur Chess.com', 'Open on Chess.com') : t('Ouvrir sur Lichess', 'Open on Lichess')}
               >
                 ↗
               </a>
@@ -596,7 +635,7 @@ function GameRows({ games, onOpen }: { games: MyGameRef[]; onOpen: (id: string) 
 }
 
 function ErrorText({ error }: { error: unknown }) {
-  if (error instanceof ApiError && error.status === 404) return <p className="muted">Aucune statistique pour cette position.</p>;
+  if (error instanceof ApiError && error.status === 404) return <p className="muted">{t('Aucune statistique pour cette position.', 'No statistics for this position.')}</p>;
   return <p className="error small-text">{error instanceof Error ? error.message : String(error)}</p>;
 }
 
@@ -630,10 +669,10 @@ function LineInput({ initial, onJump, onCancel }: { initial: string; onJump: (mo
         onKeyDown={(e) => e.key === 'Escape' && onCancel()}
         onBlur={onCancel}
         placeholder="1. e4 c5 2. Nf3"
-        aria-label="Aller à une ligne : coups de la position initiale"
+        aria-label={t('Aller à une ligne : coups de la position initiale', 'Go to a line: moves from the starting position')}
         aria-invalid={error}
       />
-      {error && <span className="error small-text">Coups illégaux ou mal écrits (exemple : 1. e4 c5 2. Nf3).</span>}
+      {error && <span className="error small-text">{t('Coups illégaux ou mal écrits (exemple : 1. e4 c5 2. Nf3).', 'Illegal or badly written moves (example: 1. e4 c5 2. Nf3).')}</span>}
     </form>
   );
 }

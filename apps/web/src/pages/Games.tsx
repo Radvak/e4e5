@@ -1,13 +1,17 @@
-import type { Color } from '@tabiya/core';
+import type { Color } from '@e4e5/core';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { api, type GamesReport, type RepertoireSummary, type Results } from '../api';
 import { GameSyncInline, useGameSync } from '../components/GameSync';
+import { fmt, t } from '../i18n';
 import { SPEED_NAMES, useSettings } from '../settings';
 import { Button, EmptyState, PageHeader, plural } from '../ui';
 
-const PERIOD: Record<number, string> = { 30: '30 derniers jours', 90: '3 derniers mois', 365: '12 derniers mois', 0: 'toutes les parties' };
-const pct = (x: number) => `${Math.round(100 * x)} %`;
+const PERIOD: Record<number, string> = t(
+  { 30: '30 derniers jours', 90: '3 derniers mois', 365: '12 derniers mois', 0: 'toutes les parties' },
+  { 30: 'last 30 days', 90: 'last 3 months', 365: 'last 12 months', 0: 'all games' },
+);
+const pct = (x: number) => t(`${Math.round(100 * x)} %`, `${Math.round(100 * x)}%`);
 const score = (r: Results) => {
   const n = r.win + r.draw + r.loss;
   return n ? (r.win + r.draw / 2) / n : 0;
@@ -41,21 +45,24 @@ export function Games() {
   return (
     <div className="games-page stack">
       <PageHeader
-        title="Mes parties"
+        title={t('Mes parties', 'My games')}
         subtitle={
-          <Link to="/settings#parties" title="Changer dans les paramètres" className="muted">
-            {r ? `${plural(r.games, 'partie', 'parties')} · ` : ''}
-            {PERIOD[gamesDays] ?? `${gamesDays} jours`} · {gamesSpeeds.map((s) => SPEED_NAMES[s] ?? s).join(', ')}
+          <Link to="/settings#parties" title={t('Changer dans les paramètres', 'Change in the settings')} className="muted">
+            {r ? `${t(plural(r.games, 'partie', 'parties'), plural(r.games, 'game', 'games'))} · ` : ''}
+            {PERIOD[gamesDays] ?? t(`${gamesDays} jours`, `${gamesDays} days`)} · {gamesSpeeds.map((s) => SPEED_NAMES[s] ?? s).join(', ')}
           </Link>
         }
       />
       <GameSyncInline />
 
-      {report.isLoading && <p className="muted">Analyse de vos parties…</p>}
+      {report.isLoading && <p className="muted">{t('Analyse de vos parties…', 'Analysing your games…')}</p>}
       {report.error && <p className="error">{String(report.error)}</p>}
       {r && r.games === 0 && (
-        <EmptyState title="Aucune partie" action={<Button to="/settings#parties">Paramètres des parties</Button>}>
-          Importez vos parties Chess.com ou Lichess, ou élargissez la période et les cadences.
+        <EmptyState title={t('Aucune partie', 'No games')} action={<Button to="/settings#parties">{t('Paramètres des parties', 'Game settings')}</Button>}>
+          {t(
+            'Importez vos parties Chess.com ou Lichess, ou élargissez la période et les cadences.',
+            'Import your Chess.com or Lichess games, or widen the period and the speeds.',
+          )}
         </EmptyState>
       )}
 
@@ -63,12 +70,18 @@ export function Games() {
         <>
           <p className="muted small-text" style={{ margin: 0 }}>
             {r.inbox.errorCount > 0 ? (
-              <>
-                Vos écarts au répertoire ({r.inbox.errorCount}) sont dans les <Link to="/lacunes">Lacunes</Link>, avec les positions fragiles de
-                l’entraînement.
-              </>
+              t(
+                <>
+                  Vos écarts au répertoire ({r.inbox.errorCount}) sont dans les <Link to="/lacunes">Lacunes</Link>, avec les positions fragiles de
+                  l’entraînement.
+                </>,
+                <>
+                  Your deviations from the repertoire ({r.inbox.errorCount}) are in <Link to="/lacunes">Gaps</Link>, with the fragile positions of
+                  your training.
+                </>,
+              )
             ) : (
-              <>Aucun écart à votre répertoire dans ces parties.</>
+              t('Aucun écart à votre répertoire dans ces parties.', 'No deviation from your repertoire in these games.')
             )}
           </p>
           <RepertoireStats report={r} reps={byId} />
@@ -81,10 +94,10 @@ export function Games() {
 function ResultBar({ results }: { results: Results }) {
   const n = results.win + results.draw + results.loss || 1;
   return (
-    <span className="result-bar" title={`${results.win} gagnées · ${results.draw} nulles · ${results.loss} perdues`}>
-      <span className="win" style={{ width: pct(results.win / n) }} />
-      <span className="draw" style={{ width: pct(results.draw / n) }} />
-      <span className="loss" style={{ width: pct(results.loss / n) }} />
+    <span className="result-bar" title={t(`${results.win} gagnées · ${results.draw} nulles · ${results.loss} perdues`, `${results.win} won · ${results.draw} drawn · ${results.loss} lost`)}>
+      <span className="win" style={{ width: `${(100 * results.win) / n}%` }} />
+      <span className="draw" style={{ width: `${(100 * results.draw) / n}%` }} />
+      <span className="loss" style={{ width: `${(100 * results.loss) / n}%` }} />
     </span>
   );
 }
@@ -98,15 +111,15 @@ function RepertoireStats({ report, reps }: { report: GamesReport; reps: Map<stri
   const colors: Color[] = ['white', 'black'];
   return (
     <section className="card">
-      <h3>Par répertoire</h3>
+      <h3>{t('Par répertoire', 'By repertoire')}</h3>
       <div className="table-wrap">
         <table className="lines">
           <thead>
             <tr>
               <th />
-              <th>Parties</th>
+              <th>{t('Parties', 'Games')}</th>
               <th>Score</th>
-              <th title="Nombre moyen de coups joués dans votre préparation">Dans la théorie</th>
+              <th title={t('Nombre moyen de coups joués dans votre préparation', 'Average number of moves played within your preparation')}>{t('Dans la théorie', 'In book')}</th>
             </tr>
           </thead>
           {colors.map((color) => {
@@ -124,13 +137,15 @@ function RepertoireStats({ report, reps }: { report: GamesReport; reps: Map<stri
                     <td className="meter-cell">
                       {pct(score(x.results))} <ResultBar results={x.results} />
                     </td>
-                    <td>{x.bookMoves.toLocaleString('fr-FR', { maximumFractionDigits: 1 })} coups</td>
+                    <td>
+                      {fmt(x.bookMoves, { maximumFractionDigits: 1 })} {t('coups', 'moves')}
+                    </td>
                   </tr>
                 ))}
                 {out.slice(0, 4).map((o) => (
                   <tr key={o.move} className="muted">
-                    <td title="Vous avez joué un autre premier coup que dans vos répertoires">
-                      <span className={`dot ${color}`} /> hors répertoire : {o.move}
+                    <td title={t('Vous avez joué un autre premier coup que dans vos répertoires', 'You played another first move than in your repertoires')}>
+                      <span className={`dot ${color}`} /> {t('hors répertoire :', 'outside repertoire:')} {o.move}
                     </td>
                     <td>{o.games}</td>
                     <td className="meter-cell">

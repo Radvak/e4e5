@@ -1,5 +1,5 @@
-import { fenKey, positionFromFen, RATING_BUCKETS, REACH_STEPS, suggestMoves } from '@tabiya/core';
-import { myGameMoves, myGamesAt, openingOfUcis, positionRepertoires, repertoireMovesAt } from '@tabiya/data';
+import { fenKey, positionFromFen, RATING_BUCKETS, REACH_STEPS, suggestMoves } from '@e4e5/core';
+import { myGameMoves, myGamesAt, openingOfUcis, positionRepertoires, repertoireMovesAt } from '@e4e5/data';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireUser } from '../auth.js';

@@ -11,13 +11,13 @@ import {
   syncRepertoire,
   updateMove,
   updateRepertoire,
-} from '@tabiya/data';
+} from '@e4e5/data';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireUser } from '../auth.js';
 import { db } from '../db/client.js';
 
-// The rules live in @tabiya/data (shared with the app running without a server); the routes
+// The rules live in @e4e5/data (shared with the app running without a server); the routes
 // only check the requests.
 
 const createBody = z.object({

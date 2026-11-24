@@ -14,7 +14,7 @@ import {
   trainingPositionsFrom,
   type PreparedSummary,
   type TrainingPosition,
-} from '@tabiya/core';
+} from '@e4e5/core';
 import type { RepertoireDetail } from '../api';
 
 const graphs = new WeakMap<RepertoireDetail, Repertoire>();

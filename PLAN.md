@@ -1,4 +1,4 @@
-# Tabiya: plan
+# e4e5: plan
 
 A web app to build and learn chess opening repertoires, shared with friends. Each user logs in
 with their Lichess account.
@@ -109,8 +109,9 @@ Planned: `review_cards` (FSRS state per user move), `game_syncs`, `inbox_items`.
   and, with my games only, my recent games in the position (a click replays the game on the board).
 - [ ] **6. Polish**: search/jump to position, mobile
   layout, PWA, sharing a repertoire with a friend (read-only link / copy).
-- [x] **7. Hosting**: Fly.io app `tabiya` (https://tabiya.fly.dev), one machine in
-  Paris, 1 GB encrypted volume with daily snapshots (5 days). Own domain later (tabiya.fr).
+- [x] **7. Hosting**: GitHub Pages (https://gab23r.github.io/e4e5/), the app without a server
+  (local mode: data on the device), with the statistics files under `/stats/`; the Android and iOS
+  apps (Capacitor) the same way. The server (`apps/server`) can still be self-hosted with Docker.
 
 ## Risks
 

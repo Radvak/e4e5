@@ -1,4 +1,4 @@
-import { groupLines, lineStarts, START_FEN, type Repertoire, type RepMove, type TrainingPosition } from '@tabiya/core';
+import { groupLines, lineStarts, START_FEN, type Repertoire, type RepMove, type TrainingPosition } from '@e4e5/core';
 import type { Key } from 'chessground/types';
 import type { DrawShape } from 'chessground/draw';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -12,6 +12,7 @@ import { answerArrows, inTime, JUMP_MS, REPLAY_MS, REPLAYED_PLIES, REPLY_MS, sav
 import { DrillActions, LineDone, QuizLine, SwipeBar, useMyMovesHere, type TrailDot, type TrailResult } from './DrillParts';
 import { outcomeOf, type Outcome } from './Feedback';
 import type { Source } from './useTrainingSources';
+import { fmt, plural, t } from '../i18n';
 
 interface Item {
   source: Source;
@@ -572,19 +573,29 @@ export function ReviewMode({
   if (!current) {
     return (
       <div className="panel done">
-        <h3>{sources.every((s) => s.positions.length === 0) ? 'Rien à entraîner ici' : 'Tout est fait pour l’instant 🎉'}</h3>
+        <h3>{sources.every((s) => s.positions.length === 0)
+            ? t('Rien à entraîner ici', 'Nothing to train here')
+            : t('Tout est fait pour l’instant 🎉', 'All done for now 🎉')}</h3>
         {/* The lines of the session can still be seen again (swipe to the right, or a dot). */}
         {trail.length > 0 && (
-          <SwipeBar onSkip={() => {}} onBack={onBack} canBack before={trail} onOpen={onOpen} hint="revoir les lignes de la séance →" />
+          <SwipeBar onSkip={() => {}} onBack={onBack} canBack before={trail} onOpen={onOpen} hint={t('revoir les lignes de la séance →', 'replay the lines of the session →')} />
         )}
         {sources.every((s) => s.positions.length === 0) && (
-          <p className="muted">Aucune position où c’est à vous de jouer dans ces lignes : ajoutez (et enregistrez) d’abord des coups pour votre camp.</p>
+          <p className="muted">
+            {t(
+              'Aucune position où c’est à vous de jouer dans ces lignes : ajoutez (et enregistrez) d’abord des coups pour votre camp.',
+              'No position where it is your move in these lines: first add (and save) moves for your side.',
+            )}
+          </p>
         )}
-        {queue.nextDue && <p>Prochaine révision {inTime(queue.nextDue)}.</p>}
+        {queue.nextDue && <p>{t(`Prochaine révision ${inTime(queue.nextDue)}.`, `Next review ${inTime(queue.nextDue)}.`)}</p>}
         <div className="row">
           {queue.unseenLines > 0 && (
             <button className="primary" onClick={() => setExtraNew((n) => n + 3)}>
-              Apprendre {Math.min(3, queue.unseenLines)} nouvelles lignes ({queue.unseenLines} pas encore apprises)
+              {t(
+                `Apprendre ${plural(Math.min(3, queue.unseenLines), 'nouvelle ligne', 'nouvelles lignes')} (${fmt(queue.unseenLines)} pas encore ${queue.unseenLines > 1 ? 'apprises' : 'apprise'})`,
+                `Learn ${plural(Math.min(3, queue.unseenLines), 'new line', 'new lines')} (${fmt(queue.unseenLines)} not learnt yet)`,
+              )}
             </button>
           )}
           {queue.early > 0 && (
@@ -594,12 +605,12 @@ export function ReviewMode({
                 setNow(Date.now());
               }}
             >
-              Réviser en avance
+              {t('Réviser en avance', 'Review ahead')}
             </button>
           )}
           {onTest && sources.some((s) => s.positions.length > 0) && (
-            <button className={queue.unseenLines > 0 ? '' : 'primary'} onClick={onTest} title="L’adversaire joue les coups les plus fréquents à votre niveau">
-              Se tester
+            <button className={queue.unseenLines > 0 ? '' : 'primary'} onClick={onTest} title={t('L’adversaire joue les coups les plus fréquents à votre niveau', 'The opponent plays the most frequent moves at your level')}>
+              {t('Se tester', 'Test yourself')}
             </button>
           )}
         </div>
@@ -828,31 +839,34 @@ function Drill({
           shapes={shapes}
           onMove={asking ? play : undefined}
         />
-        {lineDone && played && <LineDone text="Ligne revue" />}
+        {lineDone && played && <LineDone text={t('Ligne revue', 'Line reviewed')} />}
         {pausedMove && asking && (
           <div key={`p${retries}`} className="alt-bubble" role="status">
-            ⏸ <strong><San san={pausedMove.san} nags={pausedMove.nags} /></strong> est en pause dans ton répertoire — joue un autre coup
+            ⏸ <strong><San san={pausedMove.san} nags={pausedMove.nags} /></strong>{' '}
+            {t('est en pause dans ton répertoire — joue un autre coup', 'is paused in your repertoire: play another move')}
           </div>
         )}
         {knownMove && asking && (
           <div key={`k${retries}`} className="alt-bubble" role="status">
-            ✓ <strong><San san={knownMove.san} nags={knownMove.nags} /></strong> est déjà appris — apprends-en un nouveau
+            ✓ <strong><San san={knownMove.san} nags={knownMove.nags} /></strong>{' '}
+            {t('est déjà appris — apprends-en un nouveau', 'is already learnt: learn a new one')}
             {newHere.length === 1 ? (
-              <> : <strong><San san={expected.san} nags={expected.nags} /></strong></>
+              <>{t(' : ', ': ')}<strong><San san={expected.san} nags={expected.nags} /></strong></>
             ) : (
-              ' (flèches vert foncé)'
+              t(' (flèches vert foncé)', ' (dark green arrows)')
             )}
           </div>
         )}
         {alternative && asking && !pausedMove && (
           <div key={retries} className="alt-bubble" role="status">
-            👍 <strong><San san={alternative.san} nags={alternative.nags} /></strong> est un bon coup, mais ici on révise{' '}
+            👍 <strong><San san={alternative.san} nags={alternative.nags} /></strong> {' '}
+            {t('est un bon coup, mais ici on révise', 'is a good move, but here we review')}{' '}
             <strong><San san={expected.san} nags={expected.nags} /></strong>
           </div>
         )}
         {/* The quiz's line so far (since it started, not from the first move), annotations in colour. */}
         <QuizLine moves={moves.slice(lineFrom.current)} firstPly={lineFrom.current} />
-        {question.replay !== undefined && <p className="replay-note muted small-text">↺ Rejeu — pas compté dans les révisions</p>}
+        {question.replay !== undefined && <p className="replay-note muted small-text">{t('↺ Rejeu — pas compté dans les révisions', '↺ Replay: not counted in the reviews')}</p>}
         <SwipeBar
           onSkip={onSkip}
           onBack={onBack}
@@ -867,7 +881,7 @@ function Drill({
         <DrillActions
           hinted={hinted || revealed}
           disabled={!asking}
-          solutionTitle="Jouer le coup attendu (compté comme aidé), puis la ligne continue"
+          solutionTitle={t('Jouer le coup attendu (compté comme aidé), puis la ligne continue', 'Play the expected move (counted as helped), then the line goes on')}
           onHint={hint}
           onExplorer={toExplorer}
         />

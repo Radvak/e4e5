@@ -5,7 +5,7 @@ import compress from '@fastify/compress';
 import cookie from '@fastify/cookie';
 import fastifyStatic from '@fastify/static';
 import Fastify from 'fastify';
-import { setOpeningsTable } from '@tabiya/data';
+import { setOpeningsTable } from '@e4e5/data';
 import { ZodError } from 'zod';
 import { authRoutes } from './auth.js';
 import { runMigrations } from './db/client.js';
@@ -36,7 +36,7 @@ app.setErrorHandler((err, _req, reply) => {
     return reply.code(400).send({ error: err.issues[0]?.message ?? 'Invalid request', issues: err.issues });
   }
   const status = (err as { statusCode?: number }).statusCode ?? 500;
-  // Expected failures (404, 400 of @tabiya/data) are answers, not server errors.
+  // Expected failures (404, 400 of @e4e5/data) are answers, not server errors.
   if (status >= 500) app.log.error(err);
   else app.log.debug(err);
   return reply.code(status).send({ error: status < 500 ? (err as Error).message : 'Erreur interne' });

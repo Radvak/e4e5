@@ -13,4 +13,4 @@ export const isNative = (): boolean => Capacitor.isNativePlatform();
 export const isServerless = (): boolean => isNative() || import.meta.env.VITE_SERVERLESS === '1';
 
 /** The app's address Lichess sends back to after OAuth (declared in the Android and iOS projects). */
-export const NATIVE_CALLBACK = 'com.tabiya://lichess-callback';
+export const NATIVE_CALLBACK = 'com.e4e5://lichess-callback';

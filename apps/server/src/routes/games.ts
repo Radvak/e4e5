@@ -1,9 +1,9 @@
 /**
  * Played games: sync from Lichess / Chess.com, comparison with the repertoires, inbox. The rules
- * are in @tabiya/data (gameSync.ts, gamesReport.ts), shared with the app running without a
+ * are in @e4e5/data (gameSync.ts, gamesReport.ts), shared with the app running without a
  * server: these routes check the requests.
  */
-import { dismissInbox, gamesReport, restoreInbox, startSync, syncStatus } from '@tabiya/data';
+import { dismissInbox, gamesReport, restoreInbox, startSync, syncStatus } from '@e4e5/data';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireUser } from '../auth.js';

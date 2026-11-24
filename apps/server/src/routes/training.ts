@@ -1,9 +1,9 @@
 /**
- * Training: spaced-repetition reviews (FSRS) of my moves. The rules are in @tabiya/data
+ * Training: spaced-repetition reviews (FSRS) of my moves. The rules are in @e4e5/data
  * (training.ts), shared with the app running without a server: these routes check the requests.
  */
-import { GRADES } from '@tabiya/core';
-import { listCards, recordAnswer, reviewNow } from '@tabiya/data';
+import { GRADES } from '@e4e5/core';
+import { listCards, recordAnswer, reviewNow } from '@e4e5/data';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireUser } from '../auth.js';

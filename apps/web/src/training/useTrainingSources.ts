@@ -1,4 +1,4 @@
-import { positionReview, START_FEN, type Color, type Repertoire, type RepMove, type TrainingPosition } from '@tabiya/core';
+import { positionReview, START_FEN, type Color, type Repertoire, type RepMove, type TrainingPosition } from '@e4e5/core';
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { api, type Grade, type ReviewCard } from '../api';
