@@ -26,7 +26,7 @@ export function Login() {
 
   return (
     <div className="login">
-      <img className="brand-mark" src="/icons/icon.svg" alt="" />
+      <img className="brand-mark" src={`${import.meta.env.BASE_URL}icons/icon.svg`} alt="" />
       <h1>Tabiya</h1>
       <p>Construisez votre répertoire d’ouvertures, voyez ce que jouent les joueurs de votre niveau, et faites-le grandir avec vos propres parties.</p>
       {loginError && <p className="notice error">{ERRORS[loginError] ?? ERRORS.failed}</p>}

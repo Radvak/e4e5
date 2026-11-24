@@ -142,7 +142,7 @@ export function App() {
     <div className="shell">
       <header className="appbar">
         <Link to="/repertoires" className="brand">
-          <img className="brand-mark" src="/icons/icon.svg" alt="" />
+          <img className="brand-mark" src={`${import.meta.env.BASE_URL}icons/icon.svg`} alt="" />
           Tabiya
         </Link>
         <nav className="appnav">

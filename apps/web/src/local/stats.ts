@@ -7,7 +7,7 @@
  * the server for the web app during the migration (VITE_STATS_URL at build time to change it).
  */
 import { statsFromRows, zobristOfFen, type ExplorerResponse, type StoredStats } from '@tabiya/core';
-import { isNative } from '../native';
+import { isNative, isServerless } from '../native';
 import { localDb } from './db';
 import type { StatsFile } from './sqlite.worker';
 
@@ -15,7 +15,10 @@ export type { StatsFile };
 
 /** GitHub Pages of the project (workflows stats.yml and pages.yml). */
 const PAGES_STATS = 'https://gab23r.github.io/tabiya/stats';
-const STATS_URL = (import.meta.env.VITE_STATS_URL as string | undefined)?.replace(/\/$/, '') ?? (isNative() ? PAGES_STATS : '/api/stats-files');
+const STATS_URL =
+  (import.meta.env.VITE_STATS_URL as string | undefined)?.replace(/\/$/, '') ??
+  // The mobile app: the project's Pages; a static build: next to the app; else the server.
+  (isNative() ? PAGES_STATS : isServerless() ? `${import.meta.env.BASE_URL}stats` : '/api/stats-files');
 const MAX_MOVES = 30;
 /** Positions read per message to the worker. */
 const BATCH = 500;

@@ -2,6 +2,8 @@ import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
+  // Where the app is served: / (server, dev, mobile app), /tabiya/ on GitHub Pages (VITE_BASE).
+  base: process.env.VITE_BASE ?? '/',
   plugins: [react()],
   // Changes with every build: drops the data kept offline when the app changes (offline/persist.ts).
   define: { __BUILD_ID__: JSON.stringify(String(Date.now())) },

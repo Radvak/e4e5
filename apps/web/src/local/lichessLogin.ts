@@ -18,7 +18,7 @@ const KEY = 'tabiya.lichess-oauth';
 
 const b64url = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 const random = (n: number) => b64url(crypto.getRandomValues(new Uint8Array(n)));
-const redirectUri = () => (isNative() ? NATIVE_CALLBACK : `${location.origin}/lichess-callback`);
+const redirectUri = () => (isNative() ? NATIVE_CALLBACK : `${location.origin}${import.meta.env.BASE_URL}lichess-callback`);
 
 /** Goes to Lichess to authorise the app (back on /lichess-callback). */
 export async function startLichessLogin(): Promise<void> {
@@ -44,7 +44,7 @@ export function listenForLichessCallback() {
   void App.addListener('appUrlOpen', ({ url }) => {
     if (!url.startsWith(NATIVE_CALLBACK)) return;
     void Browser.close().catch(() => undefined);
-    location.assign(`/lichess-callback${url.slice(NATIVE_CALLBACK.length)}`);
+    location.assign(`${import.meta.env.BASE_URL}lichess-callback${url.slice(NATIVE_CALLBACK.length)}`);
   });
 }
 

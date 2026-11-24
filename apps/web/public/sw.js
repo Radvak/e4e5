@@ -8,10 +8,15 @@
  *
  * On each new index.html, the cached /assets/ files it no longer uses are dropped (a later
  * request for one simply goes to the network). Bump VERSION to drop every cache.
+ *
+ * Paths are relative to the worker's scope: the app is served at / or under a base path
+ * (GitHub Pages: /tabiya/).
  */
 const VERSION = 'v1';
 const CACHE = `tabiya-${VERSION}`;
-const SHELL = '/index.html';
+const BASE = new URL(self.registration.scope).pathname;
+const SHELL = `${BASE}index.html`;
+const under = (path, dir) => path.startsWith(BASE + dir);
 
 self.addEventListener('install', (event) => {
   event.waitUntil(cacheShell().then(() => self.skipWaiting()));
@@ -30,11 +35,11 @@ self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
-  if (url.origin !== self.location.origin || url.pathname.startsWith('/api/')) return;
+  if (url.origin !== self.location.origin || under(url.pathname, 'api/')) return;
 
   if (req.mode === 'navigate') event.respondWith(navigate(req));
-  else if (url.pathname.startsWith('/assets/') || url.pathname.startsWith('/stockfish/')) event.respondWith(cacheFirst(req));
-  else if (url.pathname.startsWith('/icons/') || url.pathname === '/manifest.webmanifest') event.respondWith(staleWhileRevalidate(event, req));
+  else if (under(url.pathname, 'assets/') || under(url.pathname, 'stockfish/')) event.respondWith(cacheFirst(req));
+  else if (under(url.pathname, 'icons/') || url.pathname === `${BASE}manifest.webmanifest`) event.respondWith(staleWhileRevalidate(event, req));
 });
 
 /** Caches index.html and the files it references (entry script, CSS), and drops stale assets. */
@@ -44,7 +49,7 @@ async function cacheShell(response) {
   if (!res.ok) return;
   const html = await res.clone().text();
   await cache.put(SHELL, res);
-  const used = new Set([...html.matchAll(/(?:src|href)="(\/assets\/[^"]+)"/g)].map((m) => m[1]));
+  const used = new Set([...html.matchAll(/(?:src|href)="([^"]*\/assets\/[^"]+)"/g)].map((m) => new URL(m[1], self.location.origin + BASE).pathname));
   await Promise.all(
     [...used].map(async (path) => {
       if (!(await cache.match(path))) await cache.add(path).catch(() => {});
@@ -52,7 +57,7 @@ async function cacheShell(response) {
   );
   for (const req of await cache.keys()) {
     const path = new URL(req.url).pathname;
-    if (path.startsWith('/assets/') && !used.has(path) && !path.match(/\.(woff2?|png|svg|jpg)$/)) await cache.delete(req);
+    if (under(path, 'assets/') && !used.has(path) && !path.match(/\.(woff2?|png|svg|jpg)$/)) await cache.delete(req);
   }
 }
 

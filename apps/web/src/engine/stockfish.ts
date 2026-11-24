@@ -6,7 +6,7 @@
  */
 import { parseInfo, uciFen, type EngineLine } from '@tabiya/core';
 
-const ENGINE_URL = '/stockfish/stockfish-19-lite-single.js';
+const ENGINE_URL = `${import.meta.env.BASE_URL}stockfish/stockfish-19-lite-single.js`;
 
 interface Search {
   fen: string;

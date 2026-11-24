@@ -4,7 +4,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { gapCutoffFor, LINE_DEPTHS } from '@tabiya/core';
 import { ApiError, serverApi, type Me, type TrainingSummary } from '../api';
 import { isLocalMode, setLocalMode } from '../local/mode';
-import { isNative } from '../native';
+import { isServerless } from '../native';
 import { RatingRange } from '../components/RatingRange';
 import { depthPct, explorerParams, NO_LIMIT, SPEED_CHOICES, SPEED_NAMES, useSettings, type LearnOrder, type SpeedChoice } from '../settings';
 import { PageHeader, plural } from '../ui';
@@ -176,8 +176,8 @@ function LocalModeSetting({ ratings }: { ratings: number[] }) {
       setState(signedOut ? 'Échec : connectez-vous d’abord au serveur (mode local désactivé), puis réactivez-le.' : `Échec : ${e instanceof Error ? e.message : String(e)}`);
     }
   };
-  // The mobile app is local only: just the statistics files.
-  if (isNative()) {
+  // Without a server (mobile app, static hosting): local only, just the statistics files.
+  if (isServerless()) {
     return (
       <section className="card" id="local">
         <h3>Statistiques</h3>

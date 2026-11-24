@@ -24,7 +24,7 @@ export function registerServiceWorker() {
   // The mobile app ships its files: no service worker, nothing to install.
   if (!import.meta.env.PROD || !('serviceWorker' in navigator) || isNative()) return;
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch((e) => console.warn('Service worker not registered', e));
+    navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch((e) => console.warn('Service worker not registered', e));
   });
   // Chrome fires this early, possibly before the settings page is open: keep it for later.
   window.addEventListener('beforeinstallprompt', (e) => {
