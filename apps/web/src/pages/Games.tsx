@@ -47,7 +47,7 @@ export function Games() {
       <PageHeader
         title={t('Mes parties', 'My games')}
         subtitle={
-          <Link to="/settings#parties" title={t('Changer dans les paramètres', 'Change in the settings')} className="muted">
+          <Link to="/settings#games" title={t('Changer dans les paramètres', 'Change in the settings')} className="muted">
             {r ? `${t(plural(r.games, 'partie', 'parties'), plural(r.games, 'game', 'games'))} · ` : ''}
             {PERIOD[gamesDays] ?? t(`${gamesDays} jours`, `${gamesDays} days`)} · {gamesSpeeds.map((s) => SPEED_NAMES[s] ?? s).join(', ')}
           </Link>
@@ -58,7 +58,7 @@ export function Games() {
       {report.isLoading && <p className="muted">{t('Analyse de vos parties…', 'Analysing your games…')}</p>}
       {report.error && <p className="error">{String(report.error)}</p>}
       {r && r.games === 0 && (
-        <EmptyState title={t('Aucune partie', 'No games')} action={<Button to="/settings#parties">{t('Paramètres des parties', 'Game settings')}</Button>}>
+        <EmptyState title={t('Aucune partie', 'No games')} action={<Button to="/settings#games">{t('Paramètres des parties', 'Game settings')}</Button>}>
           {t(
             'Importez vos parties Chess.com ou Lichess, ou élargissez la période et les cadences.',
             'Import your Chess.com or Lichess games, or widen the period and the speeds.',
@@ -72,11 +72,11 @@ export function Games() {
             {r.inbox.errorCount > 0 ? (
               t(
                 <>
-                  Vos écarts au répertoire ({r.inbox.errorCount}) sont dans les <Link to="/lacunes">Lacunes</Link>, avec les positions fragiles de
+                  Vos écarts au répertoire ({r.inbox.errorCount}) sont dans les <Link to="/gaps">Lacunes</Link>, avec les positions fragiles de
                   l’entraînement.
                 </>,
                 <>
-                  Your deviations from the repertoire ({r.inbox.errorCount}) are in <Link to="/lacunes">Gaps</Link>, with the fragile positions of
+                  Your deviations from the repertoire ({r.inbox.errorCount}) are in <Link to="/gaps">Gaps</Link>, with the fragile positions of
                   your training.
                 </>,
               )

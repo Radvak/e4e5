@@ -181,7 +181,7 @@ const firstTryText = (n: number, asked: number) => {
 /** Without statistics (error), nothing is cut: says so. */
 function ShortenNotice({ gaps, colors }: { gaps: ReturnType<typeof useGaps>; colors: Color[] }) {
   const reports = colors.map((c) => gaps.data?.[c]).filter((r) => !!r);
-  const settings = <Link to="/settings#entrainement">{t('Paramètres', 'Settings')}</Link>;
+  const settings = <Link to="/settings#training">{t('Paramètres', 'Settings')}</Link>;
   if (gaps.isError || (gaps.data && !reports.length)) {
     return (
       <p className="notice error small-text">

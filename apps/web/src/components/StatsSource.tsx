@@ -8,7 +8,7 @@ export function StatsSource({ me }: { me: Me }) {
   const { speed, range } = useSettings();
   const ex = explorerParams(me, speed, range);
   return (
-    <Link className="chip source-chip" to="/settings#statistiques" title={t('Changer dans les paramètres', 'Change in the settings')}>
+    <Link className="chip source-chip" to="/settings#statistics" title={t('Changer dans les paramètres', 'Change in the settings')}>
       Lichess {rangeLabel(ex.ratings)} · {speedsLabel(ex.speeds)}
       {ex.auto && <span className="muted">(auto)</span>}
     </Link>

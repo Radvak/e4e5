@@ -57,9 +57,9 @@ export function Repertoires({ me }: { me: Me }) {
   // Filters live in the URL: they survive opening a repertoire and coming back.
   const [params, setParams] = useSearchParams();
   const query = params.get('q') ?? '';
-  const colorFilter = oneOf<ColorFilter>(params.get('couleur'), ['all', 'white', 'black'], 'all');
-  const status = oneOf<StatusFilter>(params.get('etat'), STATUSES.map((s) => s.id), 'all');
-  const sort = oneOf<Sort>(params.get('tri'), SORTS.map((s) => s.id), 'recent');
+  const colorFilter = oneOf<ColorFilter>(params.get('color'), ['all', 'white', 'black'], 'all');
+  const status = oneOf<StatusFilter>(params.get('status'), STATUSES.map((s) => s.id), 'all');
+  const sort = oneOf<Sort>(params.get('sort'), SORTS.map((s) => s.id), 'recent');
   const setParam = (key: string, value: string, def: string) =>
     setParams(
       (p) => {
@@ -110,14 +110,14 @@ export function Repertoires({ me }: { me: Me }) {
       <PageHeader
         title={t('Répertoires', 'Repertoires')}
         subtitle={list.length ? t(plural(list.length, 'répertoire', 'répertoires'), plural(list.length, 'repertoire', 'repertoires')) : undefined}
-        actions={list.length > 0 && <Button variant="primary" icon="plus" to="/repertoires/nouveau">{t('Nouveau', 'New')}</Button>}
+        actions={list.length > 0 && <Button variant="primary" icon="plus" to="/repertoires/new">{t('Nouveau', 'New')}</Button>}
       />
 
       {reps.isLoading && <p className="muted">{t('Chargement…', 'Loading…')}</p>}
       {!reps.isLoading && list.length === 0 && (
         <EmptyState
           title={t('Aucun répertoire', 'No repertoire')}
-          action={<Button variant="primary" icon="plus" to="/repertoires/nouveau">{t('Créer un répertoire', 'Create a repertoire')}</Button>}
+          action={<Button variant="primary" icon="plus" to="/repertoires/new">{t('Créer un répertoire', 'Create a repertoire')}</Button>}
         >
           {t(
             'Un répertoire regroupe vos coups pour une couleur (par exemple « 1.e4 avec les Blancs »). Partez de zéro, ou d’une étude Lichess populaire.',
@@ -140,7 +140,7 @@ export function Repertoires({ me }: { me: Me }) {
           </label>
           <Tabs
             value={colorFilter}
-            onChange={(v) => setParam('couleur', v, 'all')}
+            onChange={(v) => setParam('color', v, 'all')}
             tabs={[
               { id: 'all', label: <>{t('Tous', 'All')} <span className="count">{list.length}</span></> },
               { id: 'white', label: <><span className="dot white" /> {t('Blancs', 'White')} <span className="count">{byColor('white')}</span></> },
@@ -148,10 +148,10 @@ export function Repertoires({ me }: { me: Me }) {
             ]}
           />
           <div className="rep-selects">
-            <select aria-label={t('Filtrer par état', 'Filter by state')} value={status} onChange={(e) => setParam('etat', e.target.value, 'all')}>
+            <select aria-label={t('Filtrer par état', 'Filter by state')} value={status} onChange={(e) => setParam('status', e.target.value, 'all')}>
               {statusOptions.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
             </select>
-            <select aria-label={t('Trier', 'Sort')} value={sort} onChange={(e) => setParam('tri', e.target.value, 'recent')}>
+            <select aria-label={t('Trier', 'Sort')} value={sort} onChange={(e) => setParam('sort', e.target.value, 'recent')}>
               {SORTS.map((s) => <option key={s.id} value={s.id}>{t('Tri : ', 'Sort: ')}{s.label}</option>)}
             </select>
           </div>

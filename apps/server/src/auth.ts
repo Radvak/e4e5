@@ -159,7 +159,7 @@ export async function authRoutes(app: FastifyInstance) {
         // Linking Lichess to the logged-in account.
         if (owner && owner.id !== current.id) return fail('lichess-already-linked');
         await db.update(users).set(lichess).where(eq(users.id, current.id));
-        return reply.redirect(`${env.publicUrl}/compte`);
+        return reply.redirect(`${env.publicUrl}/account`);
       }
       if (owner) {
         await db.update(users).set(lichess).where(eq(users.id, owner.id));

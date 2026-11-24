@@ -16,7 +16,7 @@ export function LichessCallback() {
       .then((m) => m.finishLichessLogin(new URLSearchParams(location.search)))
       .then(async () => {
         await qc.invalidateQueries();
-        navigate('/compte', { replace: true });
+        navigate('/account', { replace: true });
       })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
   }, [qc, navigate]);

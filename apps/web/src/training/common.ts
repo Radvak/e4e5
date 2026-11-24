@@ -2,6 +2,7 @@ import type { RepMove } from '@e4e5/core';
 import { createElement } from 'react';
 import type { DrawShape } from 'chessground/draw';
 import type { Key } from 'chessground/types';
+import { t } from '../i18n';
 
 /** Pause before the opponent's reply. */
 export const REPLY_MS = 300;
@@ -22,9 +23,9 @@ export function lineText(path: RepMove[]): string {
 /** Short "in 3 min" / "in 2 h" / "in 4 days". */
 export function inTime(date: Date): string {
   const min = Math.max(1, Math.round((date.getTime() - Date.now()) / 60_000));
-  if (min < 60) return `dans ${min} min`;
-  if (min < 48 * 60) return `dans ${Math.round(min / 60)} h`;
-  return `dans ${Math.round(min / 1440)} jours`;
+  if (min < 60) return t(`dans ${min} min`, `in ${min} min`);
+  if (min < 48 * 60) return t(`dans ${Math.round(min / 60)} h`, `in ${Math.round(min / 60)} h`);
+  return t(`dans ${Math.round(min / 1440)} jours`, `in ${Math.round(min / 1440)} days`);
 }
 
 /** Green arrows showing the expected moves. */

@@ -75,10 +75,10 @@ export function GameSyncInline() {
       <p className="muted small-text">
         {t(
           <>
-            <Link to="/compte#comptes">Liez Chess.com ou Lichess</Link> pour analyser vos parties.
+            <Link to="/account#accounts">Liez Chess.com ou Lichess</Link> pour analyser vos parties.
           </>,
           <>
-            <Link to="/compte#comptes">Link Chess.com or Lichess</Link> to analyse your games.
+            <Link to="/account#accounts">Link Chess.com or Lichess</Link> to analyse your games.
           </>,
         )}
       </p>

@@ -538,10 +538,10 @@ export function Explorer({ me }: { me: Me }) {
             <p className="muted">
               {t(
                 <>
-                  Liez Lichess ou indiquez votre pseudo Chess.com dans <Link to="/compte#comptes">Mon compte</Link> pour voir vos propres parties.
+                  Liez Lichess ou indiquez votre pseudo Chess.com dans <Link to="/account#accounts">Mon compte</Link> pour voir vos propres parties.
                 </>,
                 <>
-                  Link Lichess or enter your Chess.com username in <Link to="/compte#comptes">My account</Link> to see your own games.
+                  Link Lichess or enter your Chess.com username in <Link to="/account#accounts">My account</Link> to see your own games.
                 </>,
               )}
             </p>

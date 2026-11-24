@@ -33,12 +33,12 @@ export function Settings({ me }: { me: Me }) {
       <PageHeader
         title={t('Paramètres', 'Settings')}
         subtitle={t(
-          <>Comptes Lichess et Chess.com, mot de passe : <Link to="/compte">Mon compte</Link></>,
-          <>Lichess and Chess.com accounts, password: <Link to="/compte">My account</Link></>,
+          <>Comptes Lichess et Chess.com, mot de passe : <Link to="/account">Mon compte</Link></>,
+          <>Lichess and Chess.com accounts, password: <Link to="/account">My account</Link></>,
         )}
       />
 
-      <section className="card" id="langue">
+      <section className="card" id="language">
         <div className="setting">
           <div className="what"><strong>Langue / Language</strong></div>
           <Tabs<Lang>
@@ -52,7 +52,7 @@ export function Settings({ me }: { me: Me }) {
         </div>
       </section>
 
-      <section className="card" id="parties">
+      <section className="card" id="games">
         <h3>{t('Parties analysées', 'Games analysed')}</h3>
         <div className="setting">
           <div className="what">
@@ -77,7 +77,7 @@ export function Settings({ me }: { me: Me }) {
         </div>
       </section>
 
-      <section className="card" id="statistiques">
+      <section className="card" id="statistics">
         <h3>{t('Statistiques d’ouvertures', 'Opening statistics')}</h3>
         <p className="muted small-text">
           {t(
@@ -112,7 +112,7 @@ export function Settings({ me }: { me: Me }) {
         </div>
       </section>
 
-      <section className="card" id="echiquier">
+      <section className="card" id="board">
         <h3>{t('Échiquier', 'Board')}</h3>
         <div className="setting">
           <div className="what">
@@ -134,7 +134,7 @@ export function Settings({ me }: { me: Me }) {
         </div>
       </section>
 
-      <section className="card" id="entrainement">
+      <section className="card" id="training">
         <h3>{t('Entraînement et préparation', 'Training and preparation')}</h3>
         <div className="setting">
           <div className="what">
@@ -412,7 +412,7 @@ function LineDepthSetting({ me }: { me: Me }) {
   );
 }
 
-/** /settings#statistiques, /compte#comptes: open on that section. */
+/** /settings#statistics, /account#accounts: open on that section. */
 export function useScrollToHash() {
   const { hash } = useLocation();
   useEffect(() => {

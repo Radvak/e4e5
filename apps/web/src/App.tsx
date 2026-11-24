@@ -27,9 +27,9 @@ import { Button, Icon, Menu, plural, type IconName } from './ui';
 const SECTIONS: { to: string; label: string; icon: IconName; active: (path: string) => boolean }[] = [
   { to: '/repertoires', label: t('Répertoires', 'Repertoires'), icon: 'book', active: (p) => p.startsWith('/repertoires') || (p.startsWith('/r/') && !p.endsWith('/train')) },
   { to: '/train', label: t('Entraîner', 'Train'), icon: 'target', active: (p) => p.endsWith('/train') },
-  { to: '/lacunes', label: t('Lacunes', 'Gaps'), icon: 'level', active: (p) => p.startsWith('/lacunes') },
+  { to: '/gaps', label: t('Lacunes', 'Gaps'), icon: 'level', active: (p) => p.startsWith('/gaps') },
   { to: '/explorer', label: t('Explorer', 'Explore'), icon: 'compass', active: (p) => p.startsWith('/explorer') },
-  { to: '/parties', label: t('Mes parties', 'My games'), icon: 'games', active: (p) => p.startsWith('/parties') },
+  { to: '/games', label: t('Mes parties', 'My games'), icon: 'games', active: (p) => p.startsWith('/games') },
 ];
 
 /** Old addresses, kept working. */
@@ -151,7 +151,7 @@ export function App() {
   const badge = (to: string) =>
     to === '/train' ? (
       <Badge n={toTrain} label={t(`${toTrain} lignes à revoir aujourd’hui`, `${toTrain} lines to review today`)} />
-    ) : to === '/lacunes' ? (
+    ) : to === '/gaps' ? (
       <GamesBadge />
     ) : null;
 
@@ -203,7 +203,7 @@ export function App() {
             </>
           }
           items={[
-            { label: t('Mon compte', 'My account'), to: '/compte' },
+            { label: t('Mon compte', 'My account'), to: '/account' },
             { label: t('Paramètres', 'Settings'), to: '/settings' },
             // Local mode: no login, the accounts are on the device.
             ...(me.data.local ? [] : [{ label: t('Se déconnecter', 'Sign out'), onClick: logout, danger: true }]),
@@ -216,23 +216,24 @@ export function App() {
       <main className="page">
         <Routes>
           <Route path="/" element={<Redirect to="/repertoires" />} />
-          <Route path="/parties" element={<Games />} />
+          <Route path="/games" element={<Games />} />
           <Route path="/repertoires" element={<Repertoires me={me.data} />} />
-          <Route path="/repertoires/nouveau" element={<NewRepertoire me={me.data} />} />
+          <Route path="/repertoires/new" element={<NewRepertoire me={me.data} />} />
           <Route path="/r/:id" element={<RepertoireEditor me={me.data} />} />
           <Route path="/r/:id/train" element={<Training me={me.data} />} />
           <Route path="/train" element={<Training me={me.data} />} />
           <Route path="/explorer" element={<Explorer me={me.data} />} />
-          <Route path="/lacunes" element={<Lacunes />} />
-          <Route path="/bilan" element={<Redirect to="/lacunes" />} />
-          <Route path="/bilan/parties" element={<Redirect to="/lacunes" />} />
-          <Route path="/bilan/progres" element={<Redirect to="/lacunes" />} />
+          <Route path="/gaps" element={<Lacunes />} />
           <Route path="/settings" element={<Settings me={me.data} />} />
-          <Route path="/compte" element={<Account me={me.data} />} />
+          <Route path="/account" element={<Account me={me.data} />} />
           {me.data.local && <Route path="/lichess-callback" element={<LichessCallback />} />}
-          <Route path="/stats" element={<Redirect to="/lacunes" />} />
-          <Route path="/gaps" element={<Redirect to="/repertoires" />} />
-          <Route path="/games" element={<Redirect to="/parties" />} />
+          {/* Former French addresses. */}
+          <Route path="/parties" element={<Redirect to="/games" />} />
+          <Route path="/lacunes" element={<Redirect to="/gaps" />} />
+          <Route path="/compte" element={<Redirect to="/account" />} />
+          <Route path="/repertoires/nouveau" element={<Redirect to="/repertoires/new" />} />
+          <Route path="/bilan/*" element={<Redirect to="/gaps" />} />
+          <Route path="/stats" element={<Redirect to="/gaps" />} />
           <Route path="*" element={<Redirect to="/" />} />
         </Routes>
       </main>

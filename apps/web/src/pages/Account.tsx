@@ -45,7 +45,7 @@ export function Account({ me }: { me: Me }) {
       {message && <p className="notice success">{message}</p>}
       {error && <p className="notice error">{error.message}</p>}
 
-      <section className="card" id="compte">
+      <section className="card" id="account">
         <h3>{t('Compte', 'Account')}</h3>
         <p>
           <strong>{me.username}</strong>
@@ -86,7 +86,7 @@ export function Account({ me }: { me: Me }) {
         )}
       </section>
 
-      <section className="card" id="comptes">
+      <section className="card" id="accounts">
         <h3>{t('Comptes liés', 'Linked accounts')}</h3>
         <div className="setting">
           <div className="what">

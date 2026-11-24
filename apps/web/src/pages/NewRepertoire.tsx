@@ -28,15 +28,15 @@ const COLOR_TABS = [
 /**
  * New repertoire, from one search field: what is typed is the name of an empty repertoire to
  * create (Entrée, or the "Créer" row) and searches the Lichess studies (all of them in the native
- * app, my own ones everywhere); a pasted study link opens it. A study opens its chapters to choose from (?etude=, ?chapitre= for a
+ * app, my own ones everywhere); a pasted study link opens it. A study opens its chapters to choose from (?study=, ?chapter= for a
  * chapter link).
  */
 export function NewRepertoire({ me }: { me: Me }) {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
-  const studyId = params.get('etude');
-  const chapterId = params.get('chapitre') ?? undefined;
+  const studyId = params.get('study');
+  const chapterId = params.get('chapter') ?? undefined;
 
   const created = async (rep: RepertoireSummary) => {
     await qc.invalidateQueries({ queryKey: ['repertoires'] });
@@ -45,9 +45,9 @@ export function NewRepertoire({ me }: { me: Me }) {
   const openStudy = (ref: { studyId: string; chapterId?: string }) =>
     setParams((p) => {
       const next = new URLSearchParams(p);
-      next.set('etude', ref.studyId);
-      if (ref.chapterId) next.set('chapitre', ref.chapterId);
-      else next.delete('chapitre');
+      next.set('study', ref.studyId);
+      if (ref.chapterId) next.set('chapter', ref.chapterId);
+      else next.delete('chapter');
       // A pasted link is not a search to come back to.
       if (lichessStudyRef(next.get('q') ?? '')) next.delete('q');
       return next;
@@ -55,8 +55,8 @@ export function NewRepertoire({ me }: { me: Me }) {
   const closeStudy = () =>
     setParams((p) => {
       const next = new URLSearchParams(p);
-      next.delete('etude');
-      next.delete('chapitre');
+      next.delete('study');
+      next.delete('chapter');
       return next;
     });
 
@@ -91,7 +91,7 @@ function Catalogue({ me, onOpen, onCreated }: { me: Me; onOpen: (ref: { studyId:
   const [params, setParams] = useSearchParams();
   // Typed into local state (the URL lags behind fast typing), copied to the URL (?q=) to come back to.
   const [input, setInput] = useState(() => params.get('q') ?? '');
-  const color: Color = params.get('couleur') === 'black' ? 'black' : 'white';
+  const color: Color = params.get('color') === 'black' ? 'black' : 'white';
   const mine = me.lichess?.username;
   const native = canSearchLichess();
   const set = (key: string, value: string) =>
@@ -141,7 +141,7 @@ function Catalogue({ me, onOpen, onCreated }: { me: Me; onOpen: (ref: { studyId:
             onChange={(e) => setInput(e.target.value)}
           />
         </label>
-        <Tabs value={color} onChange={(c) => set('couleur', c === 'white' ? '' : c)} tabs={COLOR_TABS} />
+        <Tabs value={color} onChange={(c) => set('color', c === 'white' ? '' : c)} tabs={COLOR_TABS} />
       </form>
 
       {/* Once typing, what is typed is also the name of an empty repertoire of the side chosen. */}
@@ -469,7 +469,7 @@ function StudyImport({
             <div className="import-summary">
               {chosen.size ? (
                 <>
-                  <strong>{t(plural(chosen.size, 'chapitre', 'chapitres'), plural(chosen.size, 'chapter', 'chapters'))}</strong> · {t(plural(selection.moves, 'coup', 'coups'), plural(selection.moves, 'move', 'moves'))}
+                  <strong>{t(plural(chosen.size, 'chapter', 'chapitres'), plural(chosen.size, 'chapter', 'chapters'))}</strong> · {t(plural(selection.moves, 'coup', 'coups'), plural(selection.moves, 'move', 'moves'))}
                   {selection.maxPly > 0 && t(<> · lignes jusqu’au {Math.ceil(selection.maxPly / 2)}<sup>e</sup> coup</>, <> · lines up to move {Math.ceil(selection.maxPly / 2)}</>)}
                 </>
               ) : (
