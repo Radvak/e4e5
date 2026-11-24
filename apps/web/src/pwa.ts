@@ -38,8 +38,9 @@ export function registerServiceWorker() {
   });
 }
 
+/** Installed: the PWA opened from its icon, or the mobile app (Capacitor). */
 const standalone = () =>
-  window.matchMedia('(display-mode: standalone)').matches || (navigator as { standalone?: boolean }).standalone === true;
+  isNative() || window.matchMedia('(display-mode: standalone)').matches || (navigator as { standalone?: boolean }).standalone === true;
 
 const ios = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
