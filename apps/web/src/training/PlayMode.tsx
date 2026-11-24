@@ -8,7 +8,7 @@ import { api, type Grade } from '../api';
 import { Board } from '../components/Board';
 import { OpeningName } from '../components/OpeningName';
 import { AnswerTimer, useAnswerClock } from './AnswerTimer';
-import { answerArrows, REPLY_MS } from './common';
+import { answerArrows, REPLY_MS, savedSession, saveSession } from './common';
 import { DrillActions, LineDone, QuizLine, SwipeBar, useMyMovesHere } from './DrillParts';
 import { outcomeOf } from './Feedback';
 import type { Source } from './useTrainingSources';
@@ -59,6 +59,7 @@ export function PlayMode({
   onReview,
   onLearn,
   onScore,
+  sessionKey,
 }: {
   sources: Source[];
   root: string;
@@ -69,6 +70,8 @@ export function PlayMode({
   onLearn?: () => void;
   /** The score of the session (shown in the page header, like the review's). */
   onScore?: (score: PlayScore) => void;
+  /** The scope of the session: put aside under this key when the page is left, taken up on return. */
+  sessionKey?: string;
 }) {
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -87,8 +90,23 @@ export function PlayMode({
     () => sources.filter((s) => after(s, root) !== 'end').map((s) => ({ s, learnt: s.positions.filter((p) => known(s, p.fen)).length })),
     [sources, root],
   );
-  const [line, setLine] = useState<LineState | null>(null);
-  const [score, setScore] = useState<PlayScore>({ lines: 0, moves: 0, asked: 0, clean: 0 });
+  /** The session put aside when the page was left (e.g. for the explorer): the same line, the same score. */
+  const [saved] = useState(() => {
+    const s = sessionKey ? savedSession<{ line: LineState | null; score: PlayScore }>(sessionKey) : undefined;
+    if (!s) return undefined;
+    const source = s.line && sources.find((x) => x.id === s.line!.source.id);
+    // A finished line (or a repertoire no longer here): the next one.
+    const line = s.line && source && s.line.phase !== 'end' ? { ...s.line, source } : null;
+    return { line, score: s.score };
+  });
+  const [line, setLine] = useState<LineState | null>(saved?.line ?? null);
+  const [score, setScore] = useState<PlayScore>(saved?.score ?? { lines: 0, moves: 0, asked: 0, clean: 0 });
+  const kept = useRef({ line, score });
+  kept.current = { line, score };
+  useEffect(() => {
+    if (!sessionKey) return;
+    return () => saveSession(sessionKey, kept.current);
+  }, [sessionKey]);
   useEffect(() => onScore?.(score), [score, onScore]);
   const token = useRef(0);
 

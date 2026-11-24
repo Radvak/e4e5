@@ -8,7 +8,7 @@ import { Board } from '../components/Board';
 import { San } from '../components/Nag';
 import { OpeningName } from '../components/OpeningName';
 import { dayStart } from '../settings';
-import { answerArrows, inTime, JUMP_MS, REPLAY_MS, REPLAYED_PLIES, REPLY_MS } from './common';
+import { answerArrows, inTime, JUMP_MS, REPLAY_MS, REPLAYED_PLIES, REPLY_MS, savedSession, saveSession } from './common';
 import { DrillActions, LineDone, QuizLine, SwipeBar, useMyMovesHere, type TrailDot, type TrailResult } from './DrillParts';
 import { outcomeOf, type Outcome } from './Feedback';
 import type { Source } from './useTrainingSources';
@@ -44,6 +44,69 @@ const trailResult = (outcome: Outcome): TrailResult =>
 /** A line is wrong as soon as one move was missed (even found afterwards), learnt when only new or right ones. */
 const lineResult = (results: TrailResult[]): TrailResult =>
   results.includes('wrong') ? 'wrong' : results.every((r) => r === 'new') ? 'new' : 'right';
+
+/** The training left while browsing the trail: its question, or what was to come after a pause. */
+type Live = { question: Question | null } | { next: () => Question | null } | null;
+/** The line being answered (`id`: a passed line taken up again, its dot replaced at the end). */
+interface LineRef {
+  id?: number;
+  questions: Question[];
+  results: TrailResult[];
+}
+/** reviewed: all answers; asked: positions already learnt; firstTry: asked and right first time. */
+interface Stats {
+  reviewed: number;
+  asked: number;
+  firstTry: number;
+}
+
+/** The session put aside when the page is left (explorer, other mode), to take it up again on return. */
+interface SavedReview {
+  trail: TrailEntry[];
+  trailIds: number;
+  cursor: number | null;
+  current: Question | null;
+  live: Live;
+  line: LineRef;
+  replay: { id: number; rest: Question[] } | null;
+  answered: Map<string, number>;
+  skipped: Set<string>;
+  stats: Stats;
+  extraNew: number;
+  ahead: boolean;
+}
+/** Lines of the trail kept when the page is left (the one being replayed is always kept). */
+const KEPT_LINES = 5;
+
+/**
+ * A saved session with the current versions of its repertoires (reloaded on return: cards and
+ * moves may have changed). The question on the board is dropped when its position is no longer trained.
+ */
+function restore(s: SavedReview | undefined, sources: Source[]): SavedReview | undefined {
+  if (!s) return undefined;
+  const fix = (q: Question): Question => ({ ...q, source: sources.find((x) => x.id === q.source.id) ?? q.source });
+  const fixAll = (qs: Question[]) => qs.map(fix);
+  const trained = (q: Question) => q.replay !== undefined || q.source.positions.some((p) => p.fen === q.target.fen);
+  const current = s.current && fix(s.current);
+  const live = s.live;
+  return {
+    ...s,
+    trail: s.trail.map((e) => ({ ...e, questions: fixAll(e.questions), skippedAt: e.skippedAt && fix(e.skippedAt) })),
+    current: current && trained(current) ? current : null,
+    live:
+      live &&
+      ('question' in live
+        ? { question: live.question && fix(live.question) }
+        : {
+            next: () => {
+              const q = live.next();
+              return q && fix(q);
+            },
+          }),
+    line: { ...s.line, questions: fixAll(s.line.questions) },
+    replay: s.replay && { ...s.replay, rest: fixAll(s.replay.rest) },
+  };
+}
 
 /** Why a line stops after my move: its end, the shortened lines, or a sequel already reviewed. */
 type LineEnd = 'end' | 'cut' | 'done';
@@ -115,6 +178,7 @@ export function ReviewMode({
   chanceOf,
   learntElsewhere = 0,
   noNewLimit = false,
+  sessionKey,
 }: {
   sources: Source[];
   newPerDay: number;
@@ -139,28 +203,32 @@ export function ReviewMode({
   chanceOf?: (source: Source, fen: string) => number | undefined;
   /** Lines learnt today in the repertoires not in this session (the daily limit is shared). */
   learntElsewhere?: number;
+  /** The scope of the session: put aside under this key when the page is left, taken up on return. */
+  sessionKey?: string;
 }) {
-  const [extraNew, setExtraNew] = useState(0);
-  const [ahead, setAhead] = useState(false);
+  /** The session put aside when the page was left (e.g. for the explorer): back where it was. */
+  const [saved] = useState(() => (sessionKey ? restore(savedSession<SavedReview>(sessionKey), sources) : undefined));
+  const [extraNew, setExtraNew] = useState(saved?.extraNew ?? 0);
+  const [ahead, setAhead] = useState(saved?.ahead ?? false);
   /** Positions (fen) answered in this session, and when last (not asked again when reviewing ahead). */
-  const answered = useRef(new Map<string, number>());
+  const answered = useRef(saved?.answered ?? new Map<string, number>());
   /** Positions (fen) put aside with a swipe, whatever the repertoire (the cards are the user's). */
-  const skipped = useRef(new Set<string>());
+  const skipped = useRef(saved?.skipped ?? new Set<string>());
   /**
    * The lines of the session in order, finished or passed: the dots of the swipe bar, a history
    * browsed like back / forward (a swipe to the right: the line before; to the left: the next one,
    * then the training where it was).
    */
-  const [trail, setTrail] = useState<TrailEntry[]>([]);
-  const trailIds = useRef(0);
+  const [trail, setTrail] = useState<TrailEntry[]>(saved?.trail ?? []);
+  const trailIds = useRef(saved?.trailIds ?? 0);
   /** The line of the trail on the board (replayed, nothing recorded); null: the training itself. */
-  const [cursor, setCursor] = useState<number | null>(null);
-  /** The training left while browsing the trail: its question, or what was to come after a pause. */
-  const live = useRef<{ question: Question | null } | { next: () => Question | null } | null>(null);
-  /** The line being answered (`id`: a passed line taken up again, its dot replaced at the end). */
-  const line = useRef<{ id?: number; questions: Question[]; results: TrailResult[] }>({ questions: [], results: [] });
+  const [cursor, setCursor] = useState<number | null>(saved?.cursor ?? null);
+  /** The training left while browsing the trail. */
+  const live = useRef<Live>(saved?.live ?? null);
+  /** The line being answered. */
+  const line = useRef<LineRef>(saved?.line ?? { questions: [], results: [] });
   /** The line of the trail being replayed: its questions left. */
-  const replay = useRef<{ id: number; rest: Question[] } | null>(null);
+  const replay = useRef<{ id: number; rest: Question[] } | null>(saved?.replay ?? null);
   /** Ends the line being answered: its dot (grey when passed at `skippedAt`). */
   const closeLine = (skippedAt?: Question) => {
     const l = line.current;
@@ -172,10 +240,9 @@ export function ReviewMode({
     setTrail((t) => [...t.filter((e) => e.id !== l.id && !answeredHere(e)), { ...entry, id: ++trailIds.current }]);
   };
   const firstOf = (items: Item[]) => items.find((p) => !skipped.current.has(p.target.fen)) ?? items[0];
-  /** reviewed: all answers; asked: positions already learnt; firstTry: asked and right first time. */
-  const [stats, setStats] = useState({ reviewed: 0, asked: 0, firstTry: 0 });
+  const [stats, setStats] = useState<Stats>(saved?.stats ?? { reviewed: 0, asked: 0, firstTry: 0 });
   const [now, setNow] = useState(() => Date.now());
-  const [current, setCurrent] = useState<Question | null>(null);
+  const [current, setCurrent] = useState<Question | null>(saved?.current ?? null);
   const [round, setRound] = useState(0);
   const jumpTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   /** The line just ended with the last answer (a badge until the next one). */
@@ -476,6 +543,31 @@ export function ReviewMode({
     const i = trail.findIndex((e) => e.id === id);
     if (i >= 0 && i !== cursor) openAt(i);
   };
+
+  // Leaving the page (explorer, other mode): the session is put aside, with its last lines and
+  // the question on the board (or the one coming after the pause).
+  const snapshot = useRef<() => SavedReview>(undefined);
+  snapshot.current = () => {
+    const start = Math.max(0, Math.min(trail.length - KEPT_LINES, cursor ?? Infinity));
+    return {
+      trail: trail.slice(start),
+      trailIds: trailIds.current,
+      cursor: cursor === null ? null : cursor - start,
+      current: cursor === null && pendingNext.current ? pendingNext.current() : current,
+      live: live.current,
+      line: line.current,
+      replay: replay.current && { ...replay.current, rest: [...replay.current.rest] },
+      answered: answered.current,
+      skipped: skipped.current,
+      stats,
+      extraNew,
+      ahead,
+    };
+  };
+  useEffect(() => {
+    if (!sessionKey) return;
+    return () => saveSession(sessionKey, snapshot.current?.());
+  }, [sessionKey]);
 
   if (!current) {
     return (

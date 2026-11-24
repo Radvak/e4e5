@@ -119,7 +119,10 @@ export function LevelTable({
       const best = found.get(m.uci);
       return { m, n, rank: data.moves.indexOf(m), direct, best, score: best?.score ?? direct };
     });
-  if (sort === 'score') rows.sort((a, b) => b.score - a.score || b.n - a.n);
+  // Searching: the moves the search scored first (their scores compare the same lines), then the
+  // others on their own win rate (too rarely played to be candidates: a noisy score, not the best).
+  const scored = (r: (typeof rows)[number]) => (searching && level && !r.best ? 0 : 1);
+  if (sort === 'score') rows.sort((a, b) => scored(b) - scored(a) || b.score - a.score || b.n - a.n);
   // Searched up to the depth reached: the best of these is the move the search recommends (my
   // turn only: on the opponent's, the best for me is not its likely move).
   const top = searching && myTurn ? rows.find((r) => r.best && r.best.minReach === reach) : undefined;
@@ -143,7 +146,7 @@ export function LevelTable({
 
   // The box sets how likely a line must stay to be followed (thresholds of the search steps),
   // not a number of moves: how far the lines go follows from it, and varies with the position.
-  const steps = level?.steps ?? [0.5, 0.25, 0.12, 0.06];
+  const steps = level?.steps ?? [0.5, 0.25, 0.12, 0.06, 0.03];
   const threshold = (d: number) => (d > 0 ? `lignes ≥ ${pct(steps[d - 1]!)}` : 'coup seul');
   const reached = reach === null ? 0 : steps.indexOf(reach) + 1;
   const computing = searching && !!level && level.pending > 0;
@@ -202,7 +205,7 @@ export function LevelTable({
             const scoreTitle = !searching
               ? `${pct(direct)} pour vous dans les parties Lichess`
               : !best
-                ? 'Pas assez joué pour être calculé plus loin : score de ce coup seul.'
+                ? 'Pas assez joué pour être calculé : score brut de ce coup seul, classé après les coups calculés.'
                 : pruned
                   ? `Écarté plus tôt : calculé moins loin, score moins précis (${pct(direct)} après ce coup seul).`
                   : myTurn
@@ -224,7 +227,7 @@ export function LevelTable({
                     )}
                   </td>
                   <td className="score-col">
-                    <span className={`score ${searching && !pruned ? 'searched' : ''}`} title={scoreTitle}>
+                    <span className={`score ${searching && !pruned ? 'searched' : ''} ${searching && level && !best ? 'unsearched' : ''}`} title={scoreTitle}>
                       {pct(score)}
                     </span>
                   </td>

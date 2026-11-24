@@ -280,8 +280,12 @@ kbd { display: inline-block; min-width: 18px; padding: 0 4px; margin: 0 1px; bor
   background: var(--surface); color: var(--text);
 }
 .study-row:hover { background: var(--surface-2); }
-.study-row .study-name { flex: 1; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.study-row .study-meta { flex: none; font-size: 0.8rem; color: var(--muted); }
+.study-row .study-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.study-row .study-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.study-row.other .study-name { color: var(--text-2); font-weight: 500; }
+.study-hint { margin-left: 8px; padding: 1px 6px; border-radius: 4px; background: var(--surface-3); color: var(--muted); font-size: 0.72rem; font-weight: 600; vertical-align: 1px; }
+.study-row .study-meta { font-size: 0.8rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.catalogue-note { margin: 0 0 10px; }
 .study-row > svg { flex: none; color: var(--muted); }
 
 /* A study opened: the board (where the chapters lead) beside the choice of chapters. */
@@ -296,6 +300,9 @@ kbd { display: inline-block; min-width: 18px; padding: 0 4px; margin: 0 1px; bor
 .field { display: flex; flex-direction: column; gap: 6px; }
 .field-label { font-size: 0.78rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
 .chapter-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.chapter-groups { display: flex; flex-direction: column; gap: 12px; }
+.chapter-group-title { margin: 0 0 6px; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-2); }
+.chapter-group-title .muted { font-weight: 400; }
 .chapter { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); cursor: pointer; transition: border-color 0.12s, background 0.12s; }
 .chapter:hover { border-color: var(--border-strong); }
 .chapter.on { border-color: var(--accent); background: var(--accent-soft); }
@@ -721,6 +728,8 @@ button.badge:focus-visible { outline: 2px solid currentColor; outline-offset: 1p
 .level-table td.score-col { text-align: right; white-space: nowrap; width: 1%; }
 .level-table .score { display: inline-block; min-width: 46px; text-align: center; border-radius: 4px; padding: 1px 4px; font-variant-numeric: tabular-nums; background: var(--surface-3); color: var(--text-2); font-weight: 600; }
 .level-table .score.searched { background: color-mix(in srgb, var(--level) 22%, transparent); color: #dcc4ff; font-weight: 700; }
+/* Not scored by the search (too rarely played): its raw win rate, ranked after the scored moves. */
+.level-table .score.unsearched { background: transparent; color: var(--muted); font-weight: 400; }
 .level-table tr.level-top .score { outline: 1px solid var(--level); }
 .level-table .sf-tag { display: inline-grid; place-items: center; width: 18px; height: 18px; margin-left: 6px; vertical-align: middle; color: #fff; background: var(--engine); border: 1px solid var(--muted); border-radius: 4px; }
 .level-table td.unfold-col { width: 1%; padding: 0 2px; }

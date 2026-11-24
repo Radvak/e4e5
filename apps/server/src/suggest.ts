@@ -1,17 +1,28 @@
 /**
- * Suggested moves search on stored statistics (`bestMoves`), step by step with a smaller
- * probability threshold each time (`REACH_STEPS`): the ranking returned is the one at the
- * smallest threshold whose positions are all known, so the candidates are compared on the same
- * lines. From the 12% step on, only the best `KEEP_DEEP` moves of the step before are looked at
- * deeper; the others keep their score of that step. `missing` lists the positions of the next
- * step (most reached first): fetch them, search again. A search wanting more than
- * `MAX_POSITIONS` positions stops at the step before (nothing missing).
+ * Suggested moves search on stored statistics (`bestMoves`).
+ *
+ * With the game statistics file (gameStats.ts), every position is read locally: one search at
+ * the smallest threshold (`REACH_STEPS`), wide and deep (`LOCAL_SEARCH`). A position absent from
+ * the file is too rare to matter (fewer games than its threshold, all levels together, or past
+ * its last ply): the line ends there, nothing is fetched. Both turns search the same way, so an
+ * opponent's move scores exactly the best move shown after it.
+ *
+ * Without it, positions come from Lichess one request at a time: step by step with a smaller
+ * threshold each time, the ranking returned is the one at the smallest threshold whose positions
+ * are all known, so the candidates are compared on the same lines. From the 12% step on, only
+ * the best `KEEP_DEEP` moves of the step before are looked at deeper; the others keep their
+ * score of that step. `missing` lists the positions of the next step (most reached first): fetch
+ * them, search again. A search wanting more than `MAX_POSITIONS` positions stops at the step
+ * before (nothing missing).
  */
 import { bestMoves, turnOf, type Color, type ExplorerResponse, type SuggestedMove } from '@tabiya/core';
-import { storedStats } from './stats.js';
+import { gamePeriod, gameStatsOf } from './gameStats.js';
+import { MAX_MOVES, storedStats } from './stats.js';
 
 /** Probability thresholds of the steps (a position reached in fewer games is not explored). */
-export const REACH_STEPS = [0.5, 0.25, 0.12, 0.06];
+export const REACH_STEPS = [0.5, 0.25, 0.12, 0.06, 0.03];
+/** Local search: my 8 most played moves at the start, 3 further on, lines up to 10 moves of mine. */
+const LOCAL_SEARCH = { rootCandidates: 8, candidates: 3, maxDepth: 10 };
 /** From the 12% step on, only this many of my first moves (best at the step before) go deeper. */
 const KEEP_DEEP = 3;
 /** Positions a search may need (Lichess allows one request at a time). */
@@ -41,6 +52,23 @@ export async function suggestMoves(
   color: Color = turnOf(root),
 ): Promise<Suggestions> {
   const steps = REACH_STEPS.slice(0, depth);
+  if (gamePeriod() !== null) {
+    // Every position read locally (null: absent from the file, the line ends there).
+    const read = new Map<string, ExplorerResponse | null>([[root, rootStats.data]]);
+    const statsAt = (f: string) => {
+      if (!read.has(f)) read.set(f, gameStatsOf(f, speeds, ratings, MAX_MOVES));
+      return read.get(f);
+    };
+    const reach = steps.at(-1) ?? null;
+    const { moves } = bestMoves(root, statsAt, { ...LOCAL_SEARCH, minReach: reach ?? 2, color });
+    return {
+      moves: moves.map((m) => ({ ...m, minReach: reach })),
+      reach,
+      target: steps.at(-1) ?? REACH_STEPS[0]!,
+      missing: [],
+      approximate: rootStats.exact ? [] : [root],
+    };
+  }
   const known = new Map([[root, rootStats]]);
   // On the opponent's turn every likely move of its is searched (none pruned), each from the
   // position after it: more positions.

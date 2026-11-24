@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { api, type BestMovesResponse } from '../api';
 
 /** Steps of the search at my level (server REACH_STEPS): "profondeur" checked follows them all. */
-export const LEVEL_STEPS = 4;
+export const LEVEL_STEPS = 5;
 
 /**
  * Whether the search at my level follows the likely lines ("profondeur", kept on this device) as

@@ -68,6 +68,24 @@ export function pgnToMoves(pgn: string): PgnImport {
   return { moves, games: games.length, errors };
 }
 
+/**
+ * What a chapter is about, from its moves and headers:
+ * - opening: lines from the initial position (or joining them), the stuff of a repertoire;
+ * - game: one long main line from the initial position, a played game (players, result) or a
+ *   line going further than an opening does (annotated games, model games);
+ * - endgame: starts from its own position with few pieces left (kings and pawns aside);
+ * - position: starts from its own position, the rest (middlegame, tactics, exercises).
+ * Only openings and games can join a repertoire (they start from the initial position).
+ */
+export type ChapterKind = 'opening' | 'game' | 'endgame' | 'position';
+
+/** Pieces other than kings and pawns at most, for a position to be an endgame. */
+const ENDGAME_PIECES = 4;
+/** A main line this long (half-moves from the initial position) is a game, not an opening. */
+const GAME_PLIES = 60;
+/** …or this long with the players and a result in the headers. */
+const PLAYED_GAME_PLIES = 30;
+
 /** A game of a PGN with several (a chapter of a Lichess study), to choose which to import. */
 export interface PgnChapter {
   /** ChapterName (Lichess studies), else Event, else "Partie n". */
@@ -79,6 +97,8 @@ export interface PgnChapter {
    * reached by another such chapter (Lichess chapters often start after a few moves).
    */
   joins: boolean;
+  /** What it is about (an opening, a game, an endgame, another position). */
+  kind: ChapterKind;
   /** Moves of the chapter, variations included. */
   moves: number;
   /** Deepest half-move of the chapter, counted from the initial position (its FEN's move number). */
@@ -113,11 +133,18 @@ export function pgnChapters(pgn: string): PgnChapter[] {
       }
     }
     const depthOf = depth(game.moves);
+    let mainLine = 0;
+    for (let n: Node<PgnNodeData> | undefined = game.moves.children[0]; n; n = n.children[0]) mainLine++;
+    const board = start.isOk ? start.value.board : null;
+    const pieces = board ? board.occupied.diff(board.pawn).diff(board.king).size() : 32;
+    const player = (h: string) => !!game.headers.get(h) && game.headers.get(h) !== '?';
+    const played = player('White') && player('Black') && ['1-0', '0-1', '1/2-1/2'].includes(game.headers.get('Result') ?? '');
     return {
       chapter: {
         name: game.headers.get('ChapterName') || game.headers.get('Event') || `Partie ${i + 1}`,
         ...(orientation === 'white' || orientation === 'black' ? { orientation } : {}),
         joins: false,
+        kind: pieces <= ENDGAME_PIECES ? 'endgame' : 'position',
         moves: count(game.moves),
         maxPly: firstPly + depthOf,
         trunk: trunkOf(moves, startKey),
@@ -126,6 +153,8 @@ export function pgnChapters(pgn: string): PgnChapter[] {
       start: start.isOk ? startKey : null,
       plies,
       depth: depthOf,
+      mainLine,
+      played,
     };
   });
   // Joined: from the initial position, then from a position a joined chapter reaches, and so on.
@@ -139,6 +168,8 @@ export function pgnChapters(pgn: string): PgnChapter[] {
       if (c.chapter.joins || at === undefined) continue;
       c.chapter.joins = changed = true;
       c.chapter.maxPly = at + c.depth;
+      const line = at + c.mainLine;
+      c.chapter.kind = line >= GAME_PLIES || (c.played && line >= PLAYED_GAME_PLIES) ? 'game' : 'opening';
       for (const [f, p] of c.plies) if ((reached.get(f) ?? Infinity) > at + p) reached.set(f, at + p);
     }
   }

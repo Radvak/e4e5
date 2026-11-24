@@ -180,4 +180,30 @@ describe('best moves, by probability', () => {
     expect(c5.line.map((m) => m.san)).toEqual(['c5', 'Nf3', 'd6']);
     expect(c5.score).toBeCloseTo(0.6);
   });
+
+  it("an opponent's move scores exactly the best move searched after it (shrinkage included)", () => {
+    const e4 = after('e2e4');
+    // Few games: the shrinkage towards the position's score weighs, and must be the same.
+    const table = new Map([
+      [e4, stats([['e7e5', 'e5', 40, 10, 30], ['c7c5', 'c5', 20, 5, 25]])],
+      [after('e2e4', 'e7e5'), stats([['g1f3', 'Nf3', 25, 5, 10], ['f1c4', 'Bc4', 15, 5, 20]])],
+      [after('e2e4', 'e7e5', 'g1f3'), stats([['b8c6', 'Nc6', 20, 5, 15]])],
+      [after('e2e4', 'e7e5', 'f1c4'), stats([['g8f6', 'Nf6', 10, 5, 25]])],
+    ]);
+    const opts = { color: 'white' as const, minGames: 1, minReach: 0.1 };
+    const e5 = bestMoves(e4, (f) => table.get(f), opts).moves.find((m) => m.san === 'e5')!;
+    const best = bestMoves(after('e2e4', 'e7e5'), (f) => table.get(f), opts).moves[0]!;
+    expect(e5.score).toBe(best.score);
+    expect(e5.line.slice(1)).toEqual(best.line);
+  });
+
+  it('ends a line at a position known to have no statistics (null), without asking for it', () => {
+    const table = new Map<string, ExplorerResponse | null>([
+      [START_FEN, stats([['e2e4', 'e4', 600, 0, 400]])],
+      [after('e2e4'), null],
+    ]);
+    const r = bestMoves(START_FEN, (f) => table.get(f), { prior: 0 });
+    expect(r.missing).toEqual([]);
+    expect(r.moves[0]!.score).toBeCloseTo(0.6);
+  });
 });

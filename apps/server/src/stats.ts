@@ -37,7 +37,7 @@ import { explorerCooldownUntil, explorerFetch, RateLimited } from './lichess.js'
  * move very slowly (millions of games per position), so a year-old answer is still reliable.
  */
 const REFRESH_AFTER_MS = 365 * 86_400_000;
-const MAX_MOVES = 30;
+export const MAX_MOVES = 30;
 
 export interface StatsMeta {
   speeds: string[];

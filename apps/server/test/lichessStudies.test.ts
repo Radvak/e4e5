@@ -67,8 +67,8 @@ describe('Lichess studies', () => {
     expect(calls[0]!.url).toContain('/api/study/jtlLwUvh.pgn?orientation=true');
     expect(study).toMatchObject({ id: 'jtlLwUvh', name: 'Caro-Kann "CK"', color: 'black' });
     expect(study.chapters.map(({ pgn: _, trunk: __, ...c }) => c)).toEqual([
-      { id: 'ccJj8Q0b', name: 'Intro', orientation: 'black', joins: true, moves: 4, maxPly: 4 },
-      { id: 'AbCd1234', name: 'Advance', orientation: 'black', joins: true, moves: 2, maxPly: 6 },
+      { id: 'ccJj8Q0b', name: 'Intro', orientation: 'black', joins: true, kind: 'opening', moves: 4, maxPly: 4 },
+      { id: 'AbCd1234', name: 'Advance', orientation: 'black', joins: true, kind: 'opening', moves: 2, maxPly: 6 },
     ]);
   });
 

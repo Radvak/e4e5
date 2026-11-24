@@ -45,3 +45,21 @@ export function OpponentComment({ move }: { move: RepMove | undefined }) {
     createElement('span', { className: 'comment' }, move.comment),
   );
 }
+
+/**
+ * Training sessions put aside while the page is left (e.g. for the explorer, or the other mode),
+ * per mode and scope: back where it was on return. In memory only (lost on reload), forgotten
+ * after SESSION_MS.
+ */
+const sessions = new Map<string, { at: number; value: unknown }>();
+const SESSION_MS = 2 * 60 * 60_000;
+
+/** The session put aside under `key`, if recent. */
+export function savedSession<T>(key: string): T | undefined {
+  const s = sessions.get(key);
+  return s && Date.now() - s.at < SESSION_MS ? (s.value as T) : undefined;
+}
+
+export function saveSession<T>(key: string, value: T) {
+  sessions.set(key, { at: Date.now(), value });
+}

@@ -60,6 +60,8 @@ export function Training({ me }: { me: Me }) {
     return (source: Source, fen: string) => gaps.data?.[source.color]?.reach[fen];
   }, [gaps.data]);
   const ex = explorerParams(me, speed, range);
+  // The session is kept while the page is left (explorer, other mode), per scope.
+  const sessionKey = `${ids.join()}|${from ?? ''}`;
   // ?mode=test opens "Se tester" (e.g. from the home page when nothing is due), ?mode=review
   // "Réviser" (e.g. an error of Mes parties); else the last mode used.
   const [mode, setModeState] = useState<Mode>(() =>
@@ -139,6 +141,7 @@ export function Training({ me }: { me: Me }) {
           reachOf={reachOf}
           chanceOf={chanceOf}
           learntElsewhere={learntElsewhere}
+          sessionKey={`review|${sessionKey}`}
           idle={<Progress sources={sources} />}
         />
       ) : (
@@ -151,6 +154,7 @@ export function Training({ me }: { me: Me }) {
           onReview={onReview}
           onLearn={() => setMode('review')}
           onScore={setPlayScore}
+          sessionKey={`play|${sessionKey}`}
         />
       )}
 
