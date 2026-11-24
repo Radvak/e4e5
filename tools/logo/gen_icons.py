@@ -50,21 +50,25 @@ def board(scale=1.0, rx=20):
     )
 
 
-def svg(bg="rounded", scale=1.0, rx=20):
-    back = {
-        "rounded": f'<rect width="512" height="512" rx="116" fill="{FRAME}"/>',
-        "square": f'<rect width="512" height="512" fill="{FRAME}"/>',
-        "circle": f'<circle cx="256" cy="256" r="256" fill="{FRAME}"/>',
-        "none": "",
-        "disc": "",
+# Scale at which the board fills the whole 512 canvas (no frame).
+FULL = 512 / 352
+
+
+def svg(bg="rounded", scale=FULL, rx=20):
+    """The icon cut to a shape (FRAME behind the board), or the board alone ("none")."""
+    shape = {
+        "rounded": '<rect width="512" height="512" rx="116"/>',
+        "square": '<rect width="512" height="512"/>',
+        "disc": '<circle cx="256" cy="256" r="256"/>',
+        "none": None,
     }[bg]
-    if bg == "disc":  # FRAME circle; a large board shows a thin ring, corners cropped
-        return (
-            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">'
-            '<clipPath id="disc"><circle cx="256" cy="256" r="256"/></clipPath>'
-            f'<g clip-path="url(#disc)"><rect width="512" height="512" fill="{FRAME}"/>{board(scale, rx)}</g></svg>\n'
-        )
-    return f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">{back}{board(scale)}</svg>\n'
+    head = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">'
+    if shape is None:
+        return f"{head}{board(scale, rx)}</svg>\n"
+    return (
+        f'{head}<clipPath id="shape">{shape}</clipPath><g clip-path="url(#shape)">'
+        f'<rect width="512" height="512" fill="{FRAME}"/>{board(scale, rx)}</g></svg>\n'
+    )
 
 
 def png(content, out, size):
@@ -78,19 +82,21 @@ def main():
     (ICONS / "icon.svg").write_text(svg())
     png(svg(), ICONS / "icon-192.png", 192)
     png(svg(), ICONS / "icon-512.png", 512)
-    # iOS rounds the corners itself: full-bleed square.
-    png(svg("square"), ICONS / "apple-touch-icon.png", 180)
-    # Maskable: the board's corners must stay in the 80% safe circle.
-    png(svg("square", 0.8), ICONS / "icon-maskable-512.png", 512)
+    # iOS rounds the corners itself: full-bleed square, square board corners.
+    png(svg("square", rx=0), ICONS / "apple-touch-icon.png", 180)
+    # Maskable: the launcher crops to roughly the 80% safe circle; the board
+    # fills that area and the arrows stay inside it (like the Android adaptive icon).
+    png(svg("square", FULL * 0.8), ICONS / "icon-maskable-512.png", 512)
 
     # Android launcher (legacy, round, adaptive foreground on a FRAME background).
     for d, n in {"mdpi": 48, "hdpi": 72, "xhdpi": 96, "xxhdpi": 144, "xxxhdpi": 192}.items():
         png(svg(), RES / f"mipmap-{d}/ic_launcher.png", n)
+        # Round (Android 7 and older): rounded board inside a thin FRAME ring.
         png(svg("disc", 1.18, rx=80), RES / f"mipmap-{d}/ic_launcher_round.png", n)
         # Adaptive (Android 8+): 108dp canvas, about 72dp visible after masking.
         # The board fills the visible area (corners cropped by the mask, like
         # the round icon); the arrows stay inside the 66dp safe circle.
-        png(svg("none", (512 * 72 / 108) / 352),RES / f"mipmap-{d}/ic_launcher_foreground.png", n * 9 // 4)
+        png(svg("none", FULL * 72 / 108), RES / f"mipmap-{d}/ic_launcher_foreground.png", n * 9 // 4)
     (RES / "values/ic_launcher_background.xml").write_text(
         '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n'
         f'    <color name="ic_launcher_background">{FRAME}</color>\n</resources>\n'
