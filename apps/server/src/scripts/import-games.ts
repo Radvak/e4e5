@@ -11,10 +11,9 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { eq } from 'drizzle-orm';
-import type { ChesscomGame } from '../chesscom.js';
 import { db, runMigrations } from '../db/client.js';
 import { gameSyncs, users } from '../db/schema.js';
-import { fromChesscom, store, type SyncJob } from '../gamesync.js';
+import { fromChesscom, store, type ChesscomGame, type SyncJob } from '@tabiya/data';
 
 const { values } = parseArgs({ options: { login: { type: 'string' }, chesscom: { type: 'string' }, dir: { type: 'string' } } });
 if (!values.login || !values.chesscom || !values.dir) {
@@ -43,6 +42,6 @@ const job: SyncJob = { source: 'chesscom', status: 'running', startedAt: new Dat
 for (const file of files) {
   const { games } = JSON.parse(readFileSync(file, 'utf8')) as { games: ChesscomGame[] };
   const rows = games.map((g) => fromChesscom(user.id, account, g)).filter((r) => r !== null);
-  last = await store(user.id, 'chesscom', account, rows, job, last);
+  last = await store(db, user.id, 'chesscom', account, rows, job, last);
 }
 console.log(`${files.length} archive files: ${job.fetched} games read, ${job.added} new.`);

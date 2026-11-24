@@ -1,6 +1,6 @@
 packages:
   - packages/*
   - apps/*
-  - tools/*
+  - tools/stats
 onlyBuiltDependencies:
   - esbuild

@@ -6,7 +6,8 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { ChesscomUserNotFound, chesscomRatings } from './chesscom.js';
+import { ChesscomUserNotFound, chesscomRatings } from '@tabiya/data';
+import { gameSources } from './gameSources.js';
 import { db } from './db/client.js';
 import { sessions, users, type User } from './db/schema.js';
 import { env } from './env.js';
@@ -194,7 +195,7 @@ export async function authRoutes(app: FastifyInstance) {
     } else if (body.chesscomUsername) {
       patch.chesscomUsername = body.chesscomUsername;
       try {
-        patch.chesscomRatings = await chesscomRatings(body.chesscomUsername);
+        patch.chesscomRatings = await chesscomRatings(gameSources(), body.chesscomUsername);
       } catch (e) {
         if (e instanceof ChesscomUserNotFound) return reply.code(400).send({ error: 'Pseudo Chess.com inconnu' });
         req.log.warn({ err: e }, 'Chess.com unreachable');

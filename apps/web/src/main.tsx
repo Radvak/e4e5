@@ -5,11 +5,14 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { App } from './App';
 import { keepOfflineQueries, persistOptions } from './offline/persist';
+import { isNative } from './native';
 import { registerServiceWorker } from './pwa';
 import { SettingsProvider } from './settings';
 import './styles.css';
 
 registerServiceWorker();
+// Mobile app: back from Lichess OAuth on the app's own address.
+if (isNative()) void import('./local/lichessLogin').then((m) => m.listenForLichessCallback());
 
 const queryClient = new QueryClient({
   defaultOptions: {

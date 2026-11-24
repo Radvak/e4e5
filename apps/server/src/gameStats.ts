@@ -1,6 +1,6 @@
 /**
  * Position statistics of the Lichess game database (database.lichess.org), built offline by
- * tools/sync (buildStats.ts) into a SQLite file: one row per position played often enough, keyed
+ * tools/stats (build.ts) into a SQLite file: one row per position played often enough, keyed
  * by its Zobrist key, with its games counted per speed and rating bucket (core statsCodec). Any
  * settings are answered by adding up their cells, without asking Lichess.
  *

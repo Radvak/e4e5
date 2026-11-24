@@ -11,6 +11,7 @@ import type { Me } from './api';
 import { Lacunes } from './pages/Lacunes';
 import { Explorer } from './pages/Explorer';
 import { Games, useGamesReport } from './pages/Games';
+import { LichessCallback } from './pages/LichessCallback';
 import { Login } from './pages/Login';
 import { RepertoireEditor } from './pages/RepertoireEditor';
 import { Repertoires } from './pages/Repertoires';
@@ -165,7 +166,8 @@ export function App() {
           items={[
             { label: 'Mon compte', to: '/compte' },
             { label: 'Paramètres', to: '/settings' },
-            { label: 'Se déconnecter', onClick: logout, danger: true },
+            // Local mode: no login, the accounts are on the device.
+            ...(me.data.local ? [] : [{ label: 'Se déconnecter', onClick: logout, danger: true }]),
           ]}
         />
       </header>
@@ -188,6 +190,7 @@ export function App() {
           <Route path="/bilan/progres" element={<Redirect to="/lacunes" />} />
           <Route path="/settings" element={<Settings me={me.data} />} />
           <Route path="/compte" element={<Account me={me.data} />} />
+          {me.data.local && <Route path="/lichess-callback" element={<LichessCallback />} />}
           <Route path="/stats" element={<Redirect to="/lacunes" />} />
           <Route path="/gaps" element={<Redirect to="/repertoires" />} />
           <Route path="/games" element={<Redirect to="/parties" />} />

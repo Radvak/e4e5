@@ -1,12 +1,12 @@
 node_modules/
 dist/
 data/
+# ...but not the shared data package
+!packages/data/
 backups/
 .env
 *.log
 .DS_Store
 apps/web/public/stockfish/
 # Sync tool: personal config (credentials) and downloaded data
-tools/sync/sync.config.json
-tools/sync/.cache/
 MIGRATION-SERVERLESS.md

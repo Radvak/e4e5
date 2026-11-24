@@ -1,17 +1,20 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { constants as zlib } from 'node:zlib';
 import compress from '@fastify/compress';
 import cookie from '@fastify/cookie';
 import fastifyStatic from '@fastify/static';
 import Fastify from 'fastify';
+import { setOpeningsTable } from '@tabiya/data';
 import { ZodError } from 'zod';
 import { authRoutes } from './auth.js';
 import { runMigrations } from './db/client.js';
 import { env } from './env.js';
-import { WEB_DIST } from './paths.js';
+import { SEED_DIR, WEB_DIST } from './paths.js';
 import { explorerRoutes } from './routes/explorer.js';
 import { gameRoutes } from './routes/games.js';
 import { gapRoutes } from './routes/gaps.js';
+import { statsFileRoutes } from './routes/statsFiles.js';
 import { syncRoutes } from './routes/sync.js';
 import { repertoireRoutes } from './routes/repertoires.js';
 import { trainingRoutes } from './routes/training.js';
@@ -32,11 +35,14 @@ app.setErrorHandler((err, _req, reply) => {
   if (err instanceof ZodError) {
     return reply.code(400).send({ error: err.issues[0]?.message ?? 'Invalid request', issues: err.issues });
   }
-  app.log.error(err);
   const status = (err as { statusCode?: number }).statusCode ?? 500;
+  // Expected failures (404, 400 of @tabiya/data) are answers, not server errors.
+  if (status >= 500) app.log.error(err);
+  else app.log.debug(err);
   return reply.code(status).send({ error: status < 500 ? (err as Error).message : 'Erreur interne' });
 });
 
+setOpeningsTable(() => readFileSync(join(SEED_DIR, 'openings.tsv'), 'utf8'));
 await importSeeds(app.log);
 
 app.get('/api/health', async () => ({ ok: true }));
@@ -47,6 +53,7 @@ await app.register(trainingRoutes);
 await app.register(gapRoutes);
 await app.register(gameRoutes);
 await app.register(syncRoutes);
+await app.register(statsFileRoutes);
 
 // In production the server also serves the built web app (single container).
 const webDist = WEB_DIST;

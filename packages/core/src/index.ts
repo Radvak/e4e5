@@ -11,3 +11,4 @@ export * from './fsrs.js';
 export * from './summary.js';
 export * from './zobrist.js';
 export * from './statsCodec.js';
+export * from './suggest.js';

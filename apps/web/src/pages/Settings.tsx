@@ -1,7 +1,10 @@
-import { useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { gapCutoffFor, LINE_DEPTHS } from '@tabiya/core';
-import type { Me, TrainingSummary } from '../api';
+import { ApiError, serverApi, type Me, type TrainingSummary } from '../api';
+import { isLocalMode, setLocalMode } from '../local/mode';
+import { isNative } from '../native';
 import { RatingRange } from '../components/RatingRange';
 import { depthPct, explorerParams, NO_LIMIT, SPEED_CHOICES, SPEED_NAMES, useSettings, type LearnOrder, type SpeedChoice } from '../settings';
 import { PageHeader, plural } from '../ui';
@@ -144,6 +147,167 @@ export function Settings({ me }: { me: Me }) {
           </select>
         </div>
       </section>
+
+      <LocalModeSetting ratings={ex.ratings} />
+    </div>
+  );
+}
+
+/**
+ * Local mode (experimental): the repertoires kept in SQLite on this device instead of the
+ * server, a step of the migration without a server (MIGRATION-SERVERLESS.md).
+ */
+function LocalModeSetting({ ratings }: { ratings: number[] }) {
+  const [state, setState] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const local = isLocalMode();
+  const copy = async () => {
+    if (!confirm('Remplacer les répertoires, la progression et les comptes de cet appareil par une copie de ceux du serveur ?')) return;
+    setState('Copie en cours…');
+    try {
+      const { copyFromServer } = await import('../local/backend');
+      const n = await copyFromServer(serverApi);
+      setState(
+        `${plural(n.repertoires, 'répertoire copié', 'répertoires copiés')}, ${plural(n.moves, 'coup', 'coups')}, ${plural(n.cards, 'coup appris', 'coups appris')}.`,
+      );
+      await queryClient.invalidateQueries();
+    } catch (e) {
+      const signedOut = e instanceof ApiError && e.status === 401;
+      setState(signedOut ? 'Échec : connectez-vous d’abord au serveur (mode local désactivé), puis réactivez-le.' : `Échec : ${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
+  // The mobile app is local only: just the statistics files.
+  if (isNative()) {
+    return (
+      <section className="card" id="local">
+        <h3>Statistiques</h3>
+        <LocalStatsSetting ratings={ratings} />
+      </section>
+    );
+  }
+  return (
+    <section className="card" id="local">
+      <h3>Mode local (expérimental)</h3>
+      <div className="setting">
+        <div className="what">
+          <strong>Répertoires, entraînement et parties sur cet appareil</strong>
+          <div className="hint">
+            Les répertoires, la progression et vos parties sont enregistrés dans le navigateur, sans le serveur. Les parties sont importées
+            directement depuis Lichess et Chess.com, et les statistiques sont lues dans des fichiers téléchargés (ci-dessous). Vos comptes Lichess et Chess.com sont liés sur cet appareil (Mon compte), sans connexion au serveur. Un seul onglet à la fois.
+          </div>
+        </div>
+        <label className="check">
+          <input type="checkbox" checked={local} onChange={(e) => setLocalMode(e.target.checked)} /> Activé
+        </label>
+      </div>
+      {local && (
+        <div className="setting">
+          <div className="what">
+            <strong>Copier depuis le serveur</strong>
+            <div className="hint">Remplace les répertoires, la progression et les comptes liés de cet appareil par ceux du serveur (mêmes identifiants). Le lien Lichess est à refaire sur l’appareil.</div>
+            {state && <div className="hint">{state}</div>}
+          </div>
+          <button onClick={copy}>Copier</button>
+        </div>
+      )}
+      {local && <LocalStatsSetting ratings={ratings} />}
+    </section>
+  );
+}
+
+const bucketLabel = (b: number, next?: number) => (b === 0 ? 'Moins de 1000' : next ? `${b}–${next - 1}` : `${b} et plus`);
+const mo = (bytes: number) => `${(bytes / 1e6).toFixed(bytes < 1e7 ? 1 : 0)} Mo`;
+
+/**
+ * Statistics on the device (local mode): the files per rating bucket of the Lichess game
+ * database, downloaded here (local/stats.ts, loaded only in local mode). The buckets of the
+ * settings are marked: with all of them here, the explorer, the search at my level and the
+ * missing moves are computed on the device.
+ */
+function LocalStatsSetting({ ratings }: { ratings: number[] }) {
+  type Stats = typeof import('../local/stats');
+  const [index, setIndex] = useState<Awaited<ReturnType<Stats['statsIndex']>> | null>(null);
+  const [files, setFiles] = useState<Awaited<ReturnType<Stats['localStatsFiles']>>>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState<Record<number, string>>({});
+  const queryClient = useQueryClient();
+  const lib = () => import('../local/stats');
+  const refresh = async () => setFiles(await (await lib()).localStatsFiles());
+  useEffect(() => {
+    void lib().then(async (m) => {
+      await m.statsIndex().then(setIndex, (e: unknown) => setError(e instanceof Error ? e.message : String(e)));
+      await refresh().catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
+    });
+  }, []);
+  const here = new Set(files.map((f) => f.bucket));
+  const download = async (file: NonNullable<typeof index>['files'][number]) => {
+    setBusy((b) => ({ ...b, [file.bucket]: '0 %' }));
+    try {
+      await (await lib()).downloadStats(file, (p) =>
+        setBusy((b) => ({ ...b, [file.bucket]: p.total ? `${Math.round((100 * p.loaded) / p.total)} %` : mo(p.loaded) })),
+      );
+      setError(null);
+    } catch (e) {
+      setError(`${bucketLabel(file.bucket)} : ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setBusy(({ [file.bucket]: _, ...rest }) => rest);
+      await refresh();
+      await queryClient.invalidateQueries();
+    }
+  };
+  const remove = async (bucket: number) => {
+    await (await lib()).deleteStats(bucket);
+    await refresh();
+    await queryClient.invalidateQueries();
+  };
+  const offered = index?.files ?? [];
+  const missing = offered.filter((f) => ratings.includes(f.bucket) && !here.has(f.bucket));
+  const downloadMine = async () => {
+    for (const f of missing) await download(f);
+  };
+  return (
+    <div className="setting setting-block">
+      <div className="what">
+        <strong>Statistiques sur cet appareil</strong>
+        <div className="hint">
+          Les parties de la base Lichess{index ? ` (${index.period.since === index.period.until ? index.period.since : `${index.period.since} à ${index.period.until}`})` : ''}, une
+          tranche Elo par fichier. Avec toutes les tranches de vos réglages (marquées ●), l’explorateur, la recherche à votre niveau et les coups
+          manquants sont calculés sur l’appareil ; sinon, par le serveur.
+        </div>
+        {error && <div className="hint error">{error}</div>}
+      </div>
+      {offered.length > 0 && (
+        <table className="stats-files">
+          <tbody>
+            {offered.map((f, i) => (
+              <tr key={f.bucket}>
+                <td>
+                  {ratings.includes(f.bucket) ? '● ' : ''}
+                  {bucketLabel(f.bucket, offered[i + 1]?.bucket)}
+                </td>
+                <td className="muted">{plural(f.positions, 'position', 'positions')}</td>
+                <td className="muted">{mo(f.bytes)}</td>
+                <td>
+                  {busy[f.bucket] ? (
+                    <span className="muted">{busy[f.bucket]}</span>
+                  ) : here.has(f.bucket) ? (
+                    <button className="link" onClick={() => remove(f.bucket)}>
+                      Supprimer
+                    </button>
+                  ) : (
+                    <button onClick={() => download(f)}>Télécharger</button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {missing.length > 0 && !Object.keys(busy).length && (
+        <button onClick={downloadMine}>
+          Télécharger les tranches de mes réglages ({mo(missing.reduce((n, f) => n + f.bytes, 0))})
+        </button>
+      )}
     </div>
   );
 }

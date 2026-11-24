@@ -57,6 +57,37 @@ Application explains it to users (with an install button where the browser offer
 Installing needs HTTPS (or localhost). To try it: `pnpm --filter web build`, run the server, open
 it in Chrome. DevTools → Application shows the manifest and the service worker.
 
+## Mobile app (Capacitor)
+
+The same web app, packaged with Capacitor (`apps/web/android`, `apps/web/ios`, app id
+`com.tabiya`). It runs in local mode only, without the server: data in SQLite on the device,
+games straight from Lichess and Chess.com (native HTTP, no CORS), statistics from the files per
+rating bucket downloaded in Paramètres, Lichess linked by OAuth through
+`com.tabiya://lichess-callback`. iOS 16.4 at least; Android 7 (API 24).
+
+```bash
+pnpm --filter web build:native   # web build, copied into android/ and ios/
+pnpm --filter web android:apk                                    # android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+Needs a JDK 21 and the Android SDK (platform 36, build-tools) with `ANDROID_HOME` set, or
+Android Studio (`npx cap open android`); Xcode for iOS (`npx cap open ios`). The app downloads
+the statistics files from the project's GitHub Pages (`VITE_STATS_URL` to change it; CORS needed,
+the download runs in a worker).
+
+## Opening statistics files
+
+`tools/stats` builds the statistics of one month of the Lichess game database
+(database.lichess.org, streamed: nothing written but the result) and splits them per rating
+bucket for the app. GitHub Actions does it (`.github/workflows/stats.yml`: by hand, or the 8th of
+each month for last month), keeps the files in a release `stats-YYYY-MM`, and `pages.yml`
+publishes the latest one on GitHub Pages under `/stats/`.
+
+```bash
+pnpm --filter stats build-stats 2026-10 --out stats.db [--max-games N]   # needs zstd
+pnpm --filter stats split --in stats.db --out stats-files [--min 50]
+```
+
 ## Position statistics
 
 Lichess explorer answers are stored in the `position_stats` table and reused by every user.
@@ -113,3 +144,7 @@ docker run -p 3000:3000 -v tabiya-data:/data \
 
 On a corporate network (TLS proxy, npm mirror), pass them as build secrets (not kept in the
 image): `--secret id=ca,src=$NODE_EXTRA_CA_CERTS --secret id=npmrc,src=<npmrc with registry=...>`.
+
+## License
+
+GPL-3.0-or-later (see `LICENSE`): Stockfish, chessground and chessops are GPL too.

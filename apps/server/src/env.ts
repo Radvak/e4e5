@@ -26,13 +26,15 @@ export const env = {
   lichessAppToken: process.env.LICHESS_APP_TOKEN || null,
   chesscomApi: get('CHESSCOM_API', 'https://api.chess.com'),
   /**
-   * Secret of the sync tool (tools/sync) to send position statistics computed from Lichess
+   * Secret of a sync tool (outside this repository) to send position statistics computed from Lichess
    * games (shared by every account). Unset: that import is disabled.
    */
   syncToken: process.env.SYNC_TOKEN || null,
   /**
-   * Position statistics of the Lichess game database built by tools/sync (buildStats.ts), served
+   * Position statistics of the Lichess game database built by tools/stats (build.ts), served
    * before the Lichess explorer; absent file: explorer only.
    */
   statsDb: get('STATS_DB', isProd ? '/data/stats.db' : './data/stats.db'),
+  /** The statistics split per rating bucket (scripts/split-stats.ts), downloaded by the app (local mode). */
+  statsFilesDir: get('STATS_FILES_DIR', isProd ? '/data/stats-files' : './data/stats-files'),
 };

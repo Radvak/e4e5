@@ -12,9 +12,10 @@
  * castling as the king's move (e1g1).
  */
 import { parseSquare, makeSquare } from 'chessops';
-import { RATING_BUCKETS, type ExplorerMove } from './explorer.js';
+import { RATING_BUCKETS, type ExplorerMove, type ExplorerResponse } from './explorer.js';
+import { playUci } from './position.js';
 
-/** UltraBullet is no longer counted (buildStats), but keeps its place: the cells keep their numbers. */
+/** UltraBullet is no longer counted (tools/stats build.ts), but keeps its place: the cells keep their numbers. */
 export const STATS_SPEEDS = ['ultraBullet', 'bullet', 'blitz', 'rapid', 'classical'] as const;
 export const CELL_COUNT = STATS_SPEEDS.length * RATING_BUCKETS.length;
 
@@ -145,4 +146,87 @@ export function decodePositionStats(
   }
   moves.sort((a, b) => b.white + b.draws + b.black - (a.white + a.draws + a.black));
   return { ...total, moves };
+}
+
+/** Every count of the position, cell by cell (the inverse of encodePositionStats). */
+export function decodePositionCounts(data: Uint8Array): PositionCounts {
+  let i = 0;
+  const varint = () => {
+    let x = 0;
+    let scale = 1;
+    let byte: number;
+    do {
+      byte = data[i++]!;
+      x += (byte & 127) * scale;
+      scale *= 128;
+    } while (byte & 128);
+    return x;
+  };
+  const cells = (): CellCounts => {
+    const out: CellCounts = new Map();
+    for (let n = varint(); n > 0; n--) {
+      const cell = data[i++]!;
+      out.set(cell, [varint(), varint(), varint()]);
+    }
+    return out;
+  };
+  const total = cells();
+  const moves: PositionCounts['moves'] = [];
+  for (let n = varint(); n > 0; n--) {
+    const move = data[i]! | (data[i + 1]! << 8);
+    i += 2;
+    moves.push({ move, cells: cells() });
+  }
+  return { total, moves };
+}
+
+/** The cells of one rating bucket, every speed. */
+export function bucketCells(bucket: number): Set<number> {
+  return cellsOf([...STATS_SPEEDS], [bucket]);
+}
+
+/** Only these cells of the counts (moves left without any of them are dropped). */
+export function keepCells(counts: PositionCounts, cells: Set<number>): PositionCounts {
+  const pick = (c: CellCounts): CellCounts => new Map([...c].filter(([cell]) => cells.has(cell)));
+  return {
+    total: pick(counts.total),
+    moves: counts.moves.map((m) => ({ move: m.move, cells: pick(m.cells) })).filter((m) => m.cells.size > 0),
+  };
+}
+
+/** Games of the counts (all cells). */
+export const gamesOf = (cells: CellCounts): number => [...cells.values()].reduce((n, [w, d, b]) => n + w + d + b, 0);
+
+/**
+ * Statistics of a position for some speeds and rating buckets from its rows in one or more stats
+ * files (one per bucket: their cells add up), in the format of the Lichess explorer, most played
+ * moves first, at most `maxMoves`. null without any row.
+ */
+export function statsFromRows(fen: string, rows: Uint8Array[], speeds: string[], ratings: number[], maxMoves: number): ExplorerResponse | null {
+  if (!rows.length) return null;
+  const cells = cellsOf(speeds, ratings);
+  const total = { white: 0, draws: 0, black: 0 };
+  const byUci = new Map<string, { uci: string; white: number; draws: number; black: number }>();
+  for (const row of rows) {
+    const s = decodePositionStats(row, cells);
+    total.white += s.white;
+    total.draws += s.draws;
+    total.black += s.black;
+    for (const m of s.moves) {
+      const seen = byUci.get(m.uci);
+      if (seen) {
+        seen.white += m.white;
+        seen.draws += m.draws;
+        seen.black += m.black;
+      } else byUci.set(m.uci, { ...m });
+    }
+  }
+  const sorted = [...byUci.values()].sort((a, b) => b.white + b.draws + b.black - (a.white + a.draws + a.black));
+  const moves: ExplorerMove[] = [];
+  for (const m of sorted) {
+    if (moves.length >= maxMoves) break;
+    const san = playUci(fen, m.uci)?.san;
+    if (san) moves.push({ ...m, san });
+  }
+  return { ...total, moves, opening: null };
 }

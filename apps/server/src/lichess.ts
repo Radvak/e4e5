@@ -1,38 +1,17 @@
-/** Minimal Lichess API client (server side, with the user's OAuth token). */
+/** Minimal Lichess API client (server side): OAuth (shared, @tabiya/data lichessAccount.ts), explorer queue. */
+import { exchangeCode as sharedExchangeCode, getAccount as sharedGetAccount, type LichessAccount } from '@tabiya/data';
 import { env } from './env.js';
 
 const UA = 'tabiya';
 
-export interface LichessAccount {
-  id: string;
-  username: string;
-  perfs?: Record<string, { rating: number; games: number; prov?: boolean }>;
-}
+export type { LichessAccount };
 
-export async function exchangeCode(code: string, verifier: string, redirectUri: string): Promise<string> {
-  const res = await fetch(`${env.lichessHost}/api/token`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': UA },
-    body: new URLSearchParams({
-      grant_type: 'authorization_code',
-      code,
-      code_verifier: verifier,
-      redirect_uri: redirectUri,
-      client_id: env.lichessClientId,
-    }),
-  });
-  if (!res.ok) throw new Error(`Lichess token exchange failed: ${res.status} ${await res.text()}`);
-  const body = (await res.json()) as { access_token: string };
-  return body.access_token;
-}
+const host = () => ({ lichessHost: env.lichessHost, headers: { 'User-Agent': UA } });
 
-export async function getAccount(token: string): Promise<LichessAccount> {
-  const res = await fetch(`${env.lichessHost}/api/account`, {
-    headers: { Authorization: `Bearer ${token}`, 'User-Agent': UA },
-  });
-  if (!res.ok) throw new Error(`Lichess /api/account failed: ${res.status}`);
-  return (await res.json()) as LichessAccount;
-}
+export const exchangeCode = (code: string, verifier: string, redirectUri: string): Promise<string> =>
+  sharedExchangeCode(host(), env.lichessClientId, code, verifier, redirectUri);
+
+export const getAccount = (token: string): Promise<LichessAccount> => sharedGetAccount(host(), token);
 
 export class RateLimited extends Error {
   constructor(public retryAt: number) {
@@ -77,43 +56,4 @@ export function lichessApiQueue<T>(task: () => Promise<T>): Promise<T> {
   const run = apiQueue.then(task);
   apiQueue = run.catch(() => undefined);
   return run;
-}
-
-/** A game of the Lichess games export (only the fields used). */
-export interface LichessGameExport {
-  id: string;
-  rated: boolean;
-  variant: string;
-  speed: string;
-  createdAt: number;
-  lastMoveAt: number;
-  status: string;
-  players: { white: { user?: { name: string; id: string }; rating?: number }; black: { user?: { name: string; id: string }; rating?: number } };
-  winner?: 'white' | 'black';
-  moves: string;
-  initialFen?: string;
-}
-
-/** Games of a Lichess user played since `since` (ms), oldest first. */
-export async function lichessUserGames(username: string, since: number | null, token: string | null): Promise<LichessGameExport[]> {
-  const params = new URLSearchParams({
-    moves: 'true',
-    clocks: 'false',
-    evals: 'false',
-    opening: 'false',
-    sort: 'dateAsc',
-    perfType: 'ultraBullet,bullet,blitz,rapid,classical,correspondence',
-    ...(since ? { since: String(since + 1) } : {}),
-  });
-  const text = await lichessApiQueue(async () => {
-    const res = await fetch(`${env.lichessHost}/api/games/user/${encodeURIComponent(username)}?${params}`, {
-      headers: { Accept: 'application/x-ndjson', 'User-Agent': UA, ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-    });
-    if (!res.ok) throw new Error(`Lichess games export ${res.status}`);
-    return res.text();
-  });
-  return text
-    .split('\n')
-    .filter((line) => line.trim())
-    .map((line) => JSON.parse(line) as LichessGameExport);
 }

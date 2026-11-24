@@ -19,9 +19,11 @@ const score = (r: Results) => {
  */
 export function useGamesReport() {
   const { gamesDays, gamesSpeeds } = useSettings();
-  const { running } = useGameSync();
+  const { state, running } = useGameSync();
+  // The games stored: a sync that brought new ones gives a new report (not the cached one).
+  const stored = Object.values(state?.counts ?? {}).reduce((a, b) => a + b, 0);
   return useQuery({
-    queryKey: ['games-report', gamesDays, gamesSpeeds, running],
+    queryKey: ['games-report', gamesDays, gamesSpeeds, running, stored],
     queryFn: () => api.gamesReport(gamesDays, gamesSpeeds),
     enabled: !running,
     staleTime: 60_000,

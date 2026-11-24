@@ -1,3 +1,4 @@
+import { isLocalMode, LOCAL_METHODS } from './local/mode';
 import type { Color, ExplorerResponse, FsrsCard, Grade, RepertoireSummaryCounts, PgnChapter, RepMove, SuggestedMove } from '@tabiya/core';
 
 export interface StatsMeta {
@@ -9,8 +10,11 @@ export interface StatsMeta {
   source: 'lichess' | 'seed' | 'import' | 'database';
   /** Months of the games counted (YYYY-MM), else the explorer's whole history. */
   period?: { since: string; until: string };
-  /** Nothing stored for the position (Lichess is never asked). */
-  reason?: 'not-stored';
+  /**
+   * Why there are no statistics. not-stored: nothing stored for the position (the server never
+   * asks Lichess); local-stats: local mode, the statistics files of the settings not on the device.
+   */
+  reason?: 'not-stored' | 'local-stats';
 }
 export interface Stats {
   data: ExplorerResponse;
@@ -61,6 +65,8 @@ export interface Me {
   chesscom: { username: string; ratings: ChesscomRatings | null } | null;
   /** Live explorer statistics available (own Lichess token or the app's); stored ones are always served. */
   explorer: boolean;
+  /** Local mode: the accounts are kept on this device (no login, no password). */
+  local?: boolean;
 }
 export interface RepertoireSummary {
   id: string;
@@ -323,3 +329,16 @@ export const api = {
       `/api/explorer?${new URLSearchParams({ fen, speeds: speeds.join(','), ratings: ratings.join(',') })}`,
     ),
 };
+
+/** The server's methods, kept when local mode replaces some of them (copy from the server). */
+export const serverApi = { ...api };
+
+// Local mode (experimental): the methods of local/backend.ts answered on this device. Loaded only
+// when used, so SQLite is not downloaded otherwise.
+if (isLocalMode()) {
+  const local = () => import('./local/backend');
+  for (const key of LOCAL_METHODS) {
+    (api as Record<string, unknown>)[key] = (...args: unknown[]) =>
+      local().then((m) => (m.localApi[key] as (...a: unknown[]) => Promise<unknown>)(...args));
+  }
+}

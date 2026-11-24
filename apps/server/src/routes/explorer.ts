@@ -1,15 +1,12 @@
-import { fenKey, positionFromFen, RATING_BUCKETS } from '@tabiya/core';
-import { and, eq, or, sql } from 'drizzle-orm';
+import { fenKey, positionFromFen, RATING_BUCKETS, REACH_STEPS, suggestMoves } from '@tabiya/core';
+import { myGameMoves, myGamesAt, openingOfUcis, positionRepertoires, repertoireMovesAt } from '@tabiya/data';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireUser } from '../auth.js';
 import { db } from '../db/client.js';
-import { repertoires, repMoves } from '../db/schema.js';
-import { myGameMoves, myGamesAt } from '../myGames.js';
-import { openingOfUcis } from '../openings.js';
 import { getStudy, StudyError, studiesBy } from '../lichessStudies.js';
-import { getStats } from '../stats.js';
-import { REACH_STEPS, suggestMoves } from '../suggest.js';
+import { gamePeriod, gameStatsOf } from '../gameStats.js';
+import { getStats, MAX_MOVES, storedStats } from '../stats.js';
 
 const SPEEDS = ['bullet', 'blitz', 'rapid', 'classical'];
 const RATINGS: readonly number[] = RATING_BUCKETS;
@@ -59,7 +56,15 @@ export async function explorerRoutes(app: FastifyInstance) {
     if (!q.speeds.length || !q.ratings.length) return reply.code(400).send({ error: 'speeds and ratings required' });
     const first = await getStats(root, q.speeds, q.ratings);
     if (!first.data) return { moves: [], reach: null, target: REACH_STEPS.at(-1)!, steps: REACH_STEPS, pending: 0 };
-    const { missing: _missing, approximate: _approximate, ...found } = await suggestMoves(root, { data: first.data, exact: first.meta.exact }, q.speeds, q.ratings, q.depth, q.color);
+    const { missing: _missing, approximate: _approximate, ...found } = await suggestMoves(
+      (fens) => storedStats(fens, q.speeds, q.ratings),
+      root,
+      { data: first.data, exact: first.meta.exact },
+      q.depth,
+      q.color,
+      // With the game database file, every position is read at once (wide and deep search).
+      gamePeriod() !== null ? (f) => gameStatsOf(f, q.speeds, q.ratings, MAX_MOVES) : undefined,
+    );
     return { ...found, steps: REACH_STEPS, pending: 0 };
   });
 
@@ -79,7 +84,7 @@ export async function explorerRoutes(app: FastifyInstance) {
     const fen = parseFen(q.fen);
     if (!fen) return reply.code(400).send({ error: 'FEN invalide' });
     const user = req.user!;
-    return myGamesAt(user.id, { lichess: user.lichessUsername, chesscom: user.chesscomUsername }, { ...q, fen });
+    return myGamesAt(db, user.id, { lichess: user.lichessUsername, chesscom: user.chesscomUsername }, { ...q, fen });
   });
 
   /** The public studies of a Lichess player (to create a repertoire from one), most recently updated first. */
@@ -107,7 +112,7 @@ export async function explorerRoutes(app: FastifyInstance) {
 
   /** The moves of one of the user's synced games, to replay it on the board. */
   app.get<{ Params: { id: string } }>('/api/my-games/:id', { preHandler: requireUser }, async (req, reply) => {
-    const moves = await myGameMoves(req.user!.id, req.params.id);
+    const moves = await myGameMoves(db, req.user!.id, req.params.id);
     return moves ? { moves } : reply.code(404).send({ error: 'Partie introuvable' });
   });
 
@@ -119,48 +124,14 @@ export async function explorerRoutes(app: FastifyInstance) {
   });
 
   /** Moves prepared in this position in any of the user's repertoires (both colours). */
-  app.get('/api/explorer/repertoires', { preHandler: requireUser }, async (req, reply) => {
-    const fen = parseFen(z.object({ fen: z.string().min(10).max(120) }).parse(req.query).fen);
-    if (!fen) return reply.code(400).send({ error: 'FEN invalide' });
-    return db
-      .select({
-        repertoireId: repertoires.id,
-        name: repertoires.name,
-        color: repertoires.color,
-        id: repMoves.id,
-        paused: repMoves.paused,
-        uci: repMoves.uci,
-        san: repMoves.san,
-        isMain: repMoves.isMain,
-        comment: repMoves.comment,
-        nags: repMoves.nags,
-      })
-      .from(repMoves)
-      .innerJoin(repertoires, eq(repMoves.repertoireId, repertoires.id))
-      .where(and(eq(repertoires.userId, req.user!.id), eq(repMoves.fromFen, fen)));
-  });
+  app.get('/api/explorer/repertoires', { preHandler: requireUser }, async (req) =>
+    repertoireMovesAt(db, req.user!.id, z.object({ fen: z.string().min(10).max(120) }).parse(req.query).fen),
+  );
 
-  /**
-   * The repertoires containing this position (reached by one of their moves, or with moves from
-   * it: the initial position), with the number of their moves from here (0: end of their line).
-   */
-  app.get('/api/explorer/position-repertoires', { preHandler: requireUser }, async (req, reply) => {
-    const fen = parseFen(z.object({ fen: z.string().min(10).max(120) }).parse(req.query).fen);
-    if (!fen) return reply.code(400).send({ error: 'FEN invalide' });
-    return db
-      .select({
-        repertoireId: repertoires.id,
-        name: repertoires.name,
-        color: repertoires.color,
-        moves: sql<number>`sum(case when ${repMoves.fromFen} = ${fen} then 1 else 0 end)`,
-      })
-      .from(repMoves)
-      .innerJoin(repertoires, eq(repMoves.repertoireId, repertoires.id))
-      .where(and(eq(repertoires.userId, req.user!.id), or(eq(repMoves.fromFen, fen), eq(repMoves.toFen, fen))))
-      .groupBy(repertoires.id)
-      .orderBy(repertoires.name);
-  });
-
+  /** The repertoires containing this position, with the number of their moves from here. */
+  app.get('/api/explorer/position-repertoires', { preHandler: requireUser }, async (req) =>
+    positionRepertoires(db, req.user!.id, z.object({ fen: z.string().min(10).max(120) }).parse(req.query).fen),
+  );
 }
 
 function parseFen(raw: string): string | null {

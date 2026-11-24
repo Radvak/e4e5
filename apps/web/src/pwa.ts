@@ -9,6 +9,7 @@
  *   (components/InstallPrompt.tsx).
  */
 import { useEffect, useState } from 'react';
+import { isNative } from './native';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
@@ -20,7 +21,8 @@ const listeners = new Set<() => void>();
 const notify = () => listeners.forEach((f) => f());
 
 export function registerServiceWorker() {
-  if (!import.meta.env.PROD || !('serviceWorker' in navigator)) return;
+  // The mobile app ships its files: no service worker, nothing to install.
+  if (!import.meta.env.PROD || !('serviceWorker' in navigator) || isNative()) return;
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js').catch((e) => console.warn('Service worker not registered', e));
   });
@@ -36,8 +38,9 @@ export function registerServiceWorker() {
   });
 }
 
+/** Installed: the PWA opened from its icon, or the mobile app (Capacitor). */
 const standalone = () =>
-  window.matchMedia('(display-mode: standalone)').matches || (navigator as { standalone?: boolean }).standalone === true;
+  isNative() || window.matchMedia('(display-mode: standalone)').matches || (navigator as { standalone?: boolean }).standalone === true;
 
 const ios = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 

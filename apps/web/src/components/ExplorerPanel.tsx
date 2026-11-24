@@ -37,6 +37,7 @@ interface Props {
 
 export const REASONS: Record<NonNullable<StatsMeta['reason']>, string> = {
   'not-stored': 'position trop rare, absente des statistiques enregistrées',
+  'local-stats': 'téléchargez les tranches de vos réglages (Paramètres › Mode local)',
 };
 
 const monthLabel = (m: string) => new Date(`${m}-01T00:00:00Z`).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
