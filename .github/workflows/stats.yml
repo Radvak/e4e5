@@ -55,15 +55,17 @@ jobs:
           # The FEN of each position followed lives in the JS heap (the counters in typed arrays).
           NODE_OPTIONS: --max-old-space-size=12288
           MAX_GAMES: ${{ inputs.max_games || (github.event_name == 'push' && '1000000' || '') }}
-        run: pnpm --filter stats build-stats "${{ steps.month.outputs.month }}" --out "$RUNNER_TEMP/stats.db" ${MAX_GAMES:+--max-games "$MAX_GAMES"}
+        run: pnpm --filter stats --fail-if-no-match build-stats "${{ steps.month.outputs.month }}" --out "$RUNNER_TEMP/stats.db" ${MAX_GAMES:+--max-games "$MAX_GAMES"}
       - name: Split per rating bucket
-        run: pnpm --filter stats split --in "$RUNNER_TEMP/stats.db" --out "$RUNNER_TEMP/stats-files"
+        run: pnpm --filter stats --fail-if-no-match split --in "$RUNNER_TEMP/stats.db" --out "$RUNNER_TEMP/stats-files"
       - name: Release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.month.outputs.tag }}
           MONTH: ${{ steps.month.outputs.month }}
         run: |
+          # The previous release is replaced only by complete new files.
+          test -s "$RUNNER_TEMP/stats-files/index.json" || { echo "Pas de fichiers de statistiques : release inchangée"; exit 1; }
           gh release delete "$TAG" --yes --cleanup-tag || true
           gh release create "$TAG" "$RUNNER_TEMP"/stats-files/* --target "$GITHUB_SHA" --latest=false \
             --title "Statistiques d'ouvertures $MONTH" \
