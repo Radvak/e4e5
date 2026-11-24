@@ -2,9 +2,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { gapCutoffFor, LINE_DEPTHS } from '@e4e5/core';
-import { ApiError, serverApi, type Me, type TrainingSummary } from '../api';
-import { isLocalMode, setLocalMode } from '../local/mode';
-import { isServerless } from '../native';
+import type { Me, TrainingSummary } from '../api';
 import { RatingRange } from '../components/RatingRange';
 import { depthPct, explorerParams, NO_LIMIT, SPEED_CHOICES, SPEED_NAMES, useSettings, type LearnOrder, type SpeedChoice } from '../settings';
 import { fmt, lang, setLang, t, type Lang } from '../i18n';
@@ -200,79 +198,12 @@ export function Settings({ me }: { me: Me }) {
   );
 }
 
-/**
- * Local mode (experimental): the repertoires kept in SQLite on this device instead of the
- * server, a step of the migration without a server (MIGRATION-SERVERLESS.md).
- */
+/** The statistics files, downloaded on this device. */
 function LocalModeSetting({ ratings }: { ratings: number[] }) {
-  const [state, setState] = useState<string | null>(null);
-  const queryClient = useQueryClient();
-  const local = isLocalMode();
-  const copy = async () => {
-    if (!confirm(t('Remplacer les répertoires, la progression et les comptes de cet appareil par une copie de ceux du serveur ?', 'Replace the repertoires, progress and accounts of this device with a copy of the server’s?'))) return;
-    setState(t('Copie en cours…', 'Copying…'));
-    try {
-      const { copyFromServer } = await import('../local/backend');
-      const n = await copyFromServer(serverApi);
-      setState(
-        t(
-          `${plural(n.repertoires, 'répertoire copié', 'répertoires copiés')}, ${plural(n.moves, 'coup', 'coups')}, ${plural(n.cards, 'coup appris', 'coups appris')}.`,
-          `${plural(n.repertoires, 'repertoire copied', 'repertoires copied')}, ${plural(n.moves, 'move', 'moves')}, ${plural(n.cards, 'move learnt', 'moves learnt')}.`,
-        ),
-      );
-      await queryClient.invalidateQueries();
-    } catch (e) {
-      const signedOut = e instanceof ApiError && e.status === 401;
-      const why = e instanceof Error ? e.message : String(e);
-      setState(
-        signedOut
-          ? t('Échec : connectez-vous d’abord au serveur (mode local désactivé), puis réactivez-le.', 'Failed: first sign in to the server (local mode off), then turn it back on.')
-          : t(`Échec : ${why}`, `Failed: ${why}`),
-      );
-    }
-  };
-  // Without a server (mobile app, static hosting): local only, just the statistics files.
-  if (isServerless()) {
-    return (
-      <section className="card" id="local">
-        <h3>{t('Statistiques', 'Statistics')}</h3>
-        <LocalStatsSetting ratings={ratings} />
-      </section>
-    );
-  }
   return (
     <section className="card" id="local">
-      <h3>{t('Mode local (expérimental)', 'Local mode (experimental)')}</h3>
-      <div className="setting">
-        <div className="what">
-          <strong>{t('Répertoires, entraînement et parties sur cet appareil', 'Repertoires, training and games on this device')}</strong>
-          <div className="hint">
-            {t(
-              'Les répertoires, la progression et vos parties sont enregistrés dans le navigateur, sans le serveur. Les parties sont importées directement depuis Lichess et Chess.com, et les statistiques sont lues dans des fichiers téléchargés (ci-dessous). Vos comptes Lichess et Chess.com sont liés sur cet appareil (Mon compte), sans connexion au serveur. Un seul onglet à la fois.',
-              'The repertoires, progress and your games are saved in the browser, without the server. Games are imported directly from Lichess and Chess.com, and statistics are read from downloaded files (below). Your Lichess and Chess.com accounts are linked on this device (My account), without signing in to the server. One tab at a time.',
-            )}
-          </div>
-        </div>
-        <label className="check">
-          <input type="checkbox" checked={local} onChange={(e) => setLocalMode(e.target.checked)} /> {t('Activé', 'On')}
-        </label>
-      </div>
-      {local && (
-        <div className="setting">
-          <div className="what">
-            <strong>{t('Copier depuis le serveur', 'Copy from the server')}</strong>
-            <div className="hint">
-              {t(
-                'Remplace les répertoires, la progression et les comptes liés de cet appareil par ceux du serveur (mêmes identifiants). Le lien Lichess est à refaire sur l’appareil.',
-                'Replaces the repertoires, progress and linked accounts of this device with the server’s (same IDs). The Lichess link must be made again on the device.',
-              )}
-            </div>
-            {state && <div className="hint">{state}</div>}
-          </div>
-          <button onClick={copy}>{t('Copier', 'Copy')}</button>
-        </div>
-      )}
-      {local && <LocalStatsSetting ratings={ratings} />}
+      <h3>{t('Statistiques', 'Statistics')}</h3>
+      <LocalStatsSetting ratings={ratings} />
     </section>
   );
 }
@@ -283,8 +214,8 @@ const mo = (bytes: number) => `${fmt(bytes / 1e6, { maximumFractionDigits: bytes
 const pct = (n: number) => t(`${n} %`, `${n}%`);
 
 /**
- * Statistics on the device (local mode): the files per rating bucket of the Lichess game
- * database, downloaded here (local/stats.ts, loaded only in local mode). The buckets of the
+ * Statistics on the device: the files per rating bucket of the Lichess game database,
+ * downloaded here (local/stats.ts). The buckets of the
  * settings are marked: with all of them here, the explorer, the search at my level and the
  * missing moves are computed on the device.
  */
@@ -337,8 +268,8 @@ function LocalStatsSetting({ ratings }: { ratings: number[] }) {
           {t('Les parties de la base Lichess', 'The games of the Lichess database')}
           {index ? ` (${index.period.since === index.period.until ? index.period.since : `${index.period.since}${t(' à ', ' to ')}${index.period.until}`})` : ''}
           {t(
-            ', une tranche Elo par fichier. Avec toutes les tranches de vos réglages (marquées ●), l’explorateur, la recherche à votre niveau et les coups manquants sont calculés sur l’appareil ; sinon, par le serveur.',
-            ', one Elo range per file. With all the ranges of your settings (marked ●), the explorer, the search at your level and the missing moves are computed on the device; otherwise, by the server.',
+            ', une tranche Elo par fichier. Avec toutes les tranches de vos réglages (marquées ●), l’explorateur, la recherche à votre niveau et les coups manquants sont calculés sur l’appareil ; sans elles, pas de statistiques.',
+            ', one Elo range per file. With all the ranges of your settings (marked ●), the explorer, the search at your level and the missing moves are computed on the device; without them, no statistics.',
           )}
         </div>
         {error && <div className="hint error">{error}</div>}

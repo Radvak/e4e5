@@ -25,8 +25,8 @@ import {
 import * as schema from '../src/schema.js';
 import { users } from '../src/schema.js';
 
-const MIGRATIONS = fileURLToPath(new URL('../../../apps/server/drizzle', import.meta.url));
-const OPENINGS = fileURLToPath(new URL('../../../apps/server/seed/openings.tsv', import.meta.url));
+const MIGRATIONS = fileURLToPath(new URL('../drizzle', import.meta.url));
+const OPENINGS = fileURLToPath(new URL('../seed/openings.tsv', import.meta.url));
 const SRC: GameSources = { chesscomApi: 'https://chesscom.test', lichessHost: 'https://lichess.test' };
 const START = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -';
 const user: SyncUser = { id: 'u1', chesscomUsername: 'Moi', lichessUsername: 'moi' };

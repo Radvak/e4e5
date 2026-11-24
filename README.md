@@ -23,9 +23,8 @@ pnpm monorepo, TypeScript everywhere.
 
 ```
 packages/core   pure chess logic (chessops): repertoire graph, PGN, FSRS, gap finder, search at your level
-packages/data   the app's data rules on SQLite (Drizzle), shared by the browser and the server
-apps/web        React + Vite + chessground; local mode: SQLite (WASM) in the browser
-apps/server     optional Fastify server (accounts, the same data on a server); self-hosted with Docker
+packages/data   the app's data rules on SQLite (Drizzle) and its migrations (drizzle/)
+apps/web        React + Vite + chessground; the data in SQLite (WASM) in the browser
 tools/stats     opening statistics files built from the Lichess game database
 ```
 
@@ -33,15 +32,17 @@ tools/stats     opening statistics files built from the Lichess game database
 
 ```bash
 pnpm install
-cp .env.example .env
-pnpm dev              # web on http://localhost:5173 (and the server on :3000)
+pnpm dev              # web on http://localhost:5173
 pnpm test
 pnpm typecheck
 ```
 
-Open http://localhost:5173/?local=1 for the version without a server (as on GitHub Pages);
-`?local=0` goes back to the server. The main commands are also in the `justfile` (`just` lists
-them): `just check`, `just build-pages` (the GitHub Pages build), …
+In dev, the statistics files are downloaded from the project's GitHub Pages. The main commands
+are also in the `justfile` (`just` lists them): `just check`, `just build-pages` (the GitHub
+Pages build), …
+
+After changing `packages/data/src/schema.ts`: `pnpm db:generate` writes the migration, replayed
+by the app on each device's database at start.
 
 There is no Lichess app to register: OAuth uses PKCE, and the client id is just a name.
 
@@ -53,17 +54,12 @@ Application explains it to users (with an install button where the browser offer
 
 - `apps/web/public/manifest.webmanifest`: name, colours, icons.
 - `apps/web/public/sw.js`: service worker (production builds only). The app shell and the
-  hashed `/assets/` are cached, so the app opens offline; `/api/` is never cached by it. Bump
+  hashed `/assets/` are cached, so the app opens offline. Bump
   `VERSION` in it to drop every cache.
-- Local mode (GitHub Pages, mobile app; `apps/web/src/local/`): everything is on the device, in
+- Data (`apps/web/src/local/`): everything is on the device, in
   SQLite (WASM, origin private file system, one tab at a time), with the statistics files of
   the chosen rating buckets downloaded in Paramètres. Only Lichess and Chess.com (games,
   studies) need the network.
-- With the server (`apps/web/src/offline/`): the data the app needs is kept in IndexedDB, for 20
-  days and until the next build. Training works offline: each answer is scheduled on the device
-  (FSRS in `packages/core/src/fsrs.ts`) and queued, then sent in order when the server can be
-  reached, with its own id (counted once) and its time (the server computes the same card).
-  Changes to repertoires need the network.
 - Icons: `apps/web/scripts/icons/*.svg` → `apps/web/scripts/make-icons.sh` (rsvg-convert) →
   `apps/web/public/icons/` (committed).
 
@@ -73,7 +69,7 @@ Installing needs HTTPS (or localhost). To try it: `just build-pages`, then
 ## Mobile app (Capacitor)
 
 The same web app, packaged with Capacitor (`apps/web/android`, `apps/web/ios`, app id
-`com.e4e5`). It runs in local mode only, without the server: data in SQLite on the device,
+`com.e4e5`). Data in SQLite on the device,
 games straight from Lichess and Chess.com (native HTTP, no CORS), statistics from the files per
 rating bucket downloaded in Paramètres, Lichess linked by OAuth through
 `com.e4e5://lichess-callback`. iOS 16.4 at least; Android 7 (API 24).
@@ -101,40 +97,11 @@ pnpm --filter stats build-stats 2026-10 --out stats.db [--max-games N]   # needs
 pnpm --filter stats split --in stats.db --out stats-files [--min 50]
 ```
 
-## Position statistics on the server
+## Deployment (GitHub Pages)
 
-The server never asks Lichess: statistics come from the game database file (`STATS_DB`, built by
-`tools/stats`) and, for the positions not in it, from the `position_stats` table (explorer answers
-stored before, imports and seeds; the closest rating range when the exact one is missing).
-Bundled seeds (`apps/server/seed/*.json.gz`) are imported at startup, once per file.
-
-```bash
-pnpm --filter server stats:import path/to/explorer-cache.json   # explorer cache or seed file
-pnpm --filter server stats:export-seed my-seed-name                   # table -> seed/my-seed-name.json.gz
-```
-
-## Deployment
-
-### GitHub Pages (the app)
-
-`.github/workflows/pages.yml` builds the app without a server (`VITE_SERVERLESS=1`, base
-`/<repository>/`) on every push to `main` that touches the app, adds the statistics files of the
+`.github/workflows/pages.yml` builds the app (base `/<repository>/`) on every push to `main` that touches the app, adds the statistics files of the
 latest `stats-YYYY-MM` release under `/stats/`, and publishes it at
 https://gab23r.github.io/e4e5/. Locally: `just build-pages`.
-
-### Self-hosted server (optional)
-
-The server also serves the built web app, as a single container with the SQLite file on a volume
-at `/data`:
-
-```bash
-docker build -t e4e5 .
-docker run -p 3000:3000 -v e4e5-data:/data \
-  -e PUBLIC_URL=https://your.domain -e COOKIE_SECRET=$(openssl rand -hex 32) e4e5
-```
-
-On a corporate network (TLS proxy, npm mirror), pass them as build secrets (not kept in the
-image): `--secret id=ca,src=$NODE_EXTRA_CA_CERTS --secret id=npmrc,src=<npmrc with registry=...>`.
 
 ## License
 

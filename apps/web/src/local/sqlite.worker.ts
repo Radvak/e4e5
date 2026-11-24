@@ -1,6 +1,6 @@
 /// <reference lib="webworker" />
 /**
- * SQLite running in the browser, in a worker: the app's database when it runs without a server.
+ * SQLite running in the browser, in a worker: the app's database.
  * Stored in the origin private file system with the "opfs-sahpool" VFS, which needs no special
  * HTTP headers (GitHub Pages can't set them). Its limit: one tab at a time holds the database.
  * Without OPFS (private browsing, old browser), the database lives in memory only: `persistent`
@@ -10,7 +10,7 @@
  * sqlite-proxy: 'run' (no rows), 'all' / 'values' (rows as arrays), 'get' (first row as an
  * array, undefined without a row); 'exec' runs a script of several statements (migrations).
  *
- * The statistics files (one per rating bucket, scripts/split-stats.ts on the server) are other
+ * The statistics files (one per rating bucket, tools/stats split.ts) are other
  * databases of the same pool, opened read-only: { id, stats: … } downloads one (progress sent as
  * { id, progress }), deletes one, lists them, or reads the rows of some positions in some of them.
  */

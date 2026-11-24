@@ -7,7 +7,7 @@ import { copyAccounts, exchangeCode, getProfile, linkLichess, setChesscom, unlin
 import * as schema from '../src/schema.js';
 import { users } from '../src/schema.js';
 
-const MIGRATIONS = fileURLToPath(new URL('../../../apps/server/drizzle', import.meta.url));
+const MIGRATIONS = fileURLToPath(new URL('../drizzle', import.meta.url));
 const SRC: GameSources = { chesscomApi: 'https://chesscom.test', lichessHost: 'https://lichess.test' };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
 

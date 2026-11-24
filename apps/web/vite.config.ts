@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  // Where the app is served: / (server, dev, mobile app), /e4e5/ on GitHub Pages (VITE_BASE).
+  // Where the app is served: / (dev, mobile app), /e4e5/ on GitHub Pages (VITE_BASE).
   base: process.env.VITE_BASE ?? '/',
   plugins: [react()],
   // Changes with every build: drops the data kept offline when the app changes (offline/persist.ts).
@@ -13,9 +13,5 @@ export default defineConfig({
   worker: { format: 'es' },
   // Tests in French (test-setup.ts).
   test: { setupFiles: ['src/test-setup.ts'] },
-  server: {
-    port: 5173,
-    // Same origin for the API in dev: cookies and the OAuth redirect go through Vite.
-    proxy: { '/api': process.env.API_URL ?? 'http://127.0.0.1:3000' },
-  },
+  server: { port: 5173 },
 });

@@ -1,19 +1,19 @@
 # e4e5: plan
 
-A web app to build and learn chess opening repertoires, shared with friends. Each user logs in
-with their Lichess account.
+A web app to build and learn chess opening repertoires. It runs on the device, without a server
+(since 2026-11-25): accounts, sessions and the server's explorer proxy below are history.
 
 ## Decisions
 
 | Topic | Decision |
 |---|---|
-| Users | Multi-user (friends). Username + password accounts (scrypt) and/or Login with Lichess (OAuth2 PKCE). A password account can link Lichess later. Guest login (name only) for testing, on by default in dev only |
+| Users | One user per device, no login. Lichess linked by OAuth2 PKCE from the app, Chess.com by username |
 | Chess.com | First-class for games and ratings (public API). Login with Chess.com needs an approved OAuth app: apply, and plug it in next to Lichess once approved. Until then Chess.com players use a password account and enter their Chess.com username in Settings |
-| Stack | TypeScript monorepo (pnpm): React + Vite + chessground / Fastify / SQLite (Drizzle + libsql) |
-| Chess logic | `chessops` in a shared `packages/core` (used by server and browser) |
+| Stack | TypeScript monorepo (pnpm): React + Vite + chessground / SQLite WASM (Drizzle) |
+| Chess logic | `chessops` in a shared `packages/core` |
 | License | GPL-3.0 is acceptable (chessground, chessops) |
 | Statistics | Always the **Lichess** explorer, clearly labelled "Lichess players rated X–Y". A slider picks the range, defaulting to the buckets around the user's Lichess rating. No automatic Chess.com→Lichess conversion: users know the gap and adjust the slider. Speed selector: blitz, rapid, or both |
-| Deployment | One Docker container (API + static web), SQLite file on a volume |
+| Deployment | No server (since 2026-11-25): GitHub Pages and the mobile apps, SQLite (WASM) on the device |
 
 ## Data model
 
@@ -111,7 +111,7 @@ Planned: `review_cards` (FSRS state per user move), `game_syncs`, `inbox_items`.
   layout, PWA, sharing a repertoire with a friend (read-only link / copy).
 - [x] **7. Hosting**: GitHub Pages (https://gab23r.github.io/e4e5/), the app without a server
   (local mode: data on the device), with the statistics files under `/stats/`; the Android and iOS
-  apps (Capacitor) the same way. The server (`apps/server`) can still be self-hosted with Docker.
+  apps (Capacitor) the same way. The server (`apps/server`, Docker) was removed on 2026-11-25.
 
 ## Risks
 

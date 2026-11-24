@@ -1,5 +1,4 @@
 import { t, translateError } from './i18n';
-import { isLocalMode, LOCAL_METHODS } from './local/mode';
 import type { Color, ExplorerResponse, FsrsCard, Grade, RepertoireSummaryCounts, PgnChapter, RepMove, SuggestedMove } from '@e4e5/core';
 
 export interface StatsMeta {
@@ -28,47 +27,21 @@ export class ApiError extends Error {
     message: string,
     public body: Record<string, unknown> = {},
   ) {
-    // Messages of @e4e5/data and the server are in French.
+    // Messages of @e4e5/data are in French.
     super(translateError(message));
   }
 }
 
-/** Status of an ApiError when the server could not be reached (offline, server down). */
+/** Status of an ApiError when Lichess or Chess.com could not be reached (offline). */
 export const UNREACHABLE = 0;
-
-async function request<T>(method: string, url: string, body?: unknown): Promise<T> {
-  let res: Response;
-  try {
-    res = await fetch(url, {
-      method,
-      headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-      credentials: 'same-origin',
-    });
-  } catch {
-    throw new ApiError(UNREACHABLE, navigator.onLine ? t('Le serveur ne répond pas', 'The server does not answer') : t('Pas de connexion Internet : réessayez une fois en ligne', 'No Internet connection: try again once online'));
-  }
-  if (!res.ok) {
-    const err = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new ApiError(res.status, err.error ?? res.statusText, err);
-  }
-  return res.json() as Promise<T>;
-}
 
 export type Perfs = Record<string, { rating: number; games: number; prov?: boolean }>;
 export type ChesscomRatings = Partial<Record<'rapid' | 'blitz' | 'bullet' | 'daily', number>>;
 export interface Me {
   id: string;
   username: string;
-  guest: boolean;
-  hasPassword: boolean;
-  login: string | null;
   lichess: { username: string; perfs: Perfs | null } | null;
   chesscom: { username: string; ratings: ChesscomRatings | null } | null;
-  /** Live explorer statistics available (own Lichess token or the app's); stored ones are always served. */
-  explorer: boolean;
-  /** Local mode: the accounts are kept on this device (no login, no password). */
-  local?: boolean;
 }
 export interface RepertoireSummary {
   id: string;
@@ -107,7 +80,7 @@ export interface ImportResult {
   games: number; added: number; duplicates: number; unreachable: number; errors: string[];
 }
 
-/** A study in a Lichess player's list (server lichessStudies.ts; no likes, topics nor side). */
+/** A study in a Lichess player's list (@e4e5/data lichessStudies.ts; no likes, topics nor side). */
 export interface LichessStudyListItem {
   id: string;
   name: string;
@@ -269,78 +242,54 @@ export interface GamesReport {
   }[];
 }
 
-export const api = {
-  me: () => request<Me>('GET', '/api/me'),
-  authConfig: () => request<{ guestLogin: boolean }>('GET', '/api/auth/config'),
-  guestLogin: (username: string) => request<{ ok: true }>('POST', '/api/auth/guest', { username }),
-  register: (username: string, password: string) => request<{ ok: true }>('POST', '/api/auth/register', { username, password }),
-  passwordLogin: (username: string, password: string) =>
-    request<{ ok: true }>('POST', '/api/auth/password', { username, password }),
-  updateMe: (patch: { chesscomUsername?: string | null; password?: string; login?: string }) =>
-    request<{ user: Me; warning?: string }>('PATCH', '/api/me', patch),
-  unlinkLichess: () => request<{ user: Me }>('DELETE', '/api/me/lichess'),
-  logout: () => request<{ ok: true }>('POST', '/api/auth/logout'),
-  repertoires: () => request<RepertoireSummary[]>('GET', '/api/repertoires'),
-  createRepertoire: (name: string, color: Color) => request<RepertoireSummary>('POST', '/api/repertoires', { name, color }),
-  renameRepertoire: (id: string, name: string) => request<RepertoireSummary>('PATCH', `/api/repertoires/${id}`, { name }),
-  setRepertoireActive: (id: string, active: boolean) => request<RepertoireSummary>('PATCH', `/api/repertoires/${id}`, { active }),
-  deleteRepertoire: (id: string) => request<{ ok: true }>('DELETE', `/api/repertoires/${id}`),
-  repertoire: (id: string) => request<RepertoireDetail>('GET', `/api/repertoires/${id}`),
-  saveLine: (id: string, ucis: string[]) =>
-    request<{ added: number }>('POST', `/api/repertoires/${id}/lines`, { ucis }),
-  updateMove: (id: string, moveId: number, patch: { comment?: string | null; nags?: number[] | null; isMain?: boolean; paused?: boolean }) =>
-    request<StoredMove>('PATCH', `/api/repertoires/${id}/moves/${moveId}`, patch),
-  deleteMove: (id: string, moveId: number) => request<{ ok: true; pruned: number }>('DELETE', `/api/repertoires/${id}/moves/${moveId}`),
-  importPgn: (id: string, pgn: string) => request<ImportResult>('POST', `/api/repertoires/${id}/import-pgn`, { pgn }),
-  /** The public studies of a Lichess player, most recently updated first. */
-  lichessStudiesBy: (username: string) => request<LichessStudyListItem[]>('GET', `/api/lichess/studies?${new URLSearchParams({ by: username })}`),
-  lichessStudy: (id: string) => request<LichessStudy>('GET', `/api/lichess/studies/${encodeURIComponent(id)}`),
-  cards: () => request<ReviewCard[]>('GET', '/api/cards'),
-  /** An answer, possibly sent later (offline): `id` makes it count once, `reviewedAt` is when it was given. */
-  review: (id: string, answer: { fen: string; uci: string; grade: Grade; id: string; reviewedAt: number }) =>
-    request<ReviewCard>('POST', `/api/repertoires/${id}/review`, answer),
-  gaps: (speeds: string[], ratings: number[], cutoff: number) =>
-    request<GapsResponse>('GET', `/api/gaps?${new URLSearchParams({ speeds: speeds.join(','), ratings: ratings.join(','), cutoff: String(cutoff) })}`),
-  myGames: (fen: string, color: Color, speeds: string[], days: number) =>
-    request<MyGames>('GET', `/api/explorer/mine?${new URLSearchParams({ fen, color, speeds: speeds.join(','), days: String(days) })}`),
-  myGameMoves: (id: string) => request<{ moves: string[] }>('GET', `/api/my-games/${encodeURIComponent(id)}`),
+/** What the app asks for, answered on this device (local/backend.ts). */
+export interface Api {
+  me: () => Promise<Me>;
+  updateMe: (patch: { chesscomUsername?: string | null }) => Promise<{ user: Me; warning?: string }>;
+  unlinkLichess: () => Promise<{ user: Me }>;
+  repertoires: () => Promise<RepertoireSummary[]>;
+  createRepertoire: (name: string, color: Color) => Promise<RepertoireSummary>;
+  renameRepertoire: (id: string, name: string) => Promise<RepertoireSummary>;
+  setRepertoireActive: (id: string, active: boolean) => Promise<RepertoireSummary>;
+  deleteRepertoire: (id: string) => Promise<{ ok: true }>;
+  repertoire: (id: string) => Promise<RepertoireDetail>;
+  saveLine: (id: string, ucis: string[]) => Promise<{ added: number }>;
+  updateMove: (id: string, moveId: number, patch: { comment?: string | null; nags?: number[] | null; isMain?: boolean; paused?: boolean }) => Promise<StoredMove>;
+  deleteMove: (id: string, moveId: number) => Promise<{ ok: true; pruned: number }>;
+  importPgn: (id: string, pgn: string) => Promise<ImportResult>;
+  /** The studies of a Lichess player (private ones too for my own account), most recently updated first. */
+  lichessStudiesBy: (username: string) => Promise<LichessStudyListItem[]>;
+  lichessStudy: (id: string) => Promise<LichessStudy>;
+  cards: () => Promise<ReviewCard[]>;
+  /** An answer: `id` makes it count once, `reviewedAt` is when it was given. */
+  review: (id: string, answer: { fen: string; uci: string; grade: Grade; id: string; reviewedAt: number }) => Promise<ReviewCard>;
+  gaps: (speeds: string[], ratings: number[], cutoff: number) => Promise<GapsResponse>;
+  myGames: (fen: string, color: Color, speeds: string[], days: number) => Promise<MyGames>;
+  myGameMoves: (id: string) => Promise<{ moves: string[] }>;
   /** Opening of a line (UCI moves, comma separated), null if none is named. */
-  opening: (line: string) =>
-    request<{ eco: string; name: string } | null>('GET', `/api/explorer/opening?${new URLSearchParams({ line })}`),
-  positionRepertoires: (fen: string) => request<PositionRepertoire[]>('GET', `/api/explorer/position-repertoires?${new URLSearchParams({ fen })}`),
-  repertoireMovesAt: (fen: string) => request<RepertoireMoveHere[]>('GET', `/api/explorer/repertoires?${new URLSearchParams({ fen })}`),
-  syncState: () => request<SyncState>('GET', '/api/games/sync'),
-  startSync: (source: 'chesscom' | 'lichess') => request<SyncJob>('POST', '/api/games/sync', { source }),
-  gamesReport: (days: number, speeds: string[]) =>
-    request<GamesReport>('GET', `/api/games/report?${new URLSearchParams({ days: String(days), speeds: speeds.join(',') })}`),
-  dismissInbox: (key: string) => request<{ ok: true }>('POST', '/api/games/inbox/dismiss', { key }),
-  restoreInbox: () => request<{ ok: true }>('DELETE', '/api/games/inbox/dismiss'),
-  reviewNow: (id: string, fen: string) => request<{ ok: true }>('POST', `/api/repertoires/${id}/cards/due`, { fen }),
+  opening: (line: string) => Promise<{ eco: string; name: string } | null>;
+  positionRepertoires: (fen: string) => Promise<PositionRepertoire[]>;
+  repertoireMovesAt: (fen: string) => Promise<RepertoireMoveHere[]>;
+  syncState: () => Promise<SyncState>;
+  startSync: (source: 'chesscom' | 'lichess') => Promise<SyncJob>;
+  gamesReport: (days: number, speeds: string[]) => Promise<GamesReport>;
+  dismissInbox: (key: string) => Promise<{ ok: true }>;
+  restoreInbox: () => Promise<{ ok: true }>;
+  reviewNow: (id: string, fen: string) => Promise<{ ok: true }>;
   /**
    * `depth`: steps of the search to go through (0: each move's own win rate; default: all).
    * `color`: my side (on the opponent's turn, its moves scored for me; default: the side to move).
    */
-  bestMoves: (fen: string, speeds: string[], ratings: number[], depth?: number, color?: Color) =>
-    request<BestMovesResponse>(
-      'GET',
-      `/api/explorer/best?${new URLSearchParams({ fen, speeds: speeds.join(','), ratings: ratings.join(','), ...(depth !== undefined ? { depth: String(depth) } : {}), ...(color ? { color } : {}) })}`,
-    ),
-  explorer: (fen: string, speeds: string[], ratings: number[]) =>
-    request<Stats>(
-      'GET',
-      `/api/explorer?${new URLSearchParams({ fen, speeds: speeds.join(','), ratings: ratings.join(',') })}`,
-    ),
-};
-
-/** The server's methods, kept when local mode replaces some of them (copy from the server). */
-export const serverApi = { ...api };
-
-// Local mode (experimental): the methods of local/backend.ts answered on this device. Loaded only
-// when used, so SQLite is not downloaded otherwise.
-if (isLocalMode()) {
-  const local = () => import('./local/backend');
-  for (const key of LOCAL_METHODS) {
-    (api as Record<string, unknown>)[key] = (...args: unknown[]) =>
-      local().then((m) => (m.localApi[key] as (...a: unknown[]) => Promise<unknown>)(...args));
-  }
+  bestMoves: (fen: string, speeds: string[], ratings: number[], depth?: number, color?: Color) => Promise<BestMovesResponse>;
+  explorer: (fen: string, speeds: string[], ratings: number[]) => Promise<Stats>;
 }
+
+/**
+ * The API: each method answered by the local database (local/backend.ts), loaded at the first
+ * call so SQLite is only downloaded when used.
+ */
+export const api = new Proxy({} as Api, {
+  get: (_, key: string) =>
+    (...args: unknown[]) =>
+      import('./local/backend').then((m) => (m.localApi[key as keyof Api] as (...a: unknown[]) => Promise<unknown>)(...args)),
+});

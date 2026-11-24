@@ -19,7 +19,7 @@ if (isNative()) void import('./local/lichessLogin').then((m) => m.listenForLiche
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: { refetchOnWindowFocus: false },
-    // Changes need the server: offline they fail at once with a message, instead of waiting.
+    // Changes run at once, even offline (they are on the device; Lichess calls fail with a message).
     mutations: { networkMode: 'always' },
   },
 });

@@ -21,7 +21,7 @@ import {
 import * as schema from '../src/schema.js';
 import { users } from '../src/schema.js';
 
-const MIGRATIONS = fileURLToPath(new URL('../../../apps/server/drizzle', import.meta.url));
+const MIGRATIONS = fileURLToPath(new URL('../drizzle', import.meta.url));
 
 let db: Db;
 beforeEach(async () => {

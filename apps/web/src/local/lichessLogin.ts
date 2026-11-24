@@ -1,5 +1,5 @@
 /**
- * Linking Lichess without a server (local mode): OAuth with PKCE from the app itself. Lichess
+ * Linking Lichess: OAuth with PKCE from the app itself. Lichess
  * needs no client secret nor registration; the token stays on the device (local database).
  *
  * The page goes to Lichess and comes back to /lichess-callback (LichessCallback page) with a

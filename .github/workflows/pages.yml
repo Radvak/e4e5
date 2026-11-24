@@ -1,4 +1,4 @@
-# GitHub Pages: the web app without a server (local mode only: data in the browser, games from
+# GitHub Pages: the web app (data in the browser, games from
 # Lichess and Chess.com, statistics from the files next to it), and the opening statistics of the
 # latest release stats-YYYY-MM under /stats/ (Pages allows other origins: CORS *, for the mobile
 # app). https://<owner>.github.io/<repo>/
@@ -39,10 +39,9 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile --filter web...
-      - name: Build the app (static, no server)
+      - name: Build the app (static)
         env:
           VITE_BASE: /${{ github.event.repository.name }}/
-          VITE_SERVERLESS: '1'
         run: |
           pnpm --filter web --fail-if-no-match build
           mkdir -p site

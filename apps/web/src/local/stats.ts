@@ -1,13 +1,13 @@
 /**
- * Statistics on the device (local mode): the files of the Lichess game database split per rating
- * bucket (scripts/split-stats.ts on the server), downloaded into the local SQLite. Read by their
+ * Statistics on the device: the files of the Lichess game database split per rating
+ * bucket (tools/stats split.ts), downloaded into the local SQLite. Read by their
  * Zobrist keys, the cells of the buckets asked added up (core statsFromRows).
  *
- * The files are listed in `index.json` at STATS_URL: the project's GitHub Pages in the mobile app,
- * the server for the web app during the migration (VITE_STATS_URL at build time to change it).
+ * The files are listed in `index.json` at STATS_URL: next to the app on GitHub Pages, the project's
+ * Pages elsewhere (mobile app, dev; VITE_STATS_URL at build time to change it).
  */
 import { statsFromRows, zobristOfFen, type ExplorerResponse, type StoredStats } from '@e4e5/core';
-import { isNative, isServerless } from '../native';
+import { isNative } from '../native';
 import { t } from '../i18n';
 import { localDb } from './db';
 import type { StatsFile } from './sqlite.worker';
@@ -18,8 +18,8 @@ export type { StatsFile };
 const PAGES_STATS = 'https://gab23r.github.io/e4e5/stats';
 const STATS_URL =
   (import.meta.env.VITE_STATS_URL as string | undefined)?.replace(/\/$/, '') ??
-  // The mobile app: the project's Pages; a static build: next to the app; else the server.
-  (isNative() ? PAGES_STATS : isServerless() ? `${import.meta.env.BASE_URL}stats` : '/api/stats-files');
+  // The mobile app and dev: the project's Pages; the build for Pages: next to the app.
+  (isNative() || import.meta.env.DEV ? PAGES_STATS : `${import.meta.env.BASE_URL}stats`);
 const MAX_MOVES = 30;
 /** Positions read per message to the worker. */
 const BATCH = 500;
@@ -100,7 +100,7 @@ export interface LocalStats {
 
 /**
  * The statistics on the device for these speeds and buckets, null when a bucket asked is not
- * downloaded (the caller asks the server). A position below the files' threshold in one bucket
+ * downloaded. A position below the files' threshold in one bucket
  * is missing from that file only: the others still count it (a few games short).
  */
 export async function localStats(speeds: string[], ratings: number[]): Promise<LocalStats | null> {

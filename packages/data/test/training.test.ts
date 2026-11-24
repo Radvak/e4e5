@@ -7,7 +7,7 @@ import { createRepertoire, getRepertoire, listCards, makeDue, recordAnswer, revi
 import * as schema from '../src/schema.js';
 import { reviewLog, users } from '../src/schema.js';
 
-const MIGRATIONS = fileURLToPath(new URL('../../../apps/server/drizzle', import.meta.url));
+const MIGRATIONS = fileURLToPath(new URL('../drizzle', import.meta.url));
 
 let db: Db;
 let repId: string;

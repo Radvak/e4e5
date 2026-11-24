@@ -9,7 +9,7 @@ default:
 install:
     pnpm install
 
-# Server on :3000, web on http://localhost:5173
+# Web app on http://localhost:5173
 dev:
     pnpm dev
 
@@ -24,22 +24,14 @@ typecheck:
 test:
     pnpm test
 
-# Production build (web, then server)
+# Production build of the web app
 build:
     pnpm build
 
-# Database migration, after changing apps/server/src/db/schema.ts
+# Database migration, after changing packages/data/src/schema.ts
 db-generate:
     pnpm db:generate
 
-# Import explorer statistics (explorer cache or seed file)
-stats-import file:
-    pnpm --filter server stats:import {{file}}
-
-# Export the statistics table to seed/<name>.json.gz
-stats-export name:
-    pnpm --filter server stats:export-seed {{name}}
-
-# The GitHub Pages version (no server, local mode) in apps/web/dist, as the Pages workflow builds it
+# The GitHub Pages version in apps/web/dist, as the Pages workflow builds it
 build-pages:
-    VITE_BASE=/e4e5/ VITE_SERVERLESS=1 pnpm --filter web build
+    VITE_BASE=/e4e5/ pnpm --filter web build

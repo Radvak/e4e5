@@ -5,11 +5,10 @@
   "packageManager": "pnpm@10.13.1",
   "scripts": {
     "dev": "pnpm -r --parallel dev",
-    "build": "pnpm --filter web build && pnpm --filter server build",
-    "start": "pnpm --filter server start",
+    "build": "pnpm --filter web build",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck",
-    "db:generate": "pnpm --filter server db:generate"
+    "db:generate": "pnpm --filter @e4e5/data db:generate"
   },
   "license": "GPL-3.0-or-later"
 }

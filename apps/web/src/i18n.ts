@@ -53,7 +53,7 @@ export const plural = (n: number, one: string, many: string) =>
   `${fmt(n)} ${(lang === 'fr' ? n > 1 : n !== 1) ? many : one}`;
 
 /**
- * Error messages written in French by @tabiya/data and the server, in English. Exact messages
+ * Error messages written in French by @e4e5/data, in English. Exact messages
  * first, then patterns for those with a value inside.
  */
 const ERRORS_EN: Record<string, string> = {
@@ -75,7 +75,7 @@ const ERROR_PATTERNS_EN: [RegExp, (...m: string[]) => string][] = [
   [/^Lichess a répondu (\d+)$/, (_, status) => `Lichess answered ${status}`],
 ];
 
-/** An error message from @tabiya/data or the server, in the current language. */
+/** An error message from @e4e5/data, in the current language. */
 export function translateError(message: string): string {
   if (lang === 'fr') return message;
   if (ERRORS_EN[message]) return ERRORS_EN[message];

@@ -170,7 +170,7 @@ function Catalogue({ me, onOpen, onCreated }: { me: Me; onOpen: (ref: { studyId:
         )}
       </div>
       {source === 'lichess' && <LichessResults q={q} onOpen={onOpen} />}
-      {source === 'mine' && <MyStudies username={mine!} local={!!me.local} name={name} onOpen={onOpen} />}
+      {source === 'mine' && <MyStudies username={mine!} name={name} onOpen={onOpen} />}
       {!source && (
         <p className="muted catalogue-empty">
           {t('Collez le lien d’une étude Lichess (lichess.org/study/…) pour l’importer', 'Paste the link to a Lichess study (lichess.org/study/…) to import it')}
@@ -240,16 +240,15 @@ function LichessResults({ q, onOpen }: { q: string; onOpen: (ref: { studyId: str
  * Authorises Lichess again, now with the scope study:read: accounts linked before it was asked
  * only see their public studies.
  */
-function relinkLichess(local: boolean) {
-  if (local) void import('../local/lichessLogin').then((m) => m.startLichessLogin());
-  else location.href = '/api/auth/login';
+function relinkLichess() {
+  void import('../local/lichessLogin').then((m) => m.startLichessLogin());
 }
 
 /**
  * My Lichess studies (official API, with my token: the private ones too), most recent first,
  * filtered by what is typed.
  */
-function MyStudies({ username, local, name, onOpen }: { username: string; local: boolean; name: string; onOpen: (ref: { studyId: string }) => void }) {
+function MyStudies({ username, name, onOpen }: { username: string; name: string; onOpen: (ref: { studyId: string }) => void }) {
   const [all, setAll] = useState(false);
   useEffect(() => setAll(false), [name]);
   const list = useQuery({
@@ -301,7 +300,7 @@ function MyStudies({ username, local, name, onOpen }: { username: string; local:
       {list.data && (
         <p className="muted small-text catalogue-note">
           {t('Vos études privées n’apparaissent pas ?', 'Your private studies are missing?')}{' '}
-          <button type="button" className="link" onClick={() => relinkLichess(local)}>
+          <button type="button" className="link" onClick={relinkLichess}>
             {t('Autoriser e4e5 à les lire sur Lichess', 'Let e4e5 read them on Lichess')}
           </button>
         </p>

@@ -1,19 +1,19 @@
 /**
- * The app's database when it runs without a server: SQLite in a worker (sqlite.worker.ts), seen
+ * The app's database: SQLite in a worker (sqlite.worker.ts), seen
  * through Drizzle's sqlite-proxy driver, so the shared data functions (@e4e5/data) run on it
- * exactly as on the server. The schema comes from the server's migrations, replayed here in order.
+ * here. The schema comes from the migrations of @e4e5/data (packages/data/drizzle), replayed in order.
  * One user only: LOCAL_USER.
  */
 import * as schema from '@e4e5/data/schema';
 import type { Db } from '@e4e5/data';
 import { drizzle } from 'drizzle-orm/sqlite-proxy';
-import journal from '../../../server/drizzle/meta/_journal.json';
+import journal from '../../../../packages/data/drizzle/meta/_journal.json';
 import type { Method, Ready, Request, Response, StatsOp, StatsRequest } from './sqlite.worker';
 
 /** The only user of a local database. */
 export const LOCAL_USER = 'local';
 
-const migrations = import.meta.glob<string>('../../../server/drizzle/*.sql', { query: '?raw', import: 'default', eager: true });
+const migrations = import.meta.glob<string>('../../../../packages/data/drizzle/*.sql', { query: '?raw', import: 'default', eager: true });
 
 export interface LocalDb {
   db: Db;
@@ -82,7 +82,7 @@ async function open(): Promise<LocalDb> {
   const done = new Set(((await query('SELECT tag FROM __local_migrations', [], 'all')) as [string][]).map((r) => r[0]));
   for (const { tag } of journal.entries) {
     if (done.has(tag)) continue;
-    const sql = migrations[`../../../server/drizzle/${tag}.sql`];
+    const sql = migrations[`../../../../packages/data/drizzle/${tag}.sql`];
     if (sql === undefined) throw new Error(`Migration ${tag} introuvable`);
     await query(sql.replaceAll('--> statement-breakpoint', ''), [], 'exec');
     await query('INSERT INTO __local_migrations (tag, applied_at) VALUES (?, ?)', [tag, Date.now()], 'run');

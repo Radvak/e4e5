@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { clearStudyCache, getStudy, StudyError, studiesBy } from '../src/lichessStudies.js';
+import { PUBLIC_SOURCES } from '../src/gameSources.js';
+import { clearStudyCache, getStudy as sharedGetStudy, StudyError, studiesBy as sharedStudiesBy } from '../src/lichessStudies.js';
+
+const studiesBy = (username: string) => sharedStudiesBy(PUBLIC_SOURCES, username);
+const getStudy = (id: string) => sharedGetStudy(PUBLIC_SOURCES, id);
 
 /** Answers of Lichess, by path prefix (as seen through the prototype). */
 function stubLichess(routes: Record<string, { status?: number; body: string }>) {
@@ -18,7 +22,7 @@ afterEach(() => {
   clearStudyCache();
 });
 
-// The official API's list of a player's studies (ndjson), as seen from production.
+// The official API's list of a player's studies (ndjson).
 const BY_PLAYER = [
   { id: 'jsSks17H', name: 'Sicilian Defense', createdAt: 1611340981495, updatedAt: 1700000000000 },
   { id: 'jtlLwUvh', name: 'Caro-Kann Defense', createdAt: 1612369937607, updatedAt: 1733290608071 },
@@ -77,17 +81,11 @@ describe('Lichess studies', () => {
     await expect(getStudy('zzzzzzzz')).rejects.toEqual(new StudyError(404, 'Étude introuvable ou privée'));
   });
 
-  it('exports a study once for everyone (cache), one request at a time', async () => {
-    let running = 0;
-    let most = 0;
-    vi.stubGlobal('fetch', async (url: string) => {
-      most = Math.max(most, ++running);
-      await new Promise((r) => setTimeout(r, 5));
-      running--;
-      return new Response(url.includes('/api/study/') && url.includes('.pgn') ? STUDY : BY_PLAYER);
-    });
-    await Promise.all([getStudy('jtlLwUvh'), getStudy('jtlLwUvh'), studiesBy('someone'), getStudy('AbCd1234')]);
-    expect(most).toBe(1);
+  it('exports a study once (cache)', async () => {
+    const calls = stubLichess({ '/api/study/jtlLwUvh.pgn': { body: STUDY } });
+    await getStudy('jtlLwUvh');
+    await getStudy('jtlLwUvh');
+    expect(calls).toHaveLength(1);
   });
 
   it('does not keep a failed export', async () => {
