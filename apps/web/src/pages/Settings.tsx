@@ -189,6 +189,13 @@ export function Settings({ me }: { me: Me }) {
       </section>
 
       <LocalModeSetting ratings={ex.ratings} />
+
+      {/* Absolute address: in the mobile app, it opens in the system browser. */}
+      <p className="muted small-text">
+        <a href="https://gab23r.github.io/e4e5/privacy.html" target="_blank" rel="noreferrer">
+          {t('Politique de confidentialité', 'Privacy policy')}
+        </a>
+      </p>
     </div>
   );
 }
