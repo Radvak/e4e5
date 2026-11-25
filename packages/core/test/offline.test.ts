@@ -60,14 +60,14 @@ describe('trainingSummary (on the device)', () => {
     expect(later.learntTodayLines).toBeGreaterThan(0);
   });
 
-  it('known: mean chance of finding my move over the trained positions (0 when not learnt)', () => {
-    expect(trainingSummary([rep], () => undefined, null, opts)[0]!.known).toBe(0);
-    const all = trainingSummary([rep], () => ({ due: 99_000, createdAt: 5_000, recall: 0.8 }), null, opts)[0]!;
-    expect(all.known).toBeCloseTo(0.8);
-    // Only the first position learnt (recall 1): its share of the positions.
+  it('seen: share of the trained positions with a move of mine learnt, whatever its recall', () => {
+    expect(trainingSummary([rep], () => undefined, null, opts)[0]!.seen).toBe(0);
+    const all = trainingSummary([rep], () => ({ due: 1_000, createdAt: 5_000, recall: 0.2 }), null, opts)[0]!;
+    expect(all.seen).toBe(1);
+    // Only the first position learnt: its share of the positions.
     const first = positions[0]!.fen;
-    const one = trainingSummary([rep], (fen) => (fen === first ? { due: 99_000, createdAt: 5_000, recall: 1 } : undefined), null, opts)[0]!;
-    expect(one.known).toBeCloseTo(1 / positions.length);
+    const one = trainingSummary([rep], (fen) => (fen === first ? { due: 99_000, createdAt: 5_000 } : undefined), null, opts)[0]!;
+    expect(one.seen).toBeCloseTo(1 / positions.length);
   });
 
   it('an inactive repertoire takes no new lines', () => {

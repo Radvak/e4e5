@@ -279,23 +279,23 @@ function RepertoireRow({ rep, counts, missing, firstGap, organize, picked, onPic
         <Link className="name" to={`/r/${rep.id}`} onClick={stop}>{rep.name}</Link>
         <div className="meta">
           {(rep.chapters?.length ?? 0) !== 1 && `${t(plural(rep.chapters?.length ?? 0, 'chapitre', 'chapitres'), plural(rep.chapters?.length ?? 0, 'chapter', 'chapters'))} · `}
-          {counts ? t(`${plural(counts.totalLines, 'ligne', 'lignes')} (${plural(counts.positions, 'position', 'positions')})`, `${plural(counts.totalLines, 'line', 'lines')} (${plural(counts.positions, 'position', 'positions')})`) : '…'}
+          {counts ? t(plural(counts.totalLines, 'ligne', 'lignes'), plural(counts.totalLines, 'line', 'lines')) : '…'}
+          {/* Share of the positions trained (at the depth of the lines, Paramètres) seen at least once. */}
+          {counts && counts.total > 0 && (
+            <span
+              title={t(
+                'Part des positions entraînées où vous avez déjà appris au moins un coup. Positions entraînées : selon la profondeur des lignes choisie dans les Paramètres.',
+                'Share of the trained positions where you have already learnt at least one move. Trained positions: according to the depth of the lines chosen in the Settings.',
+              )}
+            >
+              {' · '}
+              {t(
+                <>vu à <strong className="known">{Math.round(100 * counts.seen)} %</strong></>,
+                <><strong className="known">{Math.round(100 * counts.seen)}%</strong> seen</>,
+              )}
+            </span>
+          )}
         </div>
-        {/* Memorized share of the positions trained (at the depth of the lines, Paramètres). */}
-        {counts && counts.total > 0 && (
-          <div
-            className="meta"
-            title={t(
-              'Chance estimée de trouver votre coup aujourd’hui, en moyenne sur les positions entraînées (0 pour celles pas encore apprises). Positions entraînées : selon la profondeur des lignes choisie dans les Paramètres.',
-              'Estimated chance of finding your move today, on average over the trained positions (0 for those not learnt yet). Trained positions: according to the depth of the lines chosen in the Settings.',
-            )}
-          >
-            {t(
-              <>Mémorisé à <strong className="known">{Math.round(100 * counts.known)} %</strong> sur {plural(counts.total, 'position', 'positions')}</>,
-              <><strong className="known">{Math.round(100 * counts.known)}%</strong> memorized over {plural(counts.total, 'position', 'positions')}</>,
-            )}
-          </div>
-        )}
         {/* Clickable: review this repertoire, or open the editor on its most frequent missing move. */}
         <div className="badges">
           {rep.active && counts && counts.dueLines > 0 && (
@@ -334,30 +334,22 @@ function RepertoireRow({ rep, counts, missing, firstGap, organize, picked, onPic
   );
 }
 
-/**
- * The chapters of a repertoire under its row: when it has several (or one of another name), and
- * always while organising (each with a box to pick it).
- */
+/** While organising: the chapters of a repertoire under its row, each with a box to pick it. */
 function Chapters({ rep, organize, picked, onPick }: { rep: RepertoireSummary; organize: boolean; picked: Set<string>; onPick: (id: string) => void }) {
+  if (!organize) return null;
   const chapters = rep.chapters ?? [];
-  const single = chapters.length === 1 && chapters[0]!.name === rep.name;
-  if (!organize && (chapters.length === 0 || single)) return null;
   const stop = (e: React.MouseEvent) => e.stopPropagation();
   const label = (c: ChapterSummary) => `${c.name} · ${plural(c.moves, t('coup', 'move'), t('coups', 'moves'))}${c.active ? '' : t(' · en pause', ' · paused')}`;
   return (
-    <ul className={`rep-chapters ${organize ? 'organize' : ''}`} onClick={stop}>
+    <ul className="rep-chapters organize" onClick={stop}>
       {chapters.map((c) => (
         <li key={c.id} className={c.active ? '' : 'paused'}>
-          {organize ? (
-            <label className="check">
-              <input type="checkbox" checked={picked.has(c.id)} onChange={() => onPick(c.id)} /> {label(c)}
-            </label>
-          ) : (
-            <Link to={`/r/${rep.id}?chapter=${c.id}`}>{label(c)}</Link>
-          )}
+          <label className="check">
+            <input type="checkbox" checked={picked.has(c.id)} onChange={() => onPick(c.id)} /> {label(c)}
+          </label>
         </li>
       ))}
-      {organize && !chapters.length && <li className="muted">{t('Aucun chapitre', 'No chapter')}</li>}
+      {!chapters.length && <li className="muted">{t('Aucun chapitre', 'No chapter')}</li>}
     </ul>
   );
 }

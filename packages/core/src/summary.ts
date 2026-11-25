@@ -41,11 +41,8 @@ export interface RepertoireSummaryCounts {
   learntTodayLines: number;
   /** Whole lines not learnt yet. */
   availableLines: number;
-  /**
-   * Share of the repertoire known now: mean over the positions trained of the estimated chance of
-   * finding my move (0 for a move not learnt; several moves in a position: their mean).
-   */
-  known: number;
+  /** Share (0-1) of the positions trained seen at least once: a move of mine there learnt. */
+  seen: number;
   /** Lines still to learn today, all repertoires together (same for every item). */
   remainingNewLines: number;
   /** New lines this repertoire can take today. */
@@ -107,15 +104,10 @@ export function countSummary(
     const fresh = list.filter((p) => state.get(p.fen)!.status === 'new');
     const today = new Set(list.filter((p) => (state.get(p.fen)!.learntAt ?? 0) >= dayStart).map((p) => p.fen));
     const dueSet = new Set(list.filter((p) => state.get(p.fen)!.status === 'due').map((p) => p.fen));
-    let recall = 0;
-    for (const p of list) {
-      const moves = graph.movesAt(p.fen);
-      if (moves.length) recall += moves.reduce((n, m) => n + (cardOf(p.fen, m.uci)?.recall ?? 0), 0) / moves.length;
-    }
     return {
       r,
       total: list.length,
-      known: list.length ? recall / list.length : 0,
+      seen: list.length ? list.filter((p) => state.get(p.fen)!.learntAt !== null).length / list.length : 0,
       positions: r.positions,
       byDepth: r.byDepth,
       totalLines: r.totalLines,
