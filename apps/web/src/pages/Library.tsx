@@ -7,12 +7,10 @@ import {
   playSanOn,
   positionFromFen,
   START_FEN,
-  studyLines,
   studyNodes,
   totalGames,
   type Color,
   type StudyChapter,
-  type StudyLine,
   type StudyNode,
 } from '@e4e5/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -218,7 +216,6 @@ function LessonView({ me, lesson }: { me: Me; lesson: Lesson }) {
   const [nodeId, setNodeId] = useState('');
   const chapter: StudyChapter = useMemo(() => parseStudy(lesson.chapters[chapterIndex]!.pgn, lang)[0]!, [lesson, chapterIndex]);
   const nodes = useMemo(() => studyNodes(chapter), [chapter]);
-  const lines = useMemo(() => studyLines(chapter), [chapter]);
   useEffect(() => setNodeId(''), [chapter]);
   const node = nodes.get(nodeId);
   const fen = node?.toFen ?? chapter.startFen;
@@ -395,7 +392,7 @@ function LessonView({ me, lesson }: { me: Me; lesson: Lesson }) {
 
           <section className="panel">
             <h3>{t('Les lignes', 'The lines')}</h3>
-            <LineTree lines={lines} current={nodeId} onPick={go} />
+            <MovesView chapter={chapter} current={nodeId} onPick={go} />
           </section>
 
           {(lesson.summary || lesson.ideas?.length) && (
@@ -437,53 +434,95 @@ function LessonView({ me, lesson }: { me: Me; lesson: Lesson }) {
   );
 }
 
+/** A line from a node on: the node, then the main move after each one. */
+function mainFrom(first: StudyNode): StudyNode[] {
+  const out = [first];
+  for (let n = first; n.children[0]; n = n.children[0]) out.push(n.children[0]);
+  return out;
+}
+
+const moveText = (n: StudyNode, withNumber: boolean) => (withNumber || n.color === 'white' ? `${n.moveNumber}${n.color === 'white' ? '.' : '…'} ` : '');
+
 /**
- * The lines of the chapter: the main line, then each variation under it, indented, with where it
- * leaves its line ("au coup 4 · au lieu de 4… Bd6"): the moves shared with that line greyed (the
- * last two only), the move that differs highlighted.
+ * The lines of the chapter, as on Lichess: the main line in a table (one row per move number,
+ * White and Black side by side), and under the row of each fork its variations, folded to one
+ * line (their first move and what it is about); a click unfolds one. The variation holding the
+ * current move is unfolded.
  */
-function LineTree({ lines, current, onPick }: { lines: StudyLine[]; current: string; onPick: (id: string) => void }) {
-  if (lines.length === 0) return <p className="muted small-text">{t('Ce chapitre n’a pas de coups.', 'This chapter has no moves.')}</p>;
-  const onPath = (n: StudyNode) => current === n.id || current.startsWith(`${n.id},`);
-  const moveButton = (n: StudyNode, i: number, line: StudyLine, cls = '') => (
-    <button
-      key={n.id}
-      className={['link', 'library-move', cls, n.id === current ? 'current' : onPath(n) ? 'on-path' : ''].filter(Boolean).join(' ')}
-      onClick={() => onPick(n.id)}
-    >
-      {n.color === 'white' || i === line.fork ? `${n.moveNumber}${n.color === 'white' ? '.' : '…'} ` : ''}
-      <San san={n.san} nags={n.nags} />
-    </button>
-  );
+function MovesView({ chapter, current, onPick }: { chapter: StudyChapter; current: string; onPick: (id: string) => void }) {
+  const first = chapter.children[0];
+  if (!first) return <p className="muted small-text">{t('Ce chapitre n’a pas de coups.', 'This chapter has no moves.')}</p>;
+  const main = mainFrom(first);
+  // Rows of the table: one per move number (a chapter may start with Black to move).
+  const rows: { number: number; white?: StudyNode; black?: StudyNode }[] = [];
+  for (const n of main) {
+    const last = rows.at(-1);
+    if (n.color === 'white' || !last || last.black || last.number !== n.moveNumber) rows.push({ number: n.moveNumber, [n.color]: n });
+    else last.black = n;
+  }
+  const alternatives = (n: StudyNode, parent: StudyNode[]) => (parent[0] === n ? parent.slice(1) : []);
+  const parentChildren = (n: StudyNode) => {
+    const i = main.indexOf(n);
+    return i <= 0 ? chapter.children : main[i - 1]!.children;
+  };
+  const cell = (n: StudyNode | undefined) =>
+    n ? (
+      <button className={['library-cell', n.id === current ? 'current' : ''].join(' ')} onClick={() => onPick(n.id)}>
+        <San san={n.san} nags={n.nags} />
+      </button>
+    ) : (
+      <span className="library-cell empty">…</span>
+    );
   return (
-    <div className="library-tree">
-      {lines.map((line, li) => {
-        if (line.depth === 0) return <div key={li} className="library-mainline">{line.nodes.map((n, i) => moveButton(n, i, line))}</div>;
-        const shared = line.nodes.slice(0, line.fork);
-        const firstShown = Math.max(0, line.fork - 2);
-        const fork = line.nodes[line.fork]!;
+    <div className="library-moves">
+      {rows.map((r) => {
+        const alts = [r.white, r.black].flatMap((n) => (n ? alternatives(n, parentChildren(n)).map((alt) => ({ alt, instead: n })) : []));
         return (
-          <div key={li} className="library-variation" style={{ marginLeft: `${Math.min(line.depth - 1, 3) * 14}px` }}>
-            <div className="library-variation-head small-text">
-              <span className="badge library-fork">{t(`Scission au coup ${fork.moveNumber}`, `Fork at move ${fork.moveNumber}`)}</span>{' '}
-              {line.instead && (
-                <span className="muted">
-                  {t('au lieu de ', 'instead of ')}
-                  <button className="link library-main-move" onClick={() => onPick(line.instead!.id)}>
-                    {moveLabel(line.instead)}
-                  </button>
-                </span>
-              )}
-            </div>
-            <div className="library-variation-moves">
-              {firstShown > 0 && <span className="muted">… </span>}
-              {shared.slice(firstShown).map((n, k) => moveButton(n, firstShown + k, line, 'shared'))}
-              {moveButton(fork, line.fork, line, 'library-alt-move')}
-              {line.nodes.slice(line.fork + 1).map((n, k) => moveButton(n, line.fork + 1 + k, line))}
-            </div>
-          </div>
+          <Fragment key={`${r.number}-${(r.white ?? r.black)!.id}`}>
+            <span className="library-num">{r.number}</span>
+            {cell(r.white)}
+            {cell(r.black)}
+            {alts.map(({ alt, instead }) => (
+              <Variation key={alt.id} first={alt} instead={instead} current={current} onPick={onPick} />
+            ))}
+          </Fragment>
         );
       })}
+    </div>
+  );
+}
+
+/** A variation, folded: its first move and what it is about; unfolded: its moves, its own variations folded under them. */
+function Variation({ first, instead, current, onPick }: { first: StudyNode; instead: StudyNode; current: string; onPick: (id: string) => void }) {
+  const inside = current === first.id || current.startsWith(`${first.id},`);
+  const [open, setOpen] = useState(inside);
+  useEffect(() => {
+    if (inside) setOpen(true);
+  }, [inside]);
+  const moves = mainFrom(first);
+  const about = first.comment ?? moves.find((m) => m.comment)?.comment;
+  return (
+    <div className={`library-var ${open ? 'open' : ''}`}>
+      <button className="library-var-head" onClick={() => setOpen(!open)} aria-expanded={open}>
+        <span className="library-var-chevron" aria-hidden="true">{open ? '▾' : '▸'}</span>
+        <span className="library-var-move">{moveLabel(first)}</span>
+        <span className="library-var-about">{about ?? t(`au lieu de ${moveLabel(instead)}`, `instead of ${moveLabel(instead)}`)}</span>
+        <span className="library-var-count muted">{t(`${moves.length} coups`, `${moves.length} moves`)}</span>
+      </button>
+      {open && (
+        <div className="library-var-body">
+          <div className="library-var-moves">
+            {moves.map((n, i) => (
+              <button key={n.id} className={['link', 'library-move', n.id === current ? 'current' : ''].join(' ')} onClick={() => onPick(n.id)}>
+                {moveText(n, i === 0)}
+                <San san={n.san} nags={n.nags} />
+              </button>
+            ))}
+          </div>
+          {/* Its own variations: the other moves where each of its moves was played. */}
+          {moves.slice(1).flatMap((n, i) => moves[i]!.children.slice(1).map((alt) => <Variation key={alt.id} first={alt} instead={n} current={current} onPick={onPick} />))}
+        </div>
+      )}
     </div>
   );
 }
