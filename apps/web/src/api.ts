@@ -130,6 +130,42 @@ export interface LichessStudy {
   chapters: (PgnChapter & { id?: string })[];
 }
 
+/** A sync of a repertoire from its Lichess study, chapter by chapter (@e4e5/data studySync.ts). */
+export interface StudySyncPlan {
+  /** Chapters of the app with their chapter of the study, and what updating them changes. */
+  matched: {
+    chapterId: string;
+    lichessChapterId: string;
+    name: string;
+    lichessName: string;
+    /** Matched by its name (not linked to the study yet). */
+    byName: boolean;
+    added: number;
+    /** Removed: gone from the study, and what only followed them. */
+    removed: number;
+    updated: number;
+    unreachable: number;
+    errors: string[];
+  }[];
+  /** Chapters of the study not in the app. */
+  fresh: { lichessChapterId: string; name: string }[];
+  /** Chapters of the app linked to a chapter gone from the study. */
+  gone: { chapterId: string; name: string }[];
+}
+export interface StudySyncChoices {
+  update: string[];
+  add: string[];
+  remove: string[];
+  hard?: boolean;
+}
+export interface StudySyncResult {
+  added: number;
+  removed: number;
+  updated: number;
+  chaptersAdded: number;
+  chaptersRemoved: number;
+}
+
 export interface Gap {
   kind: 'missing-reply' | 'no-answer';
   fen: string;
@@ -320,6 +356,10 @@ export interface Api {
   /** The studies of a Lichess player (private ones too for my own account), most recently updated first. */
   lichessStudiesBy: (username: string) => Promise<LichessStudyListItem[]>;
   lichessStudy: (id: string) => Promise<LichessStudy>;
+  /** What a sync of the repertoire from the study would change (the study asked to Lichess again). */
+  studySyncPlan: (repertoireId: string, studyId: string, hard?: boolean) => Promise<{ study: LichessStudy; plan: StudySyncPlan }>;
+  /** Applies the chosen changes of the plan (same version of the study); links the repertoire to it. */
+  applyStudySync: (repertoireId: string, studyId: string, choices: StudySyncChoices) => Promise<StudySyncResult>;
   cards: () => Promise<ReviewCard[]>;
   /** An answer: `id` makes it count once, `reviewedAt` is when it was given. */
   review: (id: string, answer: { fen: string; uci: string; grade: Grade; id: string; reviewedAt: number }) => Promise<ReviewCard>;

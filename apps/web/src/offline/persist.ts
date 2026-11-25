@@ -4,8 +4,9 @@
  * repertoires, move cards, gap report (reach probabilities: depth of the lines), position
  * statistics already seen (opponent's replies in "Jouer les lignes").
  *
- * The cache is dropped by a new build (shapes of the answers may have changed: the new version
- * runs online and fills it again) and after MAX_AGE without opening the app.
+ * The cache is dropped when CACHE_VERSION changes and after MAX_AGE without opening the app. It is
+ * kept across builds: the gap report takes seconds to compute on the device, and the training
+ * page waits for it (depth of the lines); the restored queries are refetched in the background.
  */
 import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister';
 import type { Query, QueryClient } from '@tanstack/react-query';
@@ -30,6 +31,8 @@ export const persister = createAsyncStoragePersister({
  * (2^31 - 1 ms, 24.8 days): above it the timer fires at once and every restored query is dropped.
  */
 export const MAX_AGE = 20 * 86_400_000;
+/** Bump when the shape of a kept answer changes (api.ts): drops the cache saved by older versions. */
+const CACHE_VERSION = '2';
 const KEPT = ['me', 'repertoires', 'repertoire', 'cards', 'gaps', 'explorer'];
 
 /** Kept queries stay in memory as long as on the device (else unused ones would not be saved). */
@@ -40,7 +43,7 @@ export function keepOfflineQueries(qc: QueryClient) {
 export const persistOptions = {
   persister,
   maxAge: MAX_AGE,
-  buster: __BUILD_ID__,
+  buster: CACHE_VERSION,
   dehydrateOptions: {
     // With data, even when the last refetch failed (status "error" offline keeps the data).
     shouldDehydrateQuery: (q: Query) => q.state.data !== undefined && KEPT.includes(String(q.queryKey[0])),

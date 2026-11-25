@@ -467,7 +467,8 @@ export async function deleteMove(db: Db, userId: string, chapterId: string, move
  */
 export async function syncChapter(db: Db, userId: string, chapterId: string, pgn: string, opts: { dryRun?: boolean; mode?: 'merge' | 'hard' }) {
   const chapter = await ownChapter(db, userId, chapterId);
-  const plan = planSync(chapter.color, await loadMoves(db, chapter.id), pgn, opts.mode ?? 'merge', chapterRoot(chapter));
+  const existing = await loadMoves(db, chapter.id);
+  const plan = planSync(chapter.color, existing, pgn, opts.mode ?? 'merge', chapterRoot(chapter));
   const summary = {
     added: plan.add.length,
     removed: plan.remove.length,
@@ -475,7 +476,14 @@ export async function syncChapter(db: Db, userId: string, chapterId: string, pgn
     unreachable: plan.unreachable,
     errors: plan.errors.slice(0, 20),
   };
-  if (opts.dryRun) return { ...summary, dryRun: true as const };
+  if (opts.dryRun) {
+    // The moves of the chapter left without a way from its start once the others are removed.
+    const removed = new Set(plan.remove.map((m) => m.id));
+    const kept = existing.filter((m) => !removed.has(m.id));
+    const after = new Repertoire(chapter.color, [...kept, ...plan.add]);
+    const orphans = new Set(after.unreachableMoves(chapterRoot(chapter)));
+    return { ...summary, pruned: kept.filter((m) => orphans.has(m)).length, dryRun: true as const };
+  }
   await deleteMoves(db, plan.remove.map((m) => m.id));
   for (const u of plan.update) {
     const { id: moveId, ...patch } = u;

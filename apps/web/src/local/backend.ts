@@ -23,7 +23,9 @@ import {
   gapsAnalysis,
   getRepertoire,
   importPgn,
+  applyStudySync,
   getStudy,
+  planStudySync,
   StudyError,
   studiesBy,
   getProfile,
@@ -228,6 +230,17 @@ export const localApi = {
   },
   lichessStudiesBy: (username) => run(async (db) => studiesBy(await withLichessToken(db), username)),
   lichessStudy: (id) => run(async (db) => getStudy(await withLichessToken(db), id)),
+  studySyncPlan: (repertoireId, studyId, hard) =>
+    run(async (db) => {
+      const study = await getStudy(await withLichessToken(db), studyId, true);
+      return { study, plan: await planStudySync(db, LOCAL_USER, repertoireId, study.chapters, { hard }) };
+    }),
+  applyStudySync: (repertoireId, studyId, choices) =>
+    run(async (db) => {
+      // The version previewed (kept since the plan).
+      const study = await getStudy(await withLichessToken(db), studyId);
+      return applyStudySync(db, LOCAL_USER, repertoireId, studyId, study.chapters, choices);
+    }),
   opening: (line) =>
     run(async () => {
       await loadOpenings();

@@ -6,8 +6,6 @@ export default defineConfig({
   // Where the app is served: / (dev, mobile app), /e4e5/ on GitHub Pages (VITE_BASE).
   base: process.env.VITE_BASE ?? '/',
   plugins: [react()],
-  // Changes with every build: drops the data kept offline when the app changes (offline/persist.ts).
-  define: { __BUILD_ID__: JSON.stringify(String(Date.now())) },
   // SQLite (local mode) loads its own .wasm file: left out of Vite's dependency pre-bundling.
   optimizeDeps: { exclude: ['@sqlite.org/sqlite-wasm'] },
   worker: { format: 'es' },

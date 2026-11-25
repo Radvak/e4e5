@@ -61,10 +61,11 @@ function lichessGet(src: GameSources, path: string, accept: string, notFound: st
  */
 function memo<T>(ms: number, max: number, load: (src: GameSources, key: string) => Promise<T>) {
   const cache = new Map<string, { at: number; value: Promise<T> }>();
-  const get = (src: GameSources, id: string): Promise<T> => {
+  /** `fresh`: asked again, not from the answers kept (e.g. to sync after a change on Lichess). */
+  const get = (src: GameSources, id: string, fresh = false): Promise<T> => {
     const key = `${src.lichessToken ?? ''}\n${id}`;
     const hit = cache.get(key);
-    if (hit && Date.now() - hit.at < ms) return hit.value;
+    if (hit && !fresh && Date.now() - hit.at < ms) return hit.value;
     const value = load(src, id);
     cache.delete(key);
     cache.set(key, { at: Date.now(), value });
@@ -112,7 +113,8 @@ const studies = memo(60 * 60_000, 300, async (src, id): Promise<StudyDetail> => 
   };
 });
 
-export const getStudy = (src: GameSources, id: string): Promise<StudyDetail> => studies.get(src, id);
+/** A study, chapter by chapter; `fresh`: asked to Lichess again (not the answer kept). */
+export const getStudy = (src: GameSources, id: string, fresh = false): Promise<StudyDetail> => studies.get(src, id, fresh);
 
 /** For tests: forget the answers kept. */
 export function clearStudyCache() {

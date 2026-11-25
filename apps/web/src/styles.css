@@ -916,3 +916,9 @@ table.explorer tr.move-detail table.games { font-size: 0.85rem; }
 .rep-chapters a { color: var(--text-2); }
 .rep-chapters.organize { gap: 4px; }
 .organize-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 8px 0; position: sticky; top: 8px; z-index: 5; }
+/* Update from a Lichess study: the chapters with what would change. */
+.study-sync-dialog { width: min(520px, calc(100vw - 24px)); }
+.sync-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 40vh; overflow-y: auto; }
+.sync-list .check { align-items: baseline; flex-wrap: wrap; }
+.sync-name { font-weight: 600; }
+.sync-loss { color: #e0a96d; }

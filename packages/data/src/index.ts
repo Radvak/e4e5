@@ -12,3 +12,4 @@ export * from './gaps.js';
 export * from './lichessAccount.js';
 export * from './profile.js';
 export * from './lichessStudies.js';
+export * from './studySync.js';
