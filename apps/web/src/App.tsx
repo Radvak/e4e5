@@ -8,7 +8,7 @@ import { InstallPrompt } from './components/InstallPrompt';
 import { useTrainingSummary } from './useTrainingSummary';
 import type { Me } from './api';
 import { Lacunes } from './pages/Lacunes';
-import { Library, LibraryOpeningPage } from './pages/Library';
+import { Library, LibraryOpeningPage, LibraryStudyPage } from './pages/Library';
 import { Explorer } from './pages/Explorer';
 import { Games, useGamesReport } from './pages/Games';
 import { LichessCallback } from './pages/LichessCallback';
@@ -157,6 +157,7 @@ export function App() {
           <Route path="/r/:id" element={<RepertoireEditor me={me.data} />} />
           <Route path="/r/:id/train" element={<Training me={me.data} />} />
           <Route path="/library" element={<Library />} />
+          <Route path="/library/study/:id" element={<LibraryStudyPage me={me.data} />} />
           <Route path="/library/:slug" element={<LibraryOpeningPage me={me.data} />} />
           <Route path="/train" element={<Training me={me.data} />} />
           <Route path="/explorer" element={<Explorer me={me.data} />} />

@@ -14,3 +14,4 @@ export * from './profile.js';
 export * from './lichessStudies.js';
 export * from './studySync.js';
 export * from './lichessPush.js';
+export * from './library.js';

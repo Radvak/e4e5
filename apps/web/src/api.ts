@@ -354,6 +354,22 @@ export interface CreatedRepertoire {
   chapters: CreatedChapter[];
 }
 
+export interface LibraryStudySummary {
+  id: string;
+  name: string;
+  color: Color;
+  /** Number of chapters. */
+  chapters: number;
+  createdAt: string;
+}
+export interface LibraryStudy {
+  id: string;
+  name: string;
+  color: Color;
+  chapters: { name: string; orientation?: Color; pgn: string }[];
+  createdAt: string;
+}
+
 /** What the app asks for, answered on this device (local/backend.ts). */
 export interface Api {
   me: () => Promise<Me>;
@@ -396,6 +412,12 @@ export interface Api {
   gaps: (speeds: string[], ratings: number[], cutoff: number) => Promise<GapsResponse>;
   myGames: (fen: string, color: Color, speeds: string[], days: number) => Promise<MyGames>;
   myGameMoves: (id: string) => Promise<{ moves: string[] }>;
+  /** Lichess studies kept in the library (Bibliothèque), most recently added first. */
+  libraryStudies: () => Promise<LibraryStudySummary[]>;
+  libraryStudy: (id: string) => Promise<LibraryStudy>;
+  /** Copies a Lichess study into the library (again: refreshes the copy). */
+  addLibraryStudy: (studyId: string) => Promise<LibraryStudy>;
+  deleteLibraryStudy: (id: string) => Promise<{ ok: true }>;
   /** Opening of a line (UCI moves, comma separated), null if none is named. */
   opening: (line: string) => Promise<{ eco: string; name: string } | null>;
   positionChapters: (fen: string) => Promise<PositionChapter[]>;

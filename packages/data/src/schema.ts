@@ -242,6 +242,32 @@ export const inboxDismissed = sqliteTable(
   (t) => [primaryKey({ columns: [t.userId, t.key] })],
 );
 
+/** A chapter of a study kept in the library: its name, the side it is studied from, its PGN. */
+export interface LibraryStudyChapter {
+  name: string;
+  orientation?: 'white' | 'black';
+  pgn: string;
+}
+
+/**
+ * Lichess studies added to the library ("Bibliothèque"), to read them move by move: a copy of
+ * their chapters (comments, arrows and variations kept), made when they were added.
+ */
+export const libraryStudies = sqliteTable(
+  'library_studies',
+  {
+    userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    /** The Lichess study id. */
+    id: text('id').notNull(),
+    name: text('name').notNull(),
+    /** Side most chapters are studied from. */
+    color: text('color', { enum: ['white', 'black'] }).notNull(),
+    chapters: text('chapters', { mode: 'json' }).notNull().$type<LibraryStudyChapter[]>(),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.id] })],
+);
+
 export type User = typeof users.$inferSelect;
 
 /** The columns of a move needed to build a repertoire graph (lighter than the whole row). */

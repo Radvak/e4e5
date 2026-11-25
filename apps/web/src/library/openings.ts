@@ -1,8 +1,9 @@
 /**
- * The openings of the library ("Bibliothèque"): what each one is for, its key ideas and its main
- * lines, written for the app (French and English). Moves in SAN, as shown everywhere in the app.
- * Main lines checked against the Lichess opening explorer, Wikipedia and 365chess; every line is
- * replayed by openings.test.ts (legal moves, notes on existing plies).
+ * The openings of the library ("Bibliothèque"), written for the app: each move explained, in
+ * PGN like a Lichess study. A comment is "[fr] … [en] …"; [%cal Gc1f4] draws an arrow (G green,
+ * R red, Y yellow, B blue) and [%csl Gd4] a square. The first move of a list is the main line,
+ * the others (in parentheses) are variations. Main lines checked against the Lichess opening
+ * explorer, Wikipedia and 365chess; openings.test.ts replays every chapter.
  */
 import type { LibraryOpening } from './lines';
 
@@ -24,61 +25,52 @@ export const OPENINGS: LibraryOpening[] = [
       en: 'More a system than an opening: White sets up almost always the same way (d4, Bf4, e3, Nf3, Bd3, c3, Nbd2), whatever Black plays. Little theory to remember and clear plans, which makes it a very good choice to start with 1.d4.',
     },
     ideas: [
-      {
-        fr: 'Le fou sort en f4 avant de jouer e3 : sinon il resterait enfermé derrière ses propres pions.',
-        en: 'The bishop goes to f4 before e3: otherwise it would stay locked behind its own pawns.',
-      },
-      {
-        fr: 'La pyramide de pions c3-d4-e3 donne un centre très solide, difficile à attaquer.',
-        en: 'The c3-d4-e3 pawn pyramid makes a very solid centre, hard to attack.',
-      },
-      {
-        fr: 'Le cavalier en e5 sert de base pour attaquer le roque noir (Qf3, g4, h4), et le fou d3 vise h7.',
-        en: 'A knight on e5 is the base for an attack on Black’s king (Qf3, g4, h4), and the d3 bishop aims at h7.',
-      },
-      {
-        fr: 'Attention à ...c5 suivi de ...Qb6 : la dame noire vise b2, qui n’est plus défendu depuis que le fou a quitté c1.',
-        en: 'Watch out for ...c5 followed by ...Qb6: Black’s queen hits b2, no longer defended once the bishop has left c1.',
-      },
-      {
-        fr: 'Si les Noirs jouent ...Bd6 pour échanger le fou f4, on recule en g3 : après ...Bxg3 hxg3, la colonne h s’ouvre pour la tour.',
-        en: 'If Black plays ...Bd6 to trade the f4 bishop, retreat to g3: after ...Bxg3 hxg3, the h-file opens for the rook.',
-      },
+      { fr: 'Le fou sort en f4 avant de jouer e3 : sinon il resterait enfermé derrière ses propres pions.', en: 'The bishop goes to f4 before e3: otherwise it would stay locked behind its own pawns.' },
+      { fr: 'La pyramide de pions c3-d4-e3 donne un centre très solide, difficile à attaquer.', en: 'The c3-d4-e3 pawn pyramid makes a very solid centre, hard to attack.' },
+      { fr: 'Le cavalier en e5 sert de base pour attaquer le roque noir, et le fou d3 vise h7.', en: 'A knight on e5 is the base for an attack on Black’s king, and the d3 bishop aims at h7.' },
+      { fr: 'Attention à ...c5 suivi de ...Qb6 : la dame noire vise b2, qui n’est plus défendu depuis que le fou a quitté c1.', en: 'Watch out for ...c5 followed by ...Qb6: Black’s queen hits b2, no longer defended once the bishop has left c1.' },
     ],
-    lines: [
+    chapters: [
       {
-        name: { fr: 'Contre ...d5 et ...c5 (ligne principale)', en: 'Against ...d5 and ...c5 (main line)' },
-        moves: 'd4 d5 Bf4 Nf6 e3 c5 c3 Nc6 Nd2 e6 Ngf3 Bd6 Bg3 O-O Bd3',
-        notes: {
-          3: { fr: 'Le fou sort avant e3.', en: 'The bishop comes out before e3.' },
-          6: { fr: 'La réaction la plus fréquente : les Noirs attaquent d4.', en: 'The most common reaction: Black attacks d4.' },
-          7: { fr: 'La pyramide c3-d4-e3 tient le centre.', en: 'The c3-d4-e3 pyramid holds the centre.' },
-          12: { fr: 'Les Noirs proposent l’échange du fou f4.', en: 'Black offers to trade the f4 bishop.' },
-          13: { fr: 'On garde le fou : si ...Bxg3, hxg3 ouvre la colonne h.', en: 'Keep the bishop: if ...Bxg3, hxg3 opens the h-file.' },
-          15: { fr: 'Dispositif complet : roque, puis Ne5 ou e4 selon la position.', en: 'Setup complete: castle, then Ne5 or e4 depending on the position.' },
-        },
-      },
-      {
-        name: { fr: 'La menace ...Qb6 sur b2', en: 'The ...Qb6 threat on b2' },
-        moves: 'd4 d5 Bf4 Nf6 e3 c5 c3 Qb6 Qb3 Nc6 Nd2 Bf5 Ngf3 e6',
-        notes: {
-          8: { fr: 'La dame vise b2, qui n’est plus défendu par le fou c1.', en: 'The queen hits b2, no longer defended by the c1 bishop.' },
-          9: {
-            fr: 'On défend b2 en proposant l’échange des dames. Si ...Qxb3, axb3 ouvre la colonne a pour la tour.',
-            en: 'Defend b2 by offering a queen trade. If ...Qxb3, axb3 opens the a-file for the rook.',
-          },
-          11: { fr: 'Développement normal : le cavalier va en d2, pas en c3 (c3 est pour le pion).', en: 'Normal development: the knight goes to d2, not c3 (c3 is for the pawn).' },
-        },
-      },
-      {
-        name: { fr: 'Contre le fianchetto (...g6)', en: 'Against the fianchetto (...g6)' },
-        moves: 'd4 Nf6 Bf4 g6 e3 Bg7 Nf3 O-O Be2 d6 h3 c5 c3',
-        notes: {
-          4: { fr: 'Les Noirs préparent ...Bg7 : pas de pion en d5 à attaquer, on joue tranquille.', en: 'Black prepares ...Bg7: no d5 pawn to attack, play quietly.' },
-          9: { fr: 'Contre ...g6, le fou est mieux en e2 : en d3, il taperait dans le pion g6.', en: 'Against ...g6 the bishop is better on e2: on d3 it would bite on the g6 pawn.' },
-          11: { fr: 'Une case de retraite en h2 pour le fou, et plus de ...Nh5 ou ...Bg4 gênants.', en: 'A retreat square on h2 for the bishop, and no annoying ...Nh5 or ...Bg4.' },
-          13: { fr: 'Toujours la même pyramide c3-d4-e3.', en: 'Always the same c3-d4-e3 pyramid.' },
-        },
+        name: { fr: 'Le Londres pas à pas', en: 'The London step by step' },
+        pgn: `[Orientation "white"]
+
+{ [fr] Le Système de Londres : on construit toujours le même dispositif, et on comprend pourquoi chaque pièce va sur sa case. [en] The London System: always the same setup, and why each piece goes to its square. }
+1. d4 { [%csl Gd4,Ge5,Gc5] [fr] On occupe le centre. Le pion d4 contrôle e5 et c5, et libère le fou c1. [en] Take the centre. The d4 pawn controls e5 and c5, and frees the c1 bishop. }
+1... d5 { [%cal Gd5e4] [fr] Les Noirs prennent leur part du centre et empêchent e4. [en] Black takes a share of the centre and stops e4. }
+(1... Nf6 { [fr] Les Noirs gardent le choix de leur structure. Pas de souci : on joue le même plan. [en] Black keeps their pawn structure open. No problem: same plan. }
+2. Bf4 { [%cal Gc1f4] [fr] Toujours le fou d'abord. [en] The bishop first, as always. }
+2... g6 { [%cal Gf8g7] [fr] Les Noirs préparent un fianchetto : le fou ira en g7. [en] Black prepares a fianchetto: the bishop goes to g7. }
+3. e3 { [fr] On soutient d4. [en] Support d4. }
+3... Bg7 4. Nf3 { [%csl Ge5] [fr] Développement et contrôle de e5. [en] Develop and control e5. }
+4... O-O 5. Be2 { [%cal Rd3g6] [fr] Contre ...g6, le fou est mieux en e2 : en d3, il taperait dans le pion g6. [en] Against ...g6 the bishop is better on e2: on d3 it would bite on the g6 pawn. }
+5... d6 6. h3 { [%cal Gf4h2] [fr] Une case de retraite en h2 pour le fou, et plus de ...Nh5 ni de ...Bg4 gênants. [en] A retreat square on h2 for the bishop, and no annoying ...Nh5 or ...Bg4. }
+6... c5 7. c3 { [%csl Gc3,Gd4,Ge3] [fr] Toujours la même pyramide c3-d4-e3. [en] Always the same c3-d4-e3 pyramid. })
+2. Bf4 { [%cal Gc1f4] [%csl Ge5] [fr] Le coup clé du Londres : le fou sort AVANT e3. Après e3, il serait enfermé derrière son pion. En f4, il surveille e5. [en] The key move of the London: the bishop comes out BEFORE e3. After e3 it would be locked behind its pawn. On f4 it watches e5. }
+2... Nf6 { [%csl Ge4] [fr] Développement naturel : le cavalier contrôle e4. [en] Natural development: the knight controls e4. }
+3. e3 { [%cal Gf1d3] [fr] Maintenant que le fou est dehors, e3 soutient d4 et ouvre la route du fou f1 vers d3. [en] Now that the bishop is out, e3 supports d4 and opens the way for the f1 bishop to d3. }
+3... c5 { [%cal Gc5d4] [fr] La réaction la plus fréquente : les Noirs attaquent d4 avec un pion de côté. [en] The most common reaction: Black attacks d4 with a side pawn. }
+(3... e6 { [fr] Plus calme : les Noirs ouvrent leur fou f8. [en] Quieter: Black opens their f8 bishop. }
+4. Nf3 { [%csl Ge5] [fr] Contrôle e5. [en] Controls e5. }
+4... Bd6 { [%cal Rd6f4] [fr] Les Noirs proposent l'échange de notre meilleur fou. [en] Black offers to trade our best bishop. }
+5. Bg3 { [%cal Gf4g3,Gh1h5] [fr] On garde le fou. Si ...Bxg3 hxg3, la colonne h s'ouvre pour la tour. [en] Keep the bishop. If ...Bxg3 hxg3, the h-file opens for the rook. }
+5... O-O 6. Bd3 { [%cal Gd3h7] [fr] Le fou vise h7, près du roi noir. [en] The bishop aims at h7, next to Black's king. }
+6... c5 7. c3 { [%csl Gc3,Gd4,Ge3] [fr] La pyramide. [en] The pyramid. }
+7... Nc6 8. Nbd2 { [fr] Le dispositif est complet. [en] The setup is complete. })
+4. c3 { [%csl Gc3,Gd4,Ge3] [fr] La pyramide c3-d4-e3 : d4 est protégé deux fois et ne craint rien. Si ...cxd4, on reprend exd4. [en] The c3-d4-e3 pyramid: d4 is protected twice and is safe. If ...cxd4, recapture exd4. }
+4... Nc6 { [%cal Gc6d4] [fr] Encore plus de pression sur d4. [en] Even more pressure on d4. }
+(4... Qb6 { [%cal Rb6b2] [%csl Rb2] [fr] Le piège à connaître : la dame vise b2, qui n'est plus défendu depuis que le fou a quitté c1. [en] The trap to know: the queen hits b2, no longer defended since the bishop left c1. }
+5. Qb3 { [%cal Gb3b2] [fr] La meilleure parade : b2 est défendu et on propose l'échange des dames. Si ...Qxb3, axb3 ouvre la colonne a pour la tour. [en] The best answer: b2 is defended and we offer a queen trade. If ...Qxb3, axb3 opens the a-file for the rook. }
+5... Nc6 6. Nd2 { [fr] Développement normal. [en] Normal development. }
+6... Bf5 7. Ngf3 { [fr] Le second cavalier contrôle e5. [en] The second knight controls e5. }
+7... e6 { [fr] Position équilibrée, avec un plan simple pour les Blancs : Be2, roque, Ne5. [en] A balanced position, with a simple plan for White: Be2, castle, Ne5. })
+5. Nd2 { [%cal Gb1d2,Gd2e4] [fr] Le cavalier va en d2, pas en c3 : c3 est la case du pion. Depuis d2, il soutient e4 et f3. [en] The knight goes to d2, not c3: c3 is for the pawn. From d2 it supports e4 and f3. }
+5... e6 { [fr] Les Noirs ouvrent leur fou f8. Leur fou c8 reste enfermé : c'est le prix de leur structure. [en] Black opens their f8 bishop. Their c8 bishop stays locked in: the price of their structure. }
+6. Ngf3 { [%cal Gg1f3] [%csl Ge5] [fr] Développement et contrôle de e5, la case clé du Londres. [en] Develop and control e5, the key square of the London. }
+6... Bd6 { [%cal Rd6f4] [fr] Les Noirs proposent l'échange du fou f4. [en] Black offers to trade the f4 bishop. }
+7. Bg3 { [%cal Gf4g3,Gh1h5] [fr] On garde le fou. Si ...Bxg3 hxg3, la colonne h s'ouvre et le pion g3 protège f4 et h4. [en] Keep the bishop. If ...Bxg3 hxg3, the h-file opens and the g3 pawn guards f4 and h4. }
+7... O-O { [fr] Le roi noir est à l'abri. [en] Black's king is safe. }
+8. Bd3 { [%cal Gd3h7] [fr] Dernière pièce mineure : le fou vise h7. Ensuite : roque, puis Ne5 et attaque sur l'aile roi, ou e4 pour ouvrir le centre. [en] The last minor piece: the bishop aims at h7. Next: castle, then Ne5 and a kingside attack, or e4 to open the centre. } *`,
       },
     ],
     lichess: 'London_System',
@@ -101,61 +93,67 @@ export const OPENINGS: LibraryOpening[] = [
     },
     ideas: [
       { fr: 'Le fou c4 vise f7 : la plupart des attaques rapides passent par cette case.', en: 'The c4 bishop aims at f7: most quick attacks go through that square.' },
-      { fr: 'c3 prépare d4 pour construire un grand centre, et ouvre une case de retraite au fou en b3.', en: 'c3 prepares d4 to build a big centre, and opens a retreat square on b3 for the bishop.' },
-      {
-        fr: 'Version lente (Giuoco Pianissimo) : c3, d3, roque, Re1, puis le cavalier b1 voyage par d2 et f1 jusqu’en g3.',
-        en: 'Slow version (Giuoco Pianissimo): c3, d3, castle, Re1, then the b1 knight travels via d2 and f1 to g3.',
-      },
-      { fr: 'Contre 3...Nf6 (défense des deux cavaliers), 4.Ng5 attaque f7 tout de suite.', en: 'Against 3...Nf6 (Two Knights Defence), 4.Ng5 attacks f7 at once.' },
-      {
-        fr: 'Piège à connaître : après 4.Ng5 d5 5.exd5, si les Noirs reprennent 5...Nxd5?, 6.Nxf7! (attaque Fried Liver) met leur roi en grand danger.',
-        en: 'Trap to know: after 4.Ng5 d5 5.exd5, if Black recaptures 5...Nxd5?, 6.Nxf7! (the Fried Liver Attack) puts their king in great danger.',
-      },
+      { fr: 'c3 prépare d4 pour construire un grand centre, et ouvre une retraite au fou en b3.', en: 'c3 prepares d4 to build a big centre, and opens a retreat on b3 for the bishop.' },
+      { fr: 'Version lente : c3, d3, roque, Re1, puis le cavalier b1 voyage par d2 et f1 jusqu’en g3.', en: 'Slow version: c3, d3, castle, Re1, then the b1 knight travels via d2 and f1 to g3.' },
+      { fr: 'Contre 3...Nf6, 4.Ng5 attaque f7 tout de suite, et 5...Nxd5? permet l’attaque Fried Liver.', en: 'Against 3...Nf6, 4.Ng5 attacks f7 at once, and 5...Nxd5? allows the Fried Liver Attack.' },
     ],
-    lines: [
+    chapters: [
       {
-        name: { fr: 'Giuoco Pianissimo (jeu lent avec d3)', en: 'Giuoco Pianissimo (slow play with d3)' },
-        moves: 'e4 e5 Nf3 Nc6 Bc4 Bc5 c3 Nf6 d3 d6 O-O O-O Re1 a6 Bb3 Ba7 Nbd2',
-        notes: {
-          5: { fr: 'Le fou vise f7.', en: 'The bishop aims at f7.' },
-          7: { fr: 'Prépare d4 et ouvre la case b3 au fou.', en: 'Prepares d4 and opens b3 for the bishop.' },
-          9: { fr: 'Version lente : e4 est protégé, d4 viendra plus tard.', en: 'Slow version: e4 is protected, d4 will come later.' },
-          14: { fr: 'Les Noirs préparent une retraite en a7 pour leur fou, à l’abri de d4 et b4.', en: 'Black prepares a retreat on a7 for their bishop, safe from d4 and b4.' },
-          17: { fr: 'Le cavalier ira en f1 puis g3 : la manœuvre typique de l’Italienne.', en: 'The knight heads for f1 and then g3: the typical Italian manoeuvre.' },
-        },
-      },
-      {
-        name: { fr: 'Giuoco Piano : le plan c3-d4', en: 'Giuoco Piano: the c3-d4 plan' },
-        moves: 'e4 e5 Nf3 Nc6 Bc4 Bc5 c3 Nf6 d4 exd4 cxd4 Bb4+ Bd2 Bxd2+ Nbxd2 d5 exd5 Nxd5 Qb3 Nce7 O-O O-O',
-        notes: {
-          9: { fr: 'Le grand centre : les Noirs doivent réagir tout de suite.', en: 'The big centre: Black must react at once.' },
-          12: { fr: 'L’échec gagne un temps et fait reculer la pression.', en: 'The check gains time and eases the pressure.' },
-          16: { fr: 'Indispensable : les Noirs cassent le centre avant e5.', en: 'Essential: Black breaks the centre before e5.' },
-          19: { fr: 'La dame vise d5 et b7.', en: 'The queen hits d5 and b7.' },
-          22: { fr: 'Les Blancs ont un pion isolé en d4 : de l’activité contre une faiblesse.', en: 'White has an isolated pawn on d4: activity in exchange for a weakness.' },
-        },
-      },
-      {
-        name: { fr: 'Défense des deux cavaliers : 4.Ng5', en: 'Two Knights Defence: 4.Ng5' },
-        moves: 'e4 e5 Nf3 Nc6 Bc4 Nf6 Ng5 d5 exd5 Na5 Bb5+ c6 dxc6 bxc6 Be2 h6 Nf3 e4 Ne5',
-        notes: {
-          7: { fr: 'Cavalier et fou attaquent f7 ensemble.', en: 'Knight and bishop attack f7 together.' },
-          8: { fr: 'La bonne défense : couper la diagonale du fou.', en: 'The right defence: cut the bishop’s diagonal.' },
-          10: { fr: 'Pas 5...Nxd5? à cause de 6.Nxf7! Les Noirs chassent le fou.', en: 'Not 5...Nxd5? because of 6.Nxf7! Black chases the bishop.' },
-          14: { fr: 'Les Noirs ont donné un pion contre une avance de développement.', en: 'Black has given a pawn for a lead in development.' },
-          19: { fr: 'Le cavalier s’installe en e5 : les Blancs gardent le pion de plus.', en: 'The knight settles on e5: White keeps the extra pawn.' },
-        },
+        name: { fr: 'L’Italienne pas à pas', en: 'The Italian step by step' },
+        pgn: `[Orientation "white"]
+
+{ [fr] La Partie italienne : se développer vite, roquer, et viser f7. [en] The Italian Game: develop fast, castle, and aim at f7. }
+1. e4 { [%csl Gd5,Gf5] [fr] On occupe le centre et on ouvre la route de la dame et du fou f1. [en] Take the centre and open the way for the queen and the f1 bishop. }
+1... e5 { [fr] Les Noirs prennent leur part du centre. [en] Black takes a share of the centre. }
+2. Nf3 { [%cal Gf3e5] [fr] On se développe en attaquant e5 : les Noirs doivent répondre. [en] Develop while attacking e5: Black must respond. }
+2... Nc6 { [%cal Gc6e5] [fr] Défend e5 en se développant. [en] Defends e5 while developing. }
+3. Bc4 { [%cal Gc4f7] [%csl Rf7] [fr] Le fou vise f7, la case la plus faible du camp noir : seul le roi la défend. [en] The bishop aims at f7, the weakest square in Black's camp: only the king defends it. }
+3... Bc5 { [%cal Gc5f2] [fr] Les Noirs font pareil : leur fou vise f2. C'est le Giuoco Piano. [en] Black does the same: their bishop aims at f2. This is the Giuoco Piano. }
+(3... Nf6 { [%cal Gf6e4] [fr] La défense des deux cavaliers : contre-attaque sur e4. [en] The Two Knights Defence: counter-attack on e4. }
+4. Ng5 { [%cal Gg5f7,Gc4f7] [fr] Le cavalier et le fou attaquent f7 ensemble. [en] Knight and bishop attack f7 together. }
+4... d5 { [%cal Gd5c4] [fr] La seule bonne défense : couper la diagonale du fou. [en] The only good defence: cut the bishop's diagonal. }
+5. exd5 { [fr] On prend : le pion d5 cloue presque le jeu noir. [en] Take: the d5 pawn cramps Black. }
+5... Na5 { [%cal Ga5c4] [fr] Les Noirs chassent le fou. Surtout pas 5...Nxd5? (voir le chapitre « Piège »). [en] Black chases the bishop. Not 5...Nxd5? (see the Trap chapter). }
+6. Bb5+ { [fr] Échec pour garder le fou actif. [en] Check, to keep the bishop active. }
+6... c6 7. dxc6 { [fr] On prend : un pion de plus, pour l'instant. [en] Take: a pawn up, for now. }
+7... bxc6 { [fr] Les Noirs ont donné un pion contre une avance de développement. [en] Black has given a pawn for a lead in development. }
+8. Be2 { [fr] Le fou se replie en sécurité. [en] The bishop retreats to safety. }
+8... h6 { [%cal Gh6g5] [fr] Chasse le cavalier. [en] Chases the knight. }
+9. Nf3 { [fr] Le cavalier recule. [en] The knight retreats. }
+9... e4 { [fr] Encore un temps gagné. [en] Another tempo gained. }
+10. Ne5 { [%csl Ge5] [fr] Le cavalier s'installe en e5 : les Blancs gardent le pion de plus, les Noirs ont de l'activité. [en] The knight settles on e5: White keeps the extra pawn, Black has activity. })
+4. c3 { [%cal Gc3d4] [fr] Prépare d4 pour un grand centre, et offre une retraite au fou en b3. [en] Prepares d4 for a big centre, and gives the bishop a retreat on b3. }
+4... Nf6 { [%cal Gf6e4] [fr] Les Noirs attaquent e4. [en] Black attacks e4. }
+5. d3 { [%csl Ge4] [fr] La version calme, le Giuoco Pianissimo : e4 est protégé, d4 viendra plus tard. Très jouée à haut niveau. [en] The quiet version, the Giuoco Pianissimo: e4 is protected, d4 will come later. Very popular at the top. }
+(5. d4 { [%csl Gd4,Ge4] [fr] Le plan direct : le grand centre e4-d4. [en] The direct plan: the big e4-d4 centre. }
+5... exd4 { [fr] Les Noirs doivent réagir tout de suite. [en] Black must react at once. }
+6. cxd4 { [fr] Le centre idéal. [en] The ideal centre. }
+6... Bb4+ { [fr] L'échec gagne un temps. [en] The check gains a tempo. }
+7. Bd2 { [fr] On pare l'échec en proposant l'échange des fous. [en] Block the check by offering a bishop trade. }
+7... Bxd2+ 8. Nbxd2 { [fr] On reprend avec le cavalier, qui protège e4. [en] Recapture with the knight, which protects e4. }
+8... d5 { [%cal Gd5e4] [fr] Indispensable : les Noirs cassent le centre avant e5. [en] Essential: Black breaks the centre before e5. }
+9. exd5 { [fr] On prend, plutôt que de laisser ...dxe4. [en] Take, rather than allow ...dxe4. }
+9... Nxd5 10. Qb3 { [%cal Gb3d5,Gb3b7] [fr] La dame vise d5 et b7. [en] The queen hits d5 and b7. }
+10... Nce7 11. O-O { [fr] Le roi à l'abri. [en] King to safety. }
+11... O-O { [%csl Yd4] [fr] Les Blancs ont un pion isolé en d4 : de l'activité contre une faiblesse. [en] White has an isolated pawn on d4: activity in exchange for a weakness. })
+5... d6 { [fr] Les Noirs soutiennent e5 et ouvrent leur fou c8. [en] Black supports e5 and opens their c8 bishop. }
+6. O-O { [fr] Le roi à l'abri avant d'ouvrir le jeu. [en] King safety before opening the game. }
+6... O-O 7. Re1 { [%cal Ge1e4] [fr] La tour soutient e4 et libère f1 pour le cavalier. [en] The rook supports e4 and frees f1 for the knight. }
+7... a6 { [%cal Gc5a7] [fr] Les Noirs préparent une retraite en a7 pour leur fou, à l'abri de d4 et b4. [en] Black prepares a retreat on a7 for their bishop, safe from d4 and b4. }
+8. Bb3 { [fr] Le fou recule avant d'être chassé par ...b5 ou ...Na5. [en] The bishop steps back before ...b5 or ...Na5 chases it. }
+8... Ba7 9. Nbd2 { [%cal Gd2f1,Gf1g3] [fr] La manœuvre typique : le cavalier ira en f1 puis g3, vers le roque noir. [en] The typical manoeuvre: the knight heads for f1 then g3, towards Black's king. } *`,
       },
       {
         name: { fr: 'Piège : l’attaque Fried Liver', en: 'Trap: the Fried Liver Attack' },
         trap: true,
-        moves: 'e4 e5 Nf3 Nc6 Bc4 Nf6 Ng5 d5 exd5 Nxd5 Nxf7 Kxf7 Qf3+ Ke6 Nc3',
-        notes: {
-          10: { fr: 'L’erreur classique : le cavalier d5 devient une cible.', en: 'The classic mistake: the d5 knight becomes a target.' },
-          11: { fr: 'Sacrifice du cavalier pour attirer le roi au centre.', en: 'Knight sacrifice to drag the king into the centre.' },
-          13: { fr: 'Échec, et le cavalier d5 est attaqué deux fois.', en: 'Check, and the d5 knight is attacked twice.' },
-          15: { fr: 'Encore une pièce sur d5 : le roi noir est exposé pour longtemps.', en: 'One more piece on d5: Black’s king will stay exposed for a long time.' },
-        },
+        pgn: `[Orientation "white"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bc4 Nf6 4. Ng5 { [%cal Gg5f7,Gc4f7] [fr] Double attaque sur f7. [en] Double attack on f7. }
+4... d5 5. exd5 Nxd5 { [%csl Rd5] [fr] L'erreur classique : le cavalier d5 devient une cible. [en] The classic mistake: the d5 knight becomes a target. }
+6. Nxf7 { [%cal Gg5f7] [fr] Sacrifice du cavalier pour attirer le roi au centre. [en] Knight sacrifice to drag the king into the centre. }
+6... Kxf7 7. Qf3+ { [%cal Gf3f7,Gf3d5] [fr] Échec, et le cavalier d5 est attaqué deux fois. [en] Check, and the d5 knight is attacked twice. }
+7... Ke6 { [fr] Le seul coup pour garder le cavalier. [en] The only move to keep the knight. }
+8. Nc3 { [%cal Gc3d5] [fr] Encore une pièce sur d5 : le roi noir restera exposé longtemps. [en] One more piece on d5: Black's king will stay exposed for a long time. } *`,
       },
     ],
     lichess: 'Italian_Game',
@@ -173,72 +171,64 @@ export const OPENINGS: LibraryOpening[] = [
       en: 'A classic: a side pawn for control of the centre.',
     },
     summary: {
-      fr: 'Avec 1.d4 d5 2.c4, les Blancs offrent le pion c4 pour détourner le pion d5 du centre. Ce n’est pas vraiment un gambit : si les Noirs veulent garder le pion, ils le paient cher. Une des ouvertures les plus solides de l’histoire des échecs, jouée à tous les niveaux.',
-      en: 'With 1.d4 d5 2.c4, White offers the c4 pawn to lure the d5 pawn away from the centre. It is not really a gambit: if Black tries to keep the pawn, it costs them dearly. One of the most solid openings in chess history, played at every level.',
+      fr: 'Avec 1.d4 d5 2.c4, les Blancs offrent le pion c4 pour détourner le pion d5 du centre. Ce n’est pas vraiment un gambit : si les Noirs veulent garder le pion, ils le paient cher. Une des ouvertures les plus solides de l’histoire des échecs.',
+      en: 'With 1.d4 d5 2.c4, White offers the c4 pawn to lure the d5 pawn away from the centre. It is not really a gambit: if Black tries to keep the pawn, it costs them dearly. One of the most solid openings in chess history.',
     },
     ideas: [
-      { fr: 'c4 attaque d5 : si les Noirs prennent, e4 permet aux Blancs de prendre tout le centre.', en: 'c4 attacks d5: if Black takes, e4 lets White grab the whole centre.' },
-      {
-        fr: 'Après 2...dxc4 (gambit accepté), pas besoin de courir après le pion : e3 puis Bxc4 le récupèrent naturellement.',
-        en: 'After 2...dxc4 (Queen’s Gambit Accepted), no need to chase the pawn: e3 then Bxc4 win it back naturally.',
-      },
-      {
-        fr: 'Contre 2...e6 (gambit refusé), développement classique Nc3, Bg5, e3, Nf3 et pression sur d5.',
-        en: 'Against 2...e6 (Queen’s Gambit Declined), classical development Nc3, Bg5, e3, Nf3 and pressure on d5.',
-      },
-      {
-        fr: 'Après l’échange cxd5 exd5, plan typique : l’attaque de minorité, b4-b5 pour créer une faiblesse en c6.',
-        en: 'After the cxd5 exd5 exchange, a typical plan is the minority attack: b4-b5 to create a weakness on c6.',
-      },
-      {
-        fr: 'Piège de l’éléphant : dans le gambit refusé, prendre le pion d5 avec le cavalier quand il est cloué peut coûter une pièce.',
-        en: 'The Elephant Trap: in the Declined, taking the d5 pawn with the knight when it looks pinned can lose a piece.',
-      },
+      { fr: 'c4 attaque d5 : si les Noirs prennent, e4 permet de prendre tout le centre.', en: 'c4 attacks d5: if Black takes, e4 grabs the whole centre.' },
+      { fr: 'Après 2...dxc4, pas besoin de courir après le pion : e3 puis Bxc4 le récupèrent.', en: 'After 2...dxc4, no need to chase the pawn: e3 then Bxc4 win it back.' },
+      { fr: 'Contre 2...e6, développement classique Nc3, Bg5, e3, Nf3 et pression sur d5.', en: 'Against 2...e6, classical development Nc3, Bg5, e3, Nf3 and pressure on d5.' },
+      { fr: 'Piège de l’éléphant : prendre d5 avec le cavalier quand il semble cloué peut coûter une pièce.', en: 'The Elephant Trap: taking d5 with the knight when it looks pinned can lose a piece.' },
     ],
-    lines: [
+    chapters: [
       {
-        name: { fr: 'Gambit dame refusé (2...e6)', en: 'Queen’s Gambit Declined (2...e6)' },
-        moves: 'd4 d5 c4 e6 Nc3 Nf6 Bg5 Be7 e3 O-O Nf3 Nbd7 Rc1 c6 Bd3 dxc4 Bxc4 Nd5',
-        notes: {
-          3: { fr: 'Le pion c4 attaque d5.', en: 'The c4 pawn attacks d5.' },
-          4: { fr: 'Les Noirs tiennent d5 avec un pion : solide, mais le fou c8 est enfermé.', en: 'Black holds d5 with a pawn: solid, but the c8 bishop is locked in.' },
-          7: { fr: 'Cloue le cavalier qui défend d5.', en: 'Pins the knight that defends d5.' },
-          13: { fr: 'La tour se place sur la colonne c, qui va s’ouvrir.', en: 'The rook goes to the c-file, which is about to open.' },
-          17: { fr: 'Les Noirs ont gagné un temps : les Blancs ont joué Bd3 puis Bxc4.', en: 'Black has gained a tempo: White played Bd3 and then Bxc4.' },
-          18: { fr: 'Manœuvre de libération : les Noirs échangent des pièces pour respirer.', en: 'Freeing manoeuvre: Black trades pieces to get some air.' },
-        },
-      },
-      {
-        name: { fr: 'Gambit dame accepté (2...dxc4)', en: 'Queen’s Gambit Accepted (2...dxc4)' },
-        moves: 'd4 d5 c4 dxc4 Nf3 Nf6 e3 e6 Bxc4 c5 O-O a6',
-        notes: {
-          4: { fr: 'Les Noirs ne gardent pas le pion : ils libèrent leur jeu.', en: 'Black will not keep the pawn: they free their game.' },
-          5: { fr: 'Empêche ...e5 et développe.', en: 'Stops ...e5 and develops.' },
-          9: { fr: 'Le pion est récupéré, les Blancs ont un beau centre.', en: 'The pawn is back, and White has a fine centre.' },
-          10: { fr: 'Les Noirs attaquent d4 à leur tour.', en: 'Black attacks d4 in turn.' },
-        },
-      },
-      {
-        name: { fr: 'Défense slave (2...c6)', en: 'Slav Defence (2...c6)' },
-        moves: 'd4 d5 c4 c6 Nf3 Nf6 Nc3 dxc4 a4 Bf5 e3 e6 Bxc4 Bb4 O-O',
-        notes: {
-          4: { fr: 'Les Noirs tiennent d5 sans enfermer leur fou c8.', en: 'Black holds d5 without locking in their c8 bishop.' },
-          8: { fr: 'Les Noirs prennent quand même, prêts à défendre le pion avec ...b5.', en: 'Black takes anyway, ready to defend the pawn with ...b5.' },
-          9: { fr: 'Empêche ...b5 : le pion c4 tombera.', en: 'Stops ...b5: the c4 pawn will fall.' },
-          13: { fr: 'Pion récupéré, développement simple.', en: 'Pawn regained, simple development.' },
-        },
+        name: { fr: 'Le Gambit dame pas à pas', en: 'The Queen’s Gambit step by step' },
+        pgn: `[Orientation "white"]
+
+{ [fr] Le Gambit dame : attaquer le centre noir avec un pion de côté. [en] The Queen's Gambit: attack Black's centre with a side pawn. }
+1. d4 { [%csl Gd4] [fr] On occupe le centre et on libère le fou c1. [en] Take the centre and free the c1 bishop. }
+1... d5 { [fr] Les Noirs bloquent le pion d4. [en] Black blocks the d4 pawn. }
+2. c4 { [%cal Gc4d5] [fr] Le gambit : on attaque d5 avec un pion de côté. Si les Noirs prennent, ils abandonnent le centre. [en] The gambit: attack d5 with a side pawn. If Black takes, they give up the centre. }
+2... e6 { [%cal Ge6d5] [%csl Rc8] [fr] Le gambit refusé : d5 est tenu par un pion. Solide, mais le fou c8 est enfermé. [en] The Declined: d5 is held by a pawn. Solid, but the c8 bishop is locked in. }
+(2... dxc4 { [fr] Le gambit accepté : les Noirs ne gardent pas le pion, ils libèrent leur jeu. [en] The Accepted: Black won't keep the pawn, they free their game. }
+3. Nf3 { [%cal Rd8d1] [%csl Ge5] [fr] Pas 3.e4 tout de suite : on empêche ...e5 et on se développe. [en] Not 3.e4 at once: stop ...e5 and develop. }
+3... Nf6 4. e3 { [%cal Gf1c4] [fr] Ouvre la diagonale du fou vers c4 : le pion va tomber. [en] Opens the bishop's diagonal to c4: the pawn will fall. }
+4... e6 5. Bxc4 { [fr] Pion récupéré, et un beau centre. [en] Pawn regained, and a fine centre. }
+5... c5 { [%cal Gc5d4] [fr] Les Noirs attaquent d4 à leur tour. [en] Black attacks d4 in turn. }
+6. O-O { [fr] Roque avant d'ouvrir le centre. [en] Castle before opening the centre. }
+6... a6 { [fr] Prépare ...b5 pour chasser le fou. [en] Prepares ...b5 to chase the bishop. })
+(2... c6 { [%cal Gc6d5] [fr] La défense slave : d5 tenu sans enfermer le fou c8. [en] The Slav: d5 held without locking in the c8 bishop. }
+3. Nf3 { [fr] Développement simple. [en] Simple development. }
+3... Nf6 4. Nc3 { [fr] Encore une pièce contre d5. [en] One more piece against d5. }
+4... dxc4 { [fr] Les Noirs prennent quand même, prêts à défendre le pion par ...b5. [en] Black takes anyway, ready to defend the pawn with ...b5. }
+5. a4 { [%cal Ga4b5] [fr] Empêche ...b5 : le pion c4 tombera. [en] Stops ...b5: the c4 pawn will fall. }
+5... Bf5 6. e3 { [fr] Ouvre le fou f1 vers c4. [en] Opens the f1 bishop towards c4. }
+6... e6 7. Bxc4 { [fr] Le fou reprend le pion. [en] The bishop wins the pawn back. }
+7... Bb4 8. O-O { [fr] Pion récupéré, développement simple. [en] Pawn regained, simple development. })
+3. Nc3 { [%cal Gc3d5] [fr] Une pièce de plus contre d5. [en] One more piece against d5. }
+3... Nf6 { [%csl Gd5] [fr] Les Noirs défendent d5. [en] Black defends d5. }
+4. Bg5 { [%cal Gg5f6,Gf6d5] [fr] Cloue le cavalier qui défend d5. [en] Pins the knight that defends d5. }
+4... Be7 { [fr] Défait le clouage. [en] Breaks the pin. }
+5. e3 { [%cal Gf1d3] [fr] Soutient d4 et ouvre le fou f1. [en] Supports d4 and opens the f1 bishop. }
+5... O-O 6. Nf3 { [fr] Développement. [en] Development. }
+6... Nbd7 { [fr] Le cavalier va en d7 pour soutenir ...c5 ou ...e5 plus tard. [en] The knight goes to d7 to support ...c5 or ...e5 later. }
+7. Rc1 { [%cal Gc1c8] [fr] La tour se place sur la colonne c, qui va s'ouvrir. [en] The rook goes to the c-file, which is about to open. }
+7... c6 { [fr] Consolide d5. [en] Shores up d5. }
+8. Bd3 { [fr] Le fou se développe. Les Noirs vont prendre c4 et gagner un temps, mais ...dxc4 rend aussi le centre aux Blancs. [en] The bishop develops. Black will take on c4 and gain a tempo, but ...dxc4 also gives White the centre. }
+8... dxc4 { [fr] Les Noirs gagnent un temps : le fou doit reprendre. [en] Black gains a tempo: the bishop must recapture. }
+9. Bxc4 { [fr] Le fou est actif en c4. [en] The bishop is active on c4. }
+9... Nd5 { [%cal Gd5g5] [fr] La manœuvre de libération de Capablanca : les Noirs échangent des pièces pour respirer. [en] Capablanca's freeing manoeuvre: Black trades pieces to get some air. } *`,
       },
       {
         name: { fr: 'Piège de l’éléphant', en: 'The Elephant Trap' },
         trap: true,
-        moves: 'd4 d5 c4 e6 Nc3 Nf6 Bg5 Nbd7 cxd5 exd5 Nxd5 Nxd5 Bxd8 Bb4+ Qd2 Bxd2+ Kxd2 Kxd8',
-        notes: {
-          8: { fr: 'Le cavalier f6 semble cloué : il ne l’est pas vraiment.', en: 'The f6 knight looks pinned: it is not really.' },
-          11: { fr: 'L’erreur : le pion d5 a l’air gratuit.', en: 'The mistake: the d5 pawn looks free.' },
-          12: { fr: 'Les Noirs abandonnent leur dame !', en: 'Black gives up their queen!' },
-          14: { fr: 'L’échec qui récupère la dame.', en: 'The check that wins the queen back.' },
-          18: { fr: 'Bilan : les Noirs ont une pièce de plus.', en: 'Result: Black is a piece up.' },
-        },
+        pgn: `[Orientation "white"]
+
+1. d4 d5 2. c4 e6 3. Nc3 Nf6 4. Bg5 Nbd7 { [%cal Rg5f6] [fr] Le cavalier f6 semble cloué : il ne l'est pas vraiment. [en] The f6 knight looks pinned: it is not really. }
+5. cxd5 exd5 6. Nxd5 { [%csl Rd5] [fr] L'erreur : le pion d5 a l'air gratuit. Il fallait jouer 6.e3. [en] The mistake: the d5 pawn looks free. 6.e3 was the move. }
+6... Nxd5 { [fr] Les Noirs abandonnent leur dame ! [en] Black gives up their queen! }
+7. Bxd8 Bb4+ { [%cal Gb4e1] [fr] L'échec qui récupère la dame. [en] The check that wins the queen back. }
+8. Qd2 Bxd2+ 9. Kxd2 Kxd8 { [fr] Bilan : les Noirs ont une pièce de plus. [en] Result: Black is a piece up. } *`,
       },
     ],
     lichess: 'Queens_Gambit',
@@ -263,74 +253,59 @@ export const OPENINGS: LibraryOpening[] = [
     },
     ideas: [
       { fr: '...c6 prépare ...d5 : le pion d5 est soutenu sans gêner le fou c8.', en: '...c6 prepares ...d5: the d5 pawn is supported without blocking the c8 bishop.' },
-      { fr: 'Le fou c8 sort (Bf5 ou Bg4) avant ...e6 : c’est tout l’intérêt de l’ouverture.', en: 'The c8 bishop comes out (Bf5 or Bg4) before ...e6: that is the whole point of the opening.' },
-      {
-        fr: 'Contre l’avance (3.e5) : ...Bf5, ...e6 puis ...c5 pour attaquer la chaîne de pions blancs à sa base.',
-        en: 'Against the Advance (3.e5): ...Bf5, ...e6 then ...c5 to hit White’s pawn chain at its base.',
-      },
-      {
-        fr: 'Position solide mais un peu passive : les Noirs égalisent d’abord, puis jouent sur les faiblesses blanches, souvent en finale.',
-        en: 'A solid but slightly passive position: Black equalises first, then plays on White’s weaknesses, often in the endgame.',
-      },
-      {
-        fr: 'Piège à connaître : dans la variante 4...Nd7, 5.Qe2 Ngf6?? permet 6.Nd6 mat, car le pion e7 est cloué.',
-        en: 'Trap to know: in the 4...Nd7 line, 5.Qe2 Ngf6?? allows 6.Nd6 mate, because the e7 pawn is pinned.',
-      },
+      { fr: 'Le fou c8 sort (Bf5 ou Bg4) avant ...e6 : c’est tout l’intérêt de l’ouverture.', en: 'The c8 bishop comes out (Bf5 or Bg4) before ...e6: that is the whole point.' },
+      { fr: 'Contre l’avance (3.e5) : ...Bf5, ...e6 puis ...c5 contre la base de la chaîne.', en: 'Against the Advance (3.e5): ...Bf5, ...e6 then ...c5 against the base of the chain.' },
+      { fr: 'Piège à connaître : dans la variante 4...Nd7, 5.Qe2 Ngf6?? permet 6.Nd6 mat.', en: 'Trap to know: in the 4...Nd7 line, 5.Qe2 Ngf6?? allows 6.Nd6 mate.' },
     ],
-    lines: [
+    chapters: [
       {
-        name: { fr: 'Variante classique (4...Bf5)', en: 'Classical Variation (4...Bf5)' },
-        moves: 'e4 c6 d4 d5 Nc3 dxe4 Nxe4 Bf5 Ng3 Bg6 h4 h6 Nf3 Nd7 h5 Bh7 Bd3 Bxd3 Qxd3 e6',
-        notes: {
-          4: { fr: 'Le pion d5 attaque e4, soutenu par c6.', en: 'The d5 pawn attacks e4, supported by c6.' },
-          8: { fr: 'Le fou sort avant ...e6.', en: 'The bishop comes out before ...e6.' },
-          12: { fr: 'Une case de retraite : sinon h5 attraperait le fou.', en: 'A retreat square: otherwise h5 would trap the bishop.' },
-          18: { fr: 'On échange le fou : l’attaque blanche perd de sa force.', en: 'Trade the bishop: White’s attack loses its bite.' },
-          20: { fr: 'Structure saine : ...Ngf6, ...Be7 ou ...Bd6, puis roque.', en: 'A sound structure: ...Ngf6, ...Be7 or ...Bd6, then castle.' },
-        },
-      },
-      {
-        name: { fr: 'Variante d’avance (3.e5)', en: 'Advance Variation (3.e5)' },
-        moves: 'e4 c6 d4 d5 e5 Bf5 Nf3 e6 Be2 c5 Be3 cxd4 Nxd4 Ne7',
-        notes: {
-          5: { fr: 'Les Blancs prennent de l’espace.', en: 'White grabs space.' },
-          6: { fr: 'Le fou sort avant ...e6, comme toujours.', en: 'The bishop comes out before ...e6, as always.' },
-          8: { fr: 'La chaîne c6-d5-e6 bloque le centre.', en: 'The c6-d5-e6 chain blocks the centre.' },
-          10: { fr: 'On attaque la chaîne blanche à sa base, d4.', en: 'Hit White’s chain at its base, d4.' },
-          14: { fr: 'Le cavalier ira en c6 ou g6, et le fou f5 reste bien protégé par e6.', en: 'The knight heads for c6 or g6, and the f5 bishop stays protected by e6.' },
-        },
-      },
-      {
-        name: { fr: 'Variante d’échange (3.exd5)', en: 'Exchange Variation (3.exd5)' },
-        moves: 'e4 c6 d4 d5 exd5 cxd5 Bd3 Nc6 c3 Nf6 Bf4 Bg4 Qb3 Qd7',
-        notes: {
-          6: { fr: 'Structure symétrique, aucun pion faible.', en: 'A symmetrical structure, no weak pawns.' },
-          8: { fr: 'Pression sur d4.', en: 'Pressure on d4.' },
-          12: { fr: 'Le fou sort avant ...e6.', en: 'The bishop comes out before ...e6.' },
-          14: {
-            fr: 'Protège b7. Plan : ...e6, ...Bd6, roque puis ...b5-b4 (attaque de minorité).',
-            en: 'Protects b7. Plan: ...e6, ...Bd6, castle, then ...b5-b4 (minority attack).',
-          },
-        },
-      },
-      {
-        name: { fr: 'Attaque Panov (4.c4)', en: 'Panov Attack (4.c4)' },
-        moves: 'e4 c6 d4 d5 exd5 cxd5 c4 Nf6 Nc3 e6 Nf3 Be7 cxd5 Nxd5 Bd3 Nc6 O-O O-O',
-        notes: {
-          7: { fr: 'Les Blancs acceptent un pion isolé en d4 contre du jeu actif.', en: 'White accepts an isolated d4 pawn for active play.' },
-          14: { fr: 'Un cavalier en d5 bloque le pion isolé : la case idéale.', en: 'A knight on d5 blockades the isolated pawn: the ideal square.' },
-          18: { fr: 'Plan : pression sur d4, échanges de pièces, et la finale est souvent bonne pour les Noirs.', en: 'Plan: pressure on d4, trade pieces, and the endgame often favours Black.' },
-        },
+        name: { fr: 'La Caro-Kann pas à pas', en: 'The Caro-Kann step by step' },
+        pgn: `[Orientation "black"]
+
+{ [fr] La Caro-Kann : contester le centre sans enfermer son fou c8. [en] The Caro-Kann: challenge the centre without locking in the c8 bishop. }
+1. e4 c6 { [%cal Gc6d5] [fr] Prépare ...d5 : le pion d5 sera soutenu par c6, et le fou c8 reste libre (contrairement à 1...e6). [en] Prepares ...d5: the d5 pawn will be supported by c6, and the c8 bishop stays free (unlike 1...e6). }
+2. d4 { [fr] Les Blancs prennent tout le centre. [en] White takes the whole centre. }
+2... d5 { [%cal Gd5e4] [fr] On attaque e4 tout de suite. [en] Attack e4 at once. }
+3. Nc3 { [%cal Gc3e4] [fr] Les Blancs défendent e4 avec une pièce. [en] White defends e4 with a piece. }
+(3. e5 { [%csl Ye5] [fr] La variante d'avance : les Blancs prennent de l'espace. [en] The Advance: White grabs space. }
+3... Bf5 { [%cal Gc8f5] [fr] Le fou sort avant ...e6, comme toujours. [en] The bishop comes out before ...e6, as always. }
+4. Nf3 e6 { [%csl Gc6,Gd5,Ge6] [fr] La chaîne c6-d5-e6 bloque le centre, et le fou f5 est dehors. [en] The c6-d5-e6 chain blocks the centre, and the f5 bishop is outside it. }
+5. Be2 c5 { [%cal Gc5d4] [fr] On attaque la chaîne blanche à sa base, d4. [en] Hit White's chain at its base, d4. }
+6. Be3 cxd4 { [fr] On ouvre la colonne c. [en] Open the c-file. }
+7. Nxd4 Ne7 { [%cal Ge7c6,Ge7g6] [fr] Le cavalier ira en c6 ou g6 ; le fou f5 est protégé par e6. [en] The knight heads for c6 or g6; the f5 bishop is protected by e6. })
+(3. exd5 { [fr] La variante d'échange. [en] The Exchange. }
+3... cxd5 { [fr] Structure symétrique, aucun pion faible. [en] A symmetrical structure, no weak pawns. }
+4. Bd3 (4. c4 { [%csl Yd4] [fr] L'attaque Panov : les Blancs acceptent un pion isolé contre du jeu actif. [en] The Panov Attack: White accepts an isolated pawn for active play. }
+4... Nf6 { [fr] Pression sur d5. [en] Pressure on d5. }
+5. Nc3 e6 { [fr] On soutient d5 et on ouvre le fou f8. [en] Support d5 and open the f8 bishop. }
+6. Nf3 Be7 { [fr] Prépare le roque. [en] Prepares castling. }
+7. cxd5 Nxd5 { [%csl Gd5] [fr] Le cavalier bloque le pion isolé : la case idéale. [en] The knight blockades the isolated pawn: the ideal square. }
+8. Bd3 Nc6 { [%cal Gc6d4] [fr] Pression sur le pion isolé. [en] Pressure on the isolated pawn. }
+9. O-O O-O { [fr] Plan : pression sur d4, échanges, et la finale est souvent bonne pour les Noirs. [en] Plan: pressure on d4, trades, and the endgame often favours Black. })
+4... Nc6 { [%cal Gc6d4] [fr] Pression sur d4. [en] Pressure on d4. }
+5. c3 Nf6 { [fr] Développement et contrôle de e4. [en] Development and control of e4. }
+6. Bf4 Bg4 { [%cal Gc8g4] [fr] Le fou sort avant ...e6. [en] The bishop comes out before ...e6. }
+7. Qb3 Qd7 { [%cal Gd7b7] [fr] Protège b7. Plan : ...e6, ...Bd6, roque puis ...b5-b4. [en] Protects b7. Plan: ...e6, ...Bd6, castle, then ...b5-b4. })
+3... dxe4 { [fr] On échange en e4 : le fou c8 pourra sortir avec gain de temps. [en] Trade on e4: the c8 bishop can come out with tempo. }
+4. Nxe4 Bf5 { [%cal Gf5e4] [fr] Le fou sort en attaquant le cavalier. [en] The bishop comes out attacking the knight. }
+5. Ng3 { [%cal Gg3f5] [fr] Le cavalier recule en attaquant le fou. [en] The knight retreats, attacking the bishop. }
+5... Bg6 { [fr] Le fou reste sur la diagonale. [en] The bishop stays on the diagonal. }
+6. h4 { [%cal Gh4h5] [fr] Menace h5 pour attraper le fou. [en] Threatens h5 to trap the bishop. }
+6... h6 { [%cal Gg6h7] [fr] Une case de retraite en h7 pour le fou. [en] A retreat square on h7 for the bishop. }
+7. Nf3 Nd7 { [%cal Rf3e5] [fr] Contrôle e5 : le cavalier f3 ne pourra pas s'y installer. [en] Controls e5: the f3 knight can't settle there. }
+8. h5 Bh7 { [fr] Le fou est en sécurité grâce à ...h6. [en] The bishop is safe thanks to ...h6. }
+9. Bd3 { [%cal Gd3h7] [fr] Les Blancs proposent l'échange. [en] White offers the trade. }
+9... Bxd3 { [fr] On échange : l'attaque blanche perd de sa force. [en] Trade: White's attack loses its bite. }
+10. Qxd3 e6 { [%csl Gc6,Ge6] [fr] Structure saine : ...Ngf6, ...Be7 ou ...Bd6, puis roque. [en] A sound structure: ...Ngf6, ...Be7 or ...Bd6, then castle. } *`,
       },
       {
         name: { fr: 'Piège : le mat du cavalier en d6', en: 'Trap: the knight mate on d6' },
         trap: true,
-        moves: 'e4 c6 d4 d5 Nc3 dxe4 Nxe4 Nd7 Qe2 Ngf6 Nd6#',
-        notes: {
-          9: { fr: 'La dame cloue le pion e7 sur le roi.', en: 'The queen pins the e7 pawn to the king.' },
-          10: { fr: 'L’erreur : il fallait jouer ...Ndf6.', en: 'The mistake: ...Ndf6 was the move.' },
-          11: { fr: 'Mat : le pion e7 ne peut pas prendre, il est cloué.', en: 'Mate: the e7 pawn cannot take, it is pinned.' },
-        },
+        pgn: `[Orientation "black"]
+
+1. e4 c6 2. d4 d5 3. Nc3 dxe4 4. Nxe4 Nd7 5. Qe2 { [%cal Ge2e8] [fr] La dame cloue le pion e7 sur le roi. [en] The queen pins the e7 pawn to the king. }
+5... Ngf6 { [%csl Rd6] [fr] L'erreur : il fallait jouer 5...Ndf6. [en] The mistake: 5...Ndf6 was the move. }
+6. Nd6# { [%cal Gd6e8,Re2e7] [fr] Mat : le pion e7 ne peut pas prendre, il est cloué. [en] Mate: the e7 pawn cannot take, it is pinned. } *`,
       },
     ],
     lichess: 'Caro-Kann_Defense',
@@ -343,10 +318,7 @@ export const OPENINGS: LibraryOpening[] = [
     eco: 'B01',
     moves: 'e4 d5',
     difficulty: 1,
-    tagline: {
-      fr: 'Les Noirs imposent leur jeu dès le premier coup.',
-      en: 'Black sets the agenda from the very first move.',
-    },
+    tagline: { fr: 'Les Noirs imposent leur jeu dès le premier coup.', en: 'Black sets the agenda from the very first move.' },
     summary: {
       fr: 'Avec 1...d5, les Noirs attaquent e4 tout de suite. Après 2.exd5 Qxd5, la dame sort tôt et perd un temps, mais les Noirs obtiennent une position simple et solide, avec peu de théorie et presque toujours la même structure. Très pratique en blitz.',
       en: 'With 1...d5, Black attacks e4 at once. After 2.exd5 Qxd5, the queen comes out early and loses a tempo, but Black gets a simple and solid position, with little theory and almost always the same structure. Very practical in blitz.',
@@ -354,48 +326,43 @@ export const OPENINGS: LibraryOpening[] = [
     ideas: [
       { fr: '1...d5 force les Blancs à jouer la partie des Noirs dès le premier coup.', en: '1...d5 makes White play Black’s game from move one.' },
       { fr: 'Après 3.Nc3, la dame se replie en a5 ou d6 : elle a perdu un temps mais reste active.', en: 'After 3.Nc3, the queen retreats to a5 or d6: it has lost a tempo but stays active.' },
-      {
-        fr: 'Développement type : ...Nf6, ...c6, ...Bf5 (ou ...Bg4), ...e6. Une structure de Caro-Kann, avec la dame déjà sortie.',
-        en: 'Typical development: ...Nf6, ...c6, ...Bf5 (or ...Bg4), ...e6. A Caro-Kann structure, with the queen already out.',
-      },
-      { fr: 'Le fou c8 sort avant ...e6, comme dans la Caro-Kann.', en: 'The c8 bishop comes out before ...e6, as in the Caro-Kann.' },
-      {
-        fr: 'La dame est une cible : surveiller les coups qui l’attaquent en gagnant du temps (Bd2 avec Nd5, Nb5, b4).',
-        en: 'The queen is a target: watch the moves that attack it while gaining time (Bd2 with Nd5, Nb5, b4).',
-      },
+      { fr: 'Développement type : ...Nf6, ...c6, ...Bf5, ...e6, une structure de Caro-Kann.', en: 'Typical development: ...Nf6, ...c6, ...Bf5, ...e6, a Caro-Kann structure.' },
+      { fr: 'La dame est une cible : surveiller Bd2 avec Nd5, Nb5 et b4.', en: 'The queen is a target: watch out for Bd2 with Nd5, Nb5 and b4.' },
     ],
-    lines: [
+    chapters: [
       {
-        name: { fr: 'Ligne principale : 3...Qa5', en: 'Main line: 3...Qa5' },
-        moves: 'e4 d5 exd5 Qxd5 Nc3 Qa5 d4 Nf6 Nf3 c6 Bc4 Bf5 Bd2 e6',
-        notes: {
-          2: { fr: 'Attaque e4 tout de suite.', en: 'Attacks e4 at once.' },
-          5: { fr: 'Le cavalier chasse la dame en se développant.', en: 'The knight chases the queen while developing.' },
-          6: { fr: 'La dame se met à l’abri sur le côté et cloue le cavalier c3.', en: 'The queen steps aside and pins the c3 knight.' },
-          10: { fr: 'Une case de retraite en c7 pour la dame, et d5 sous contrôle.', en: 'A retreat square on c7 for the queen, and d5 under control.' },
-          13: { fr: 'Attention : Nd5 découvrirait une attaque du fou d2 sur la dame a5.', en: 'Careful: Nd5 would uncover an attack by the d2 bishop on the a5 queen.' },
-          14: { fr: 'Structure solide : ...Bb4 ou ...Be7, ...Nbd7, roque.', en: 'A solid structure: ...Bb4 or ...Be7, ...Nbd7, castle.' },
-        },
+        name: { fr: 'La Scandinave pas à pas (3...Qa5)', en: 'The Scandinavian step by step (3...Qa5)' },
+        pgn: `[Orientation "black"]
+
+1. e4 d5 { [%cal Gd5e4] [fr] On attaque e4 tout de suite : les Blancs doivent décider maintenant. [en] Attack e4 at once: White must decide now. }
+2. exd5 { [fr] La réponse la plus jouée. [en] The most common answer. }
+(2. e5 { [%csl Ye5] [fr] Les Blancs évitent l'échange et prennent de l'espace. [en] White avoids the trade and grabs space. }
+2... Bf5 { [%cal Gc8f5] [fr] Comme dans la Caro-Kann : le fou sort avant ...e6. [en] As in the Caro-Kann: the bishop comes out before ...e6. }
+3. d4 e6 { [fr] Structure solide, et ...c5 viendra contre d4. [en] A solid structure, and ...c5 will come against d4. })
+(2. Nc3 { [fr] Les Blancs défendent e4 sans échanger. [en] White defends e4 without trading. }
+2... d4 { [%cal Gd4c3] [fr] On chasse le cavalier en prenant de l'espace. [en] Chase the knight while gaining space. }
+3. Nce2 e5 { [%csl Gd4,Ge5] [fr] Un centre solide pour les Noirs. [en] A solid centre for Black. })
+2... Qxd5 { [fr] On reprend le pion avec la dame. [en] Win the pawn back with the queen. }
+3. Nc3 { [%cal Gc3d5] [fr] Le cavalier chasse la dame en se développant : les Blancs gagnent un temps. [en] The knight chases the queen while developing: White gains a tempo. }
+3... Qa5 { [%cal Ga5c3,Ga5e1] [fr] La dame se met sur le côté, à l'abri, et cloue le cavalier c3. [en] The queen steps aside to safety and pins the c3 knight. }
+4. d4 { [fr] Les Blancs prennent le centre. [en] White takes the centre. }
+4... Nf6 { [fr] Développement, et contrôle de e4 et d5. [en] Development, controlling e4 and d5. }
+5. Nf3 c6 { [%cal Ga5c7] [fr] Une retraite en c7 pour la dame, et d5 sous contrôle. [en] A retreat to c7 for the queen, and d5 under control. }
+6. Bc4 Bf5 { [%cal Gc8f5] [fr] Le fou sort avant ...e6. [en] The bishop comes out before ...e6. }
+7. Bd2 { [%cal Rc3d5,Rd2a5] [fr] Attention : Nd5 découvrirait une attaque du fou d2 sur la dame a5. [en] Careful: Nd5 would uncover an attack by the d2 bishop on the a5 queen. }
+7... e6 { [%csl Gd5] [fr] Contrôle d5 et ouvre le fou f8. Structure solide : ...Bb4, ...Nbd7, roque. [en] Controls d5 and opens the f8 bishop. A solid structure: ...Bb4, ...Nbd7, castle. } *`,
       },
       {
-        name: { fr: 'Variante moderne : 3...Qd6', en: 'Modern line: 3...Qd6' },
-        moves: 'e4 d5 exd5 Qxd5 Nc3 Qd6 d4 Nf6 Nf3 c6 Bc4 Bf5 O-O e6',
-        notes: {
-          6: { fr: 'La dame reste centrale et à l’abri des pièges du type Bd2 et Nd5.', en: 'The queen stays central and safe from tricks like Bd2 and Nd5.' },
-          10: { fr: 'Contrôle b5 et d5, et prépare une retraite en c7.', en: 'Controls b5 and d5, and prepares a retreat to c7.' },
-          12: { fr: 'Le fou sort avant ...e6.', en: 'The bishop comes out before ...e6.' },
-          14: { fr: 'Plan : ...Nbd7, ...Be7, roque, comme dans la ligne 3...Qa5.', en: 'Plan: ...Nbd7, ...Be7, castle, as in the 3...Qa5 line.' },
-        },
-      },
-      {
-        name: { fr: 'Scandinave avec 2...Nf6', en: 'Scandinavian with 2...Nf6' },
-        moves: 'e4 d5 exd5 Nf6 d4 Nxd5 Nf3 g6 c4 Nb6 Nc3 Bg7',
-        notes: {
-          4: { fr: 'On reprend le pion avec le cavalier : pas de temps perdu avec la dame.', en: 'Win the pawn back with the knight: no time lost with the queen.' },
-          6: { fr: 'Pion récupéré, le cavalier est bien centralisé.', en: 'Pawn regained, and the knight is well centralised.' },
-          9: { fr: 'Les Blancs chassent le cavalier avec un grand centre.', en: 'White chases the knight with a big centre.' },
-          12: { fr: 'Le fou g7 met la pression sur le centre blanc (d4).', en: 'The g7 bishop puts pressure on White’s centre (d4).' },
-        },
+        name: { fr: 'Variante 3...Qd6', en: 'The 3...Qd6 line' },
+        pgn: `[Orientation "black"]
+
+1. e4 d5 { [fr] On attaque e4. [en] Attack e4. }
+2. exd5 Qxd5 { [fr] On reprend avec la dame. [en] Recapture with the queen. }
+3. Nc3 Qd6 { [%csl Gd6] [fr] La dame reste centrale et à l'abri des pièges du type Bd2 et Nd5. [en] The queen stays central and safe from tricks like Bd2 and Nd5. }
+4. d4 Nf6 { [fr] Développement naturel. [en] Natural development. }
+5. Nf3 c6 { [%cal Gd6c7] [fr] Contrôle b5 et d5, et prépare une retraite en c7. [en] Controls b5 and d5, and prepares a retreat to c7. }
+6. Bc4 Bf5 { [fr] Le fou sort avant ...e6. [en] The bishop comes out before ...e6. }
+7. O-O e6 { [fr] Même plan qu'avec 3...Qa5 : ...Nbd7, ...Be7, roque. [en] Same plan as with 3...Qa5: ...Nbd7, ...Be7, castle. } *`,
       },
     ],
     lichess: 'Scandinavian_Defense',
@@ -408,63 +375,52 @@ export const OPENINGS: LibraryOpening[] = [
     eco: 'B20 – B99',
     moves: 'e4 c5',
     difficulty: 3,
-    tagline: {
-      fr: 'La réponse la plus jouée à 1.e4 : on joue pour gagner, des deux côtés.',
-      en: 'The most played answer to 1.e4: both sides play to win.',
-    },
+    tagline: { fr: 'La réponse la plus jouée à 1.e4 : on joue pour gagner, des deux côtés.', en: 'The most played answer to 1.e4: both sides play to win.' },
     summary: {
-      fr: 'Avec 1...c5, les Noirs ne copient pas 1...e5 : ils contestent la case d4 avec un pion de côté. Les positions sont déséquilibrées et tranchantes. C’est la réponse la plus jouée contre 1.e4, à tous les niveaux, mais elle demande plus de théorie que la Caro-Kann ou la Scandinave.',
-      en: 'With 1...c5, Black does not copy 1...e5: they fight for d4 with a side pawn. The positions are unbalanced and sharp. It is the most played answer to 1.e4 at every level, but it needs more theory than the Caro-Kann or the Scandinavian.',
+      fr: 'Avec 1...c5, les Noirs ne copient pas 1...e5 : ils contestent la case d4 avec un pion de côté. Les positions sont déséquilibrées et tranchantes. C’est la réponse la plus jouée contre 1.e4, mais elle demande plus de théorie que la Caro-Kann ou la Scandinave.',
+      en: 'With 1...c5, Black does not copy 1...e5: they fight for d4 with a side pawn. The positions are unbalanced and sharp. It is the most played answer to 1.e4, but it needs more theory than the Caro-Kann or the Scandinavian.',
     },
     ideas: [
-      {
-        fr: '...c5 contrôle d4. Si les Blancs ouvrent le jeu avec d4, les Noirs échangent un pion de côté contre un pion central : ils gardent deux pions centraux contre un.',
-        en: '...c5 controls d4. If White opens with d4, Black trades a side pawn for a central one: they keep two central pawns against one.',
-      },
-      {
-        fr: 'Les Blancs ont plus d’espace et attaquent souvent l’aile roi ; les Noirs contre-attaquent sur l’aile dame, par la colonne c semi-ouverte.',
-        en: 'White has more space and often attacks on the kingside; Black counter-attacks on the queenside, down the half-open c-file.',
-      },
+      { fr: 'Si les Blancs ouvrent avec d4, les Noirs échangent un pion de côté contre un pion central.', en: 'If White opens with d4, Black trades a side pawn for a central one.' },
+      { fr: 'Les Blancs attaquent souvent l’aile roi, les Noirs contre-attaquent par la colonne c.', en: 'White often attacks on the kingside, Black counter-attacks down the c-file.' },
       { fr: 'Najdorf (5...a6) : un coup souple qui contrôle b5 et prépare ...e5 ou ...b5.', en: 'Najdorf (5...a6): a flexible move that controls b5 and prepares ...e5 or ...b5.' },
-      { fr: 'Dragon (5...g6) : le fou g7 sur la grande diagonale, très fort contre l’aile dame blanche.', en: 'Dragon (5...g6): the g7 bishop on the long diagonal, very strong against White’s queenside.' },
-      {
-        fr: 'Contre les anti-siciliennes (2.c3, gambit Smith-Morra), le schéma ...Nf6 puis ...Nd5 évite beaucoup de théorie.',
-        en: 'Against the anti-Sicilians (2.c3, Smith-Morra Gambit), the ...Nf6 then ...Nd5 setup avoids a lot of theory.',
-      },
+      { fr: 'Contre 2.c3 et le gambit Smith-Morra, le schéma ...Nf6 puis ...Nd5 évite la théorie.', en: 'Against 2.c3 and the Smith-Morra Gambit, the ...Nf6 then ...Nd5 setup avoids theory.' },
     ],
-    lines: [
+    chapters: [
       {
-        name: { fr: 'Najdorf, contre l’attaque anglaise', en: 'Najdorf, against the English Attack' },
-        moves: 'e4 c5 Nf3 d6 d4 cxd4 Nxd4 Nf6 Nc3 a6 Be3 e5 Nb3 Be6 f3 Be7 Qd2 O-O O-O-O Nbd7',
-        notes: {
-          2: { fr: 'Contrôle d4 avec un pion de côté.', en: 'Controls d4 with a side pawn.' },
-          6: { fr: 'Pion de côté contre pion central.', en: 'A side pawn for a central pawn.' },
-          10: { fr: 'Le coup de Najdorf : contrôle b5, prépare ...e5 et ...b5.', en: 'Najdorf’s move: controls b5, prepares ...e5 and ...b5.' },
-          12: { fr: 'Chasse le cavalier et prend sa part du centre.', en: 'Chases the knight and takes a share of the centre.' },
-          15: { fr: 'Les Blancs préparent g4 et une attaque de pions sur l’aile roi.', en: 'White prepares g4 and a pawn storm on the kingside.' },
-          19: { fr: 'Roques opposés : la course à l’attaque commence.', en: 'Opposite-side castling: the attacking race begins.' },
-          20: { fr: 'Plan noir : ...b5-b4 et la colonne c contre le roi blanc.', en: 'Black’s plan: ...b5-b4 and the c-file against White’s king.' },
-        },
-      },
-      {
-        name: { fr: 'Contre l’Alapin (2.c3)', en: 'Against the Alapin (2.c3)' },
-        moves: 'e4 c5 c3 Nf6 e5 Nd5 d4 cxd4 cxd4 d6 Nf3 Nc6',
-        notes: {
-          3: { fr: 'Les Blancs préparent d4 pour reprendre avec un pion.', en: 'White prepares d4 to recapture with a pawn.' },
-          4: { fr: 'Attaque e4 tout de suite.', en: 'Attacks e4 at once.' },
-          6: { fr: 'Le cavalier est très bien en d5 : c3 lui a pris sa case naturelle.', en: 'The knight is very well placed on d5: c3 took away its natural square.' },
-          10: { fr: 'On attaque le pion e5 avant que les Blancs ne le soutiennent.', en: 'Hit the e5 pawn before White can support it.' },
-          12: { fr: 'Pression sur e5 et d4 : les Noirs sont bien.', en: 'Pressure on e5 and d4: Black is fine.' },
-        },
-      },
-      {
-        name: { fr: 'Contre le gambit Smith-Morra (refusé)', en: 'Against the Smith-Morra Gambit (declined)' },
-        moves: 'e4 c5 d4 cxd4 c3 Nf6 e5 Nd5 cxd4 d6 Nf3 Nc6',
-        notes: {
-          5: { fr: 'Le gambit : un pion contre du développement.', en: 'The gambit: a pawn for development.' },
-          6: { fr: 'Pas besoin de prendre : on attaque e4, comme contre l’Alapin.', en: 'No need to take: attack e4, as against the Alapin.' },
-          9: { fr: 'Même position que contre l’Alapin : une seule chose à retenir.', en: 'The same position as against the Alapin: only one thing to remember.' },
-        },
+        name: { fr: 'La Najdorf pas à pas', en: 'The Najdorf step by step' },
+        pgn: `[Orientation "black"]
+
+1. e4 c5 { [%cal Gc5d4] [fr] Contrôle d4 avec un pion de côté : le jeu sera déséquilibré. [en] Controls d4 with a side pawn: the game will be unbalanced. }
+2. Nf3 { [fr] Prépare d4. [en] Prepares d4. }
+(2. c3 { [%cal Gc3d4] [fr] L'Alapin : les Blancs veulent reprendre en d4 avec un pion. [en] The Alapin: White wants to recapture on d4 with a pawn. }
+2... Nf6 { [%cal Gf6e4] [fr] On attaque e4 tout de suite. [en] Attack e4 at once. }
+3. e5 Nd5 { [%csl Gd5] [fr] Le cavalier est très bien en d5 : c3 a pris sa case naturelle au cavalier blanc. [en] The knight is great on d5: c3 took the white knight's natural square. }
+4. d4 cxd4 { [fr] On échange avant que les Blancs ne renforcent d4. [en] Trade before White reinforces d4. }
+5. cxd4 d6 { [%cal Gd6e5] [fr] On attaque e5 avant qu'il soit soutenu. [en] Hit e5 before it can be supported. }
+6. Nf3 Nc6 { [%cal Gc6e5,Gc6d4] [fr] Pression sur e5 et d4 : les Noirs sont bien. [en] Pressure on e5 and d4: Black is fine. })
+(2. d4 { [fr] Le gambit Smith-Morra se prépare. [en] The Smith-Morra Gambit is coming. }
+2... cxd4 { [fr] On prend le pion offert. [en] Take the pawn on offer. }
+3. c3 { [fr] Le gambit : un pion contre du développement. [en] The gambit: a pawn for development. }
+3... Nf6 { [fr] Pas besoin de prendre : on attaque e4, comme contre l'Alapin. [en] No need to take: attack e4, as against the Alapin. }
+4. e5 Nd5 { [fr] Le cavalier s'installe au centre. [en] The knight settles in the centre. }
+5. cxd4 d6 { [fr] On attaque e5. [en] Hit e5. }
+6. Nf3 Nc6 { [fr] La même position que contre l'Alapin : une seule chose à retenir. [en] The same position as against the Alapin: only one thing to remember. })
+2... d6 { [%cal Gd6e5] [fr] Contrôle e5 et ouvre le fou c8. [en] Controls e5 and opens the c8 bishop. }
+3. d4 cxd4 { [fr] On échange un pion de côté contre un pion central : deux pions centraux contre un. [en] Trade a side pawn for a central pawn: two central pawns against one. }
+4. Nxd4 Nf6 { [%cal Gf6e4] [fr] Attaque e4 et force Nc3. [en] Attacks e4 and forces Nc3. }
+5. Nc3 a6 { [%csl Gb5] [fr] Le coup de Najdorf : contrôle b5 (plus de Nb5 ni Bb5) et prépare ...e5 et ...b5. [en] Najdorf's move: controls b5 (no Nb5 or Bb5) and prepares ...e5 and ...b5. }
+6. Be3 { [fr] L'attaque anglaise : Be3, f3, Qd2, grand roque et g4. [en] The English Attack: Be3, f3, Qd2, long castling and g4. }
+(6. Bg5 { [%cal Gg5f6] [fr] La ligne principale classique, très tranchante. [en] The classical main line, very sharp. }
+6... e6 { [fr] Solide : on soutient d5 et on ouvre le fou f8. [en] Solid: support d5 and open the f8 bishop. }
+7. f4 Be7 { [fr] Défait le clouage ; les Noirs roquent ensuite. [en] Breaks the pin; Black castles next. })
+6... e5 { [%cal Ge5d4] [fr] Chasse le cavalier et prend sa part du centre. [en] Chases the knight and takes a share of the centre. }
+7. Nb3 Be6 { [%csl Gd5] [fr] Contrôle d5, la case clé de cette structure. [en] Controls d5, the key square of this structure. }
+8. f3 { [%cal Gg2g4] [fr] Les Blancs préparent g4 et une attaque de pions sur l'aile roi. [en] White prepares g4 and a kingside pawn storm. }
+8... Be7 { [fr] Développement : le roque est prêt. [en] Development: castling is ready. }
+9. Qd2 O-O { [fr] Le roi noir est à l'abri, pour l'instant. [en] Black's king is safe, for now. }
+10. O-O-O { [fr] Roques opposés : la course à l'attaque commence. [en] Opposite-side castling: the attacking race begins. }
+10... Nbd7 { [%cal Gb7b5,Gb5b4] [fr] Plan noir : ...b5-b4 et la colonne c contre le roi blanc. [en] Black's plan: ...b5-b4 and the c-file against White's king. } *`,
       },
     ],
     lichess: 'Sicilian_Defense',

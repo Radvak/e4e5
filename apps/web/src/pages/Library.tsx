@@ -1,20 +1,35 @@
-import { playUci, START_FEN, type Color, type PlayedMove } from '@e4e5/core';
+import {
+  formatScore,
+  lichessStudyRef,
+  localizePgn,
+  moveLabel,
+  parseStudy,
+  playSanOn,
+  positionFromFen,
+  START_FEN,
+  studyLines,
+  studyNodes,
+  totalGames,
+  type Color,
+  type StudyChapter,
+  type StudyLine,
+  type StudyNode,
+} from '@e4e5/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { DrawShape } from 'chessground/draw';
 import type { Key } from 'chessground/types';
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api, type Me } from '../api';
-import { LEVEL_STEPS, topLevelMove, useBestMoves, useLevelDepth } from '../components/BestMoves';
 import { Board } from '../components/Board';
-import { ExplorerPanel } from '../components/ExplorerPanel';
-import { MiniBoard } from '../components/MiniBoard';
 import { San } from '../components/Nag';
-import { t } from '../i18n';
-import { linePgn, lineText, playLine, tx, type LibraryLine, type LibraryOpening } from '../library/lines';
+import { useEngine } from '../engine/useEngine';
+import { fmt, lang, t } from '../i18n';
+import { lineText, openingLesson, type Lesson } from '../library/lines';
 import { openingBySlug, OPENINGS } from '../library/openings';
 import { explorerParams, rangeLabel, useSettings } from '../settings';
-import { Button, EmptyState, PageHeader, Tabs } from '../ui';
+import { Button, EmptyState, Icon, PageHeader, Tabs } from '../ui';
+import { MiniBoard } from '../components/MiniBoard';
 
 type Side = 'all' | Color;
 
@@ -27,13 +42,17 @@ const SIDE_TABS: { id: Side; label: React.ReactNode }[] = [
 const sideLabel = (c: Color) => (c === 'white' ? t('avec les Blancs', 'with White') : t('avec les Noirs', 'with Black'));
 const DIFFICULTY = t(['', 'Pour débuter', 'Un peu de théorie', 'Beaucoup de théorie'], ['', 'Beginner friendly', 'Some theory', 'Lots of theory']);
 
-/** The position after the moves that define the opening (its thumbnail). */
-const openingFen = (o: LibraryOpening) => playLine(o.moves)?.at(-1)?.toFen ?? START_FEN;
+/** The position after the moves that define an opening (its thumbnail). */
+function fenAfter(moves: string): string {
+  const pos = positionFromFen(START_FEN);
+  let fen = START_FEN;
+  for (const san of moves.split(/\s+/).filter(Boolean)) fen = playSanOn(pos, san)?.toFen ?? fen;
+  return fen;
+}
 
 /**
- * Library (/library): famous openings explained, to pick one and learn it. Each opening has its
- * page (/library/:slug) with its ideas, its main lines on the board, the moves played at my level,
- * and a button that makes a repertoire of it and starts training.
+ * Library (/library): well-known openings explained move by move (the app's lessons), and the
+ * Lichess studies the user added, read the same way. Each one opens on its page.
  */
 export function Library() {
   const [params, setParams] = useSearchParams();
@@ -43,7 +62,7 @@ export function Library() {
     <div className="library-page">
       <PageHeader
         title={t('Bibliothèque', 'Library')}
-        subtitle={t('Les ouvertures les plus connues, expliquées : choisissez-en une pour l’apprendre', 'The best-known openings, explained: pick one to learn it')}
+        subtitle={t('Les ouvertures expliquées coup par coup : choisissez-en une pour l’apprendre', 'Openings explained move by move: pick one to learn it')}
       />
       <div className="library-filters">
         <Tabs tabs={SIDE_TABS} value={side} onChange={(s) => setParams(s === 'all' ? {} : { side: s }, { replace: true })} />
@@ -51,211 +70,367 @@ export function Library() {
       <div className="library-grid">
         {shown.map((o) => (
           <Link key={o.slug} to={`/library/${o.slug}`} className="library-card card">
-            <MiniBoard fen={openingFen(o)} orientation={o.color} className="library-thumb" />
+            <MiniBoard fen={fenAfter(o.moves)} orientation={o.color} className="library-thumb" />
             <div className="library-card-text">
               <div className="library-card-title">
-                <span className={`dot inline ${o.color}`} /> {tx(o.name)}
+                <span className={`dot inline ${o.color}`} /> {t(o.name.fr, o.name.en)}
               </div>
               <div className="muted small-text">{lineText(o.moves)}</div>
-              <p className="library-tagline">{tx(o.tagline)}</p>
+              <p className="library-tagline">{t(o.tagline.fr, o.tagline.en)}</p>
               <span className={`badge difficulty-${o.difficulty}`}>{DIFFICULTY[o.difficulty]}</span>
             </div>
           </Link>
         ))}
       </div>
+      <MyStudies side={side} />
     </div>
   );
 }
 
-/** The lines of the opening that make its repertoire (traps are only explained). */
-const trainedLines = (o: LibraryOpening) => o.lines.filter((l) => !l.trap);
+/** The Lichess studies added to the library, and the field to add one. */
+function MyStudies({ side }: { side: Side }) {
+  const qc = useQueryClient();
+  const navigate = useNavigate();
+  const studies = useQuery({ queryKey: ['library-studies'], queryFn: api.libraryStudies });
+  const [input, setInput] = useState('');
+  const ref = lichessStudyRef(input.trim());
+  const add = useMutation({
+    mutationFn: (id: string) => api.addLibraryStudy(id),
+    onSuccess: (s) => {
+      setInput('');
+      void qc.invalidateQueries({ queryKey: ['library-studies'] });
+      qc.setQueryData(['library-study', s.id], s);
+      navigate(`/library/study/${s.id}`);
+    },
+  });
+  const remove = useMutation({
+    mutationFn: (id: string) => api.deleteLibraryStudy(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['library-studies'] }),
+  });
+  const list = (studies.data ?? []).filter((s) => side === 'all' || s.color === side);
+  return (
+    <section className="library-studies">
+      <h3>{t('Vos études Lichess', 'Your Lichess studies')}</h3>
+      <p className="muted small-text">
+        {t(
+          'Ajoutez une étude Lichess pour la lire ici coup par coup, avec ses commentaires, ses flèches et ses variantes.',
+          'Add a Lichess study to read it here move by move, with its comments, arrows and variations.',
+        )}
+      </p>
+      <form
+        className="library-add"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (ref && !add.isPending) add.mutate(ref.studyId);
+        }}
+      >
+        <input
+          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder={t('Lien de l’étude (lichess.org/study/…)', 'Link to the study (lichess.org/study/…)')}
+          aria-label={t('Lien d’une étude Lichess', 'Link to a Lichess study')}
+        />
+        <Button type="submit" variant="primary" icon="plus" disabled={!ref || add.isPending}>
+          {add.isPending ? t('Import…', 'Importing…') : t('Ajouter', 'Add')}
+        </Button>
+      </form>
+      {input.trim() && !ref && <p className="muted small-text">{t('Collez le lien d’une étude : lichess.org/study/…', 'Paste the link to a study: lichess.org/study/…')}</p>}
+      {add.error && <p className="error small-text">{add.error.message}</p>}
+      {list.length > 0 && (
+        <ul className="library-study-list">
+          {list.map((s) => (
+            <li key={s.id}>
+              <Link to={`/library/study/${s.id}`} className="library-study-row">
+                <span className={`dot inline ${s.color}`} />
+                <span className="library-study-name">{s.name}</span>
+                <span className="muted small-text">{t(`${s.chapters} chapitre${s.chapters > 1 ? 's' : ''}`, `${s.chapters} chapter${s.chapters > 1 ? 's' : ''}`)}</span>
+              </Link>
+              <Button
+                variant="ghost"
+                size="sm"
+                icon="close"
+                title={t('Retirer de la bibliothèque', 'Remove from the library')}
+                onClick={() => {
+                  if (confirm(t(`Retirer « ${s.name} » de la bibliothèque ?`, `Remove “${s.name}” from the library?`))) remove.mutate(s.id);
+                }}
+              />
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
 
 export function LibraryOpeningPage({ me }: { me: Me }) {
   const { slug } = useParams();
   const opening = openingBySlug(slug);
-  if (!opening) {
-    return (
-      <>
-        <PageHeader title={t('Bibliothèque', 'Library')} back="/library" />
-        <EmptyState title={t('Ouverture introuvable', 'Opening not found')} action={<Button to="/library">{t('Voir toutes les ouvertures', 'See all openings')}</Button>} />
-      </>
-    );
-  }
-  return <OpeningView key={opening.slug} me={me} opening={opening} />;
+  const lesson = useMemo(() => opening && openingLesson(opening), [opening]);
+  if (!lesson) return <NotFound />;
+  return <LessonView key={lesson.path} me={me} lesson={lesson} />;
 }
 
-function OpeningView({ me, opening }: { me: Me; opening: LibraryOpening }) {
-  const [lineIndex, setLineIndex] = useState(0);
-  const libLine: LibraryLine = opening.lines[lineIndex]!;
-  const libMoves = useMemo(() => playLine(libLine.moves) ?? [], [libLine]);
-  // The line on the board: the opening's line, or a variation the user played from it.
-  const [line, setLine] = useState<PlayedMove[]>(libMoves);
-  const [ply, setPly] = useState(0);
-  useEffect(() => {
-    setLine(libMoves);
-    setPly(0);
-  }, [libMoves]);
-  const goTo = (n: number) => setPly(Math.max(0, Math.min(n, line.length)));
-  const fen = line[ply - 1]?.toFen ?? START_FEN;
-  // Where the board's line leaves the opening's line (-1: it follows it).
-  const leaves = line.findIndex((m, i) => libMoves[i]?.uci !== m.uci);
-  const offLine = leaves !== -1;
-  /** Plays a move: follows the line if it is its next move, else branches off. */
-  const play = (uci: string) => {
-    if (line[ply]?.uci === uci) return goTo(ply + 1);
-    const move = playUci(fen, uci);
-    if (move) {
-      setLine([...line.slice(0, ply), move]);
-      setPly(ply + 1);
-    }
+export function LibraryStudyPage({ me }: { me: Me }) {
+  const { id } = useParams();
+  const study = useQuery({ queryKey: ['library-study', id], queryFn: () => api.libraryStudy(id!), enabled: !!id });
+  const lesson = useMemo<Lesson | undefined>(
+    () =>
+      study.data && {
+        path: `/library/study/${study.data.id}`,
+        color: study.data.color,
+        name: study.data.name,
+        meta: t('Étude Lichess', 'Lichess study'),
+        chapters: study.data.chapters,
+        links: [{ label: t('L’étude sur Lichess', 'The study on Lichess'), href: `https://lichess.org/study/${study.data.id}` }],
+      },
+    [study.data],
+  );
+  if (study.isLoading) return <PageHeader title={t('Bibliothèque', 'Library')} back="/library" />;
+  if (!lesson) return <NotFound />;
+  return <LessonView key={lesson.path} me={me} lesson={lesson} />;
+}
+
+function NotFound() {
+  return (
+    <>
+      <PageHeader title={t('Bibliothèque', 'Library')} back="/library" />
+      <EmptyState title={t('Introuvable', 'Not found')} action={<Button to="/library">{t('Voir la bibliothèque', 'See the library')}</Button>} />
+    </>
+  );
+}
+
+/** The chapter's parent of a node id ("" for the start). */
+const parentId = (id: string) => (id.includes(',') ? id.slice(0, id.lastIndexOf(',')) : '');
+
+/** Brushes of the study's arrows (chessground's own colours). */
+const toShape = (s: { orig: string; dest?: string; color: string }): DrawShape => ({ orig: s.orig as Key, dest: s.dest as Key | undefined, brush: s.color });
+const arrow = (uci: string, brush: string, lineWidth = 10): DrawShape => ({ orig: uci.slice(0, 2) as Key, dest: uci.slice(2, 4) as Key, brush, modifiers: { lineWidth } });
+
+/**
+ * A lesson read move by move, like a Lichess study: the board with the arrows of each move, its
+ * explanation, the lines with where each variation leaves its line, the other moves possible
+ * (players of my level, Stockfish), and a "guess the move" mode.
+ */
+function LessonView({ me, lesson }: { me: Me; lesson: Lesson }) {
+  const [params, setParams] = useSearchParams();
+  const chapterIndex = Math.max(0, Math.min(Number(params.get('ch') ?? 0) || 0, lesson.chapters.length - 1));
+  const [nodeId, setNodeId] = useState('');
+  const chapter: StudyChapter = useMemo(() => parseStudy(lesson.chapters[chapterIndex]!.pgn, lang)[0]!, [lesson, chapterIndex]);
+  const nodes = useMemo(() => studyNodes(chapter), [chapter]);
+  const lines = useMemo(() => studyLines(chapter), [chapter]);
+  useEffect(() => setNodeId(''), [chapter]);
+  const node = nodes.get(nodeId);
+  const fen = node?.toFen ?? chapter.startFen;
+  const children = node ? node.children : chapter.children;
+  const orientation: Color = chapter.orientation ?? lesson.color;
+  // A study may have chapters for both sides: training is then for the side of the chapter shown.
+  const mixed = new Set(lesson.chapters.map((c) => c.orientation ?? lesson.color)).size > 1;
+  const pickChapter = (i: number) => setParams(i ? { ch: String(i) } : {}, { replace: true });
+
+  // "Devine le coup": the user plays the lesson's moves of their side, the app the others.
+  const [quiz, setQuiz] = useState(false);
+  const [misses, setMisses] = useState(0);
+  const [feedback, setFeedback] = useState<'ok' | 'miss' | 'off' | null>(null);
+  /** The move just found in the quiz: its explanation stays shown while the app replies. */
+  const [guessed, setGuessed] = useState<StudyNode | null>(null);
+  const toGuess = quiz && children.length > 0 && children[0]!.color === orientation;
+  const go = (id: string) => {
+    setNodeId(id);
+    setMisses(0);
+    setFeedback(null);
+    setGuessed(null);
   };
-  const playMoves = (moves: PlayedMove[]) => {
-    const follows = moves.every((m, i) => line[ply + i]?.uci === m.uci);
-    if (follows) return goTo(ply + moves.length);
-    setLine([...line.slice(0, ply), ...moves]);
-    setPly(ply + moves.length);
+  // The opponent's moves are played by the app, along the main line.
+  useEffect(() => {
+    if (!quiz || toGuess || !children[0]) return;
+    const timer = setTimeout(() => setNodeId(children[0]!.id), 700);
+    return () => clearTimeout(timer);
+  }, [quiz, toGuess, nodeId, chapter]);
+
+  const onMove = (uci: string) => {
+    const child = children.find((c) => c.uci === uci);
+    if (quiz && toGuess) {
+      if (child) {
+        go(child.id);
+        setFeedback('ok');
+        setGuessed(child);
+        return;
+      }
+      setMisses((m) => m + 1);
+      setFeedback('miss');
+      return false;
+    }
+    if (child) return go(child.id);
+    setFeedback('off');
+    return 'retry' as const;
   };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.target as HTMLElement).closest('textarea, input, select')) return;
-      if (e.key === 'ArrowLeft') goTo(ply - 1);
-      if (e.key === 'ArrowRight') goTo(ply + 1);
-      if (e.key === 'Home') goTo(0);
-      if (e.key === 'End') goTo(line.length);
+      if (e.key === 'ArrowLeft' && nodeId) go(parentId(nodeId));
+      if (e.key === 'ArrowRight' && children[0] && !toGuess) go(children[0].id);
+      if (e.key === 'Home') go('');
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   });
 
-  // Moves played at my level here (Lichess statistics), and the search at my level, as in Explorer.
-  const { speed, range } = useSettings();
-  const ex = explorerParams(me, speed, range);
-  const stats = useQuery({
-    queryKey: ['explorer', fen, ex.speeds, ex.ratings],
-    queryFn: () => api.explorer(fen, ex.speeds, ex.ratings),
-    staleTime: Infinity,
-    retry: false,
-  });
-  const [depth, onDepth] = useLevelDepth();
-  const toMove: Color = fen.split(' ')[1] === 'b' ? 'black' : 'white';
-  const myTurn = toMove === opening.color;
-  const level = useBestMoves(fen, ex.speeds, ex.ratings, depth > 0, depth, opening.color);
-  const levelBest = depth > 0 && myTurn ? topLevelMove(level.data) : undefined;
-  // The next move of the opening's line (green arrow), and the best move at my level (as in Explorer).
-  const nextInLine = !offLine || ply < leaves ? libMoves[ply] : undefined;
+  // Arrows: the study's own for the move, and at a fork every way on (main line green, variations orange).
   const shapes = useMemo<DrawShape[]>(() => {
-    const arrow = (uci: string, brush: string, lineWidth: number): DrawShape => ({ orig: uci.slice(0, 2) as Key, dest: uci.slice(2, 4) as Key, brush, modifiers: { lineWidth } });
-    const out: DrawShape[] = [];
-    if (nextInLine) out.push(arrow(nextInLine.uci, 'repertoire', 9));
-    if (levelBest && levelBest.uci !== nextInLine?.uci) out.push(arrow(levelBest.uci, 'level', 6));
+    if (toGuess) return misses >= 2 ? [arrow(children[0]!.uci, 'nextDraft')] : [];
+    const out = (node ? node.shapes : chapter.introShapes).map(toShape);
+    if (children.length > 1) children.forEach((c, i) => out.push(arrow(c.uci, i === 0 ? 'next' : 'nextDraft', i === 0 ? 10 : 7)));
     return out;
-  }, [nextInLine?.uci, levelBest?.uci]);
+  }, [node, chapter, children, toGuess, misses]);
 
-  const note = ply > 0 && (!offLine || ply <= leaves) ? libLine.notes?.[ply] : undefined;
+  const comment = node ? node.comment : chapter.intro;
+  const end = children.length === 0 && !!node;
 
   return (
     <>
-      <PageHeader title={tx(opening.name)} subtitle={`${opening.eco} · ${sideLabel(opening.color)}`} back="/library" />
-      {/* Under the title, not in it: on a phone the buttons would squeeze the name. */}
+      <PageHeader title={lesson.name} subtitle={[lesson.meta, !mixed && sideLabel(lesson.color)].filter(Boolean).join(' · ')} back="/library" />
       <div className="library-actions">
-        <span className={`badge difficulty-${opening.difficulty}`}>{DIFFICULTY[opening.difficulty]}</span>
+        {lesson.difficulty && <span className={`badge difficulty-${lesson.difficulty}`}>{DIFFICULTY[lesson.difficulty]}</span>}
         <div className="spacer" />
-        <TrainButton opening={opening} />
+        <TrainButton lesson={lesson} color={orientation} mixed={mixed} />
       </div>
+      {lesson.chapters.length > 1 && (
+        <div className="library-chapters" role="tablist">
+          {lesson.chapters.map((c, i) => (
+            <button key={i} role="tab" aria-selected={i === chapterIndex} className={`chip ${i === chapterIndex ? 'on' : ''}`} onClick={() => pickChapter(i)}>
+              {c.name} {c.trap && <span className="badge trap">{t('Piège', 'Trap')}</span>}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="editor library-opening">
         <div className="editor-board">
-          <div className="opening-name">{tx(libLine.name)}</div>
           <div className="board-row">
-            <Board fen={fen} orientation={opening.color} lastMove={line[ply - 1]?.uci} shapes={shapes} onMove={play} />
+            <Board fen={fen} orientation={orientation} lastMove={node?.uci} shapes={shapes} onMove={onMove} />
           </div>
           <div className="nav">
-            <button onClick={() => goTo(0)} title={t('Début (Origine)', 'Start (Home)')}>⏮</button>
-            <button onClick={() => goTo(ply - 1)} title={t('Reculer (←)', 'Back (←)')}>◀</button>
-            <button onClick={() => goTo(ply + 1)} title={t('Avancer (→)', 'Forward (→)')}>▶</button>
-            <button onClick={() => goTo(line.length)} title={t('Fin de la ligne (Fin)', 'End of the line (End)')}>⏭</button>
-          </div>
-          <section className="library-level">
-            <h3>
-              {t('À votre niveau', 'At your level')} <span className="muted small-text">· {t(`joueurs Lichess ${rangeLabel(ex.ratings)}`, `Lichess players ${rangeLabel(ex.ratings)}`)}</span>
-            </h3>
-            <ExplorerPanel
-              fen={fen}
-              color={opening.color}
-              inRep={(uci) => uci === nextInLine?.uci}
-              stats={stats.data}
-              error={stats.error}
-              loading={stats.isLoading}
-              onPick={play}
-              firstMoveNumber={ply}
-              onPlay={playMoves}
-              level={{
-                data: level.data,
-                loading: level.isLoading,
-                error: level.error,
-                depth,
-                maxDepth: LEVEL_STEPS,
-                onDepth,
-                myTurn,
-                range: rangeLabel(ex.ratings),
+            <button onClick={() => go('')} title={t('Début (Origine)', 'Start (Home)')}>⏮</button>
+            <button onClick={() => nodeId && go(parentId(nodeId))} title={t('Reculer (←)', 'Back (←)')}>◀</button>
+            <button onClick={() => children[0] && !toGuess && go(children[0].id)} disabled={toGuess} title={t('Avancer (→)', 'Forward (→)')}>▶</button>
+            <button
+              className={`library-quiz-toggle ${quiz ? 'on' : ''}`}
+              onClick={() => {
+                setQuiz(!quiz);
+                setFeedback(null);
+                setMisses(0);
               }}
-            />
-          </section>
+              title={t('Devine le coup : jouez vous-même les coups du cours', 'Guess the move: play the lesson’s moves yourself')}
+            >
+              <Icon name="target" size={16} /> {t('Devine le coup', 'Guess the move')}
+            </button>
+          </div>
         </div>
 
         <div className="editor-side">
-          <section className="panel library-line">
-            <div className="moves-path">
-              {line.map((m, i) => (
-                <button key={i} className={['link', i === ply - 1 ? 'current' : '', i >= ply ? 'ahead' : ''].filter(Boolean).join(' ')} onClick={() => goTo(i + 1)}>
-                  {i % 2 === 0 ? `${i / 2 + 1}. ` : ''}
-                  <San san={m.san} />
+          <section className="panel library-comment" aria-live="polite">
+            {toGuess ? (
+              <>
+                <div className="library-comment-move">{t(`À vous : le coup des ${orientation === 'white' ? 'Blancs' : 'Noirs'} ?`, `Your turn: ${orientation === 'white' ? 'White' : 'Black'}’s move?`)}</div>
+                {guessed && (
+                  <p className="library-prev small-text">
+                    <span className="badge library-ok">{t('Bravo', 'Correct')}</span> <strong>{moveLabel(guessed)}</strong> {guessed.comment}
+                  </p>
+                )}
+                {node && node !== guessed && node.comment && (
+                  <p className="library-prev muted small-text">
+                    <strong>{moveLabel(node)}</strong> {node.comment}
+                  </p>
+                )}
+                {feedback === 'miss' && (
+                  <p className="error small-text">
+                    {misses >= 2 ? t('Pas encore : la flèche orange montre le coup.', 'Not yet: the orange arrow shows the move.') : t('Ce n’est pas le coup du cours. Réessayez.', 'That’s not the lesson’s move. Try again.')}
+                  </p>
+                )}
+                <button className="link small-text" onClick={() => go(children[0]!.id)}>
+                  {t('Voir le coup', 'Show the move')}
                 </button>
-              ))}
-            </div>
-            {note && <p className="library-note">{tx(note)}</p>}
-            {offLine && (
-              <p className="muted small-text">
-                {t('Vous avez quitté la ligne. ', 'You left the line. ')}
-                <button className="link" onClick={() => { setLine(libMoves); setPly(Math.min(ply, leaves)); }}>
-                  {t('Revenir à la ligne', 'Back to the line')}
-                </button>
-              </p>
+              </>
+            ) : (
+              <>
+                <div className="library-comment-move">
+                  {node ? (
+                    <>
+                      {feedback === 'ok' && <span className="badge library-ok">{t('Bravo', 'Correct')}</span>} {node.moveNumber}
+                      {node.color === 'white' ? '.' : '…'} <San san={node.san} nags={node.nags} />
+                    </>
+                  ) : (
+                    lesson.chapters[chapterIndex]!.name
+                  )}
+                </div>
+                {comment ? <p className="library-note">{comment}</p> : <p className="muted small-text">{node ? t('Pas de commentaire sur ce coup.', 'No comment on this move.') : t('Avancez avec ▶ ou jouez le premier coup sur l’échiquier.', 'Step forward with ▶ or play the first move on the board.')}</p>}
+                {feedback === 'off' && <p className="muted small-text">{t('Ce coup n’est pas dans le cours.', 'That move is not in the lesson.')}</p>}
+                {end && (
+                  <p className="muted small-text">
+                    {t('Fin de la ligne. ', 'End of the line. ')}
+                    <button className="link" onClick={() => go('')}>{t('Recommencer', 'Start again')}</button>
+                  </p>
+                )}
+                {children.length > 1 && (
+                  <p className="small-text library-fork-hint">
+                    <span className="badge library-fork">{t('Scission', 'Fork')}</span>{' '}
+                    {t('Ici, plusieurs suites : ', 'Several ways on here: ')}
+                    {children.map((c, i) => (
+                      <Fragment key={c.id}>
+                        {i > 0 && ', '}
+                        <button className={`link ${i === 0 ? 'library-main-move' : 'library-alt-move'}`} onClick={() => go(c.id)}>
+                          {moveLabel(c)}
+                        </button>
+                        {i === 0 && t(' (ligne principale)', ' (main line)')}
+                      </Fragment>
+                    ))}
+                  </p>
+                )}
+              </>
             )}
           </section>
 
+          {node && !toGuess && <WhyPanel me={me} node={node} siblings={(nodes.get(parentId(node.id))?.children ?? chapter.children)} onPick={go} />}
+
           <section className="panel">
             <h3>{t('Les lignes', 'The lines')}</h3>
-            <ul className="library-lines">
-              {opening.lines.map((l, i) => (
-                <li key={i}>
-                  <button className={`library-line-pick ${i === lineIndex ? 'on' : ''}`} onClick={() => setLineIndex(i)}>
-                    <span className="library-line-name">
-                      {tx(l.name)} {l.trap && <span className="badge trap">{t('Piège', 'Trap')}</span>}
-                    </span>
-                    <span className="muted small-text">{lineText(l.moves)}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
+            <LineTree lines={lines} current={nodeId} onPick={go} />
           </section>
 
-          <section className="panel library-text">
-            <h3>{t('L’ouverture', 'The opening')}</h3>
-            <p>{tx(opening.summary)}</p>
-            <h3>{t('Les idées à retenir', 'Key ideas')}</h3>
-            <ul>
-              {opening.ideas.map((idea, i) => (
-                <li key={i}>{tx(idea)}</li>
-              ))}
-            </ul>
+          {(lesson.summary || lesson.ideas?.length) && (
+            <section className="panel library-text">
+              {lesson.summary && (
+                <>
+                  <h3>{t('L’ouverture', 'The opening')}</h3>
+                  <p>{lesson.summary}</p>
+                </>
+              )}
+              {lesson.ideas && lesson.ideas.length > 0 && (
+                <>
+                  <h3>{t('Les idées à retenir', 'Key ideas')}</h3>
+                  <ul>
+                    {lesson.ideas.map((idea, i) => (
+                      <li key={i}>{idea}</li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </section>
+          )}
+          {lesson.links && (
             <p className="muted small-text library-sources">
               {t('Pour aller plus loin : ', 'To go further: ')}
-              <a href={`https://lichess.org/opening/${opening.lichess}`} target="_blank" rel="noreferrer">Lichess</a>
-              {' · '}
-              <a href={tx(opening.wikipedia)} target="_blank" rel="noreferrer">Wikipedia</a>
+              {lesson.links.map((l, i) => (
+                <Fragment key={l.href}>
+                  {i > 0 && ' · '}
+                  <a href={l.href} target="_blank" rel="noreferrer">
+                    {l.label}
+                  </a>
+                </Fragment>
+              ))}
             </p>
-          </section>
+          )}
         </div>
       </div>
     </>
@@ -263,20 +438,172 @@ function OpeningView({ me, opening }: { me: Me; opening: LibraryOpening }) {
 }
 
 /**
- * "S'entraîner sur cette ouverture": makes a repertoire of the opening (one chapter per line, the
- * notes as comments), then opens its training. Once made, it opens that repertoire's training.
+ * The lines of the chapter: the main line, then each variation under it, indented, with where it
+ * leaves its line ("au coup 4 · au lieu de 4… Bd6"): the moves shared with that line greyed (the
+ * last two only), the move that differs highlighted.
  */
-function TrainButton({ opening }: { opening: LibraryOpening }) {
+function LineTree({ lines, current, onPick }: { lines: StudyLine[]; current: string; onPick: (id: string) => void }) {
+  if (lines.length === 0) return <p className="muted small-text">{t('Ce chapitre n’a pas de coups.', 'This chapter has no moves.')}</p>;
+  const onPath = (n: StudyNode) => current === n.id || current.startsWith(`${n.id},`);
+  const moveButton = (n: StudyNode, i: number, line: StudyLine, cls = '') => (
+    <button
+      key={n.id}
+      className={['link', 'library-move', cls, n.id === current ? 'current' : onPath(n) ? 'on-path' : ''].filter(Boolean).join(' ')}
+      onClick={() => onPick(n.id)}
+    >
+      {n.color === 'white' || i === line.fork ? `${n.moveNumber}${n.color === 'white' ? '.' : '…'} ` : ''}
+      <San san={n.san} nags={n.nags} />
+    </button>
+  );
+  return (
+    <div className="library-tree">
+      {lines.map((line, li) => {
+        if (line.depth === 0) return <div key={li} className="library-mainline">{line.nodes.map((n, i) => moveButton(n, i, line))}</div>;
+        const shared = line.nodes.slice(0, line.fork);
+        const firstShown = Math.max(0, line.fork - 2);
+        const fork = line.nodes[line.fork]!;
+        return (
+          <div key={li} className="library-variation" style={{ marginLeft: `${Math.min(line.depth - 1, 3) * 14}px` }}>
+            <div className="library-variation-head small-text">
+              <span className="badge library-fork">{t(`Scission au coup ${fork.moveNumber}`, `Fork at move ${fork.moveNumber}`)}</span>{' '}
+              {line.instead && (
+                <span className="muted">
+                  {t('au lieu de ', 'instead of ')}
+                  <button className="link library-main-move" onClick={() => onPick(line.instead!.id)}>
+                    {moveLabel(line.instead)}
+                  </button>
+                </span>
+              )}
+            </div>
+            <div className="library-variation-moves">
+              {firstShown > 0 && <span className="muted">… </span>}
+              {shared.slice(firstShown).map((n, k) => moveButton(n, firstShown + k, line, 'shared'))}
+              {moveButton(fork, line.fork, line, 'library-alt-move')}
+              {line.nodes.slice(line.fork + 1).map((n, k) => moveButton(n, line.fork + 1 + k, line))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Score of a move for the side that plays it (wins + half the draws), from Lichess counts. */
+const scoreFor = (m: { white: number; draws: number; black: number }, color: Color) => {
+  const n = totalGames(m);
+  return n ? ((color === 'white' ? m.white : m.black) + m.draws / 2) / n : 0;
+};
+
+/**
+ * "Pourquoi ce coup ?": the moves possible where the lesson's move was played, side by side: how
+ * often players of my level play each and how it scores for them (Lichess), and Stockfish's
+ * evaluation, the lesson's move and its variations marked.
+ */
+function WhyPanel({ me, node, siblings, onPick }: { me: Me; node: StudyNode; siblings: StudyNode[]; onPick: (id: string) => void }) {
+  const { speed, range } = useSettings();
+  const ex = explorerParams(me, speed, range);
+  const stats = useQuery({
+    queryKey: ['explorer', node.fromFen, ex.speeds, ex.ratings],
+    queryFn: () => api.explorer(node.fromFen, ex.speeds, ex.ratings),
+    staleTime: Infinity,
+    retry: false,
+  });
+  const [engineOn, setEngineOn] = useState(false);
+  const engine = useEngine(node.fromFen, engineOn, 4);
+  const data = stats.data?.data;
+  const total = data ? totalGames(data) : 0;
+  const rows = useMemo(() => {
+    const byUci = new Map<string, { uci: string; san: string; share?: number; score?: number; eval?: string; inLesson?: StudyNode }>();
+    const row = (uci: string, san: string) => byUci.get(uci) ?? byUci.set(uci, { uci, san }).get(uci)!;
+    for (const s of siblings) row(s.uci, s.san).inLesson = s;
+    for (const m of (data?.moves ?? []).slice(0, 5)) {
+      const r = row(m.uci, m.san);
+      r.share = total ? totalGames(m) / total : 0;
+      r.score = scoreFor(m, node.color);
+    }
+    for (const l of engine.lines) {
+      const first = l?.pv[0];
+      if (!first) continue;
+      const r = row(first.uci, first.san);
+      // From the mover's side.
+      const score = node.color === 'white' ? l.score : 'cp' in l.score ? { cp: -l.score.cp } : { mate: -l.score.mate };
+      r.eval = formatScore(score);
+    }
+    const all = [...byUci.values()];
+    return [...all.filter((r) => r.uci === node.uci), ...all.filter((r) => r.uci !== node.uci).sort((a, b) => (b.share ?? -1) - (a.share ?? -1))];
+  }, [siblings, data, total, engine.lines, node]);
+  const pct = (x: number) => t(`${fmt(Math.round(100 * x))} %`, `${fmt(Math.round(100 * x))}%`);
+  return (
+    <section className="panel library-why">
+      <h3>
+        {t('Pourquoi ce coup ?', 'Why this move?')} <span className="muted small-text">· {t('les autres choix possibles à ce moment', 'the other choices at that moment')}</span>
+      </h3>
+      <table className="library-why-table">
+        <thead>
+          <tr>
+            <th>{t('Coup', 'Move')}</th>
+            <th title={t(`Joueurs Lichess ${rangeLabel(ex.ratings)}`, `Lichess players ${rangeLabel(ex.ratings)}`)}>{t('Joué', 'Played')}</th>
+            <th title={t('Score pour le camp qui joue (victoires + moitié des nulles)', 'Score for the side that plays it (wins + half the draws)')}>{t('Score', 'Score')}</th>
+            <th title={t('Évaluation pour le camp qui joue : plus elle est haute, mieux c’est', 'Evaluation for the side that plays it: the higher, the better')}>{t('Stockfish', 'Stockfish')}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr
+              key={r.uci}
+              className={[r.uci === node.uci ? 'lesson-move' : '', r.inLesson ? 'clickable' : ''].filter(Boolean).join(' ')}
+              onClick={() => r.inLesson && onPick(r.inLesson.id)}
+            >
+              <td>
+                <San san={r.san} />{' '}
+                {r.uci === node.uci ? (
+                  <span className="badge library-ok">{t('le coup du cours', 'the lesson’s move')}</span>
+                ) : r.inLesson ? (
+                  <span className="badge library-fork">{t('variante', 'variation')}</span>
+                ) : null}
+              </td>
+              <td>{r.share !== undefined ? pct(r.share) : '–'}</td>
+              <td>{r.score !== undefined ? pct(r.score) : '–'}</td>
+              <td>{r.eval ?? (engineOn ? '…' : '–')}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="muted small-text">
+        {stats.isLoading
+          ? t('Chargement des statistiques…', 'Loading the statistics…')
+          : !data
+            ? t('Pas de statistiques à votre niveau ici (Paramètres › Mode local pour les télécharger).', 'No statistics at your level here (Settings › Local mode to download them).')
+            : t(`Joueurs Lichess ${rangeLabel(ex.ratings)}.`, `Lichess players ${rangeLabel(ex.ratings)}.`)}{' '}
+        <button className="link" onClick={() => setEngineOn(!engineOn)}>
+          {engineOn ? t('Arrêter Stockfish', 'Stop Stockfish') : t('Évaluer avec Stockfish', 'Evaluate with Stockfish')}
+        </button>
+      </p>
+    </section>
+  );
+}
+
+/**
+ * "S'entraîner sur cette ouverture": makes a repertoire of the lesson (one chapter per chapter
+ * with moves, traps left out, the comments in the interface's language), then opens its
+ * training. Once made, it opens that repertoire's training.
+ */
+function TrainButton({ lesson, color, mixed }: { lesson: Lesson; color: Color; mixed: boolean }) {
   const qc = useQueryClient();
   const navigate = useNavigate();
-  const name = tx(opening.name);
   const reps = useQuery({ queryKey: ['repertoires'], queryFn: api.repertoires });
-  const existing = reps.data?.find((r) => r.name === name && r.color === opening.color);
+  // A study for both sides: one repertoire per side, named after it.
+  const name = mixed ? `${lesson.name} (${color === 'white' ? t('Blancs', 'White') : t('Noirs', 'Black')})` : lesson.name;
+  const existing = reps.data?.find((r) => r.name === name && r.color === color);
+  const chapters = useMemo(
+    () =>
+      lesson.chapters
+        .filter((c) => !c.trap && (c.orientation ?? lesson.color) === color && parseStudy(c.pgn)[0]!.children.length > 0)
+        .map((c) => ({ name: c.name, pgn: localizePgn(c.pgn, lang) })),
+    [lesson, color],
+  );
   const create = useMutation({
-    mutationFn: () =>
-      api.createRepertoire(name, opening.color, {
-        chapters: trainedLines(opening).map((l) => ({ name: tx(l.name), pgn: linePgn(l) })),
-      }),
+    mutationFn: () => api.createRepertoire(name, color, { chapters }),
     onSuccess: (rep) => {
       // Straight to the training; the lists catch up in the background (the gaps take a while).
       void qc.invalidateQueries({ queryKey: ['repertoires'] });
@@ -297,6 +624,7 @@ function TrainButton({ opening }: { opening: LibraryOpening }) {
       </>
     );
   }
+  if (chapters.length === 0) return null;
   return (
     <>
       {create.error && <span className="error small-text">{create.error.message}</span>}
@@ -306,11 +634,13 @@ function TrainButton({ opening }: { opening: LibraryOpening }) {
         disabled={create.isPending || reps.isLoading}
         onClick={() => create.mutate()}
         title={t(
-          `Crée le répertoire « ${name} » (${trainedLines(opening).length} lignes) et lance l’entraînement`,
-          `Creates the “${name}” repertoire (${trainedLines(opening).length} lines) and starts training`,
+          `Crée le répertoire « ${name} » (${chapters.length} chapitre${chapters.length > 1 ? 's' : ''}) et lance l’entraînement`,
+          `Creates the “${name}” repertoire (${chapters.length} chapter${chapters.length > 1 ? 's' : ''}) and starts training`,
         )}
       >
-        {t('S’entraîner sur cette ouverture', 'Train on this opening')}
+        {mixed
+          ? t(`S’entraîner (chapitres ${color === 'white' ? 'Blancs' : 'Noirs'})`, `Train (${color === 'white' ? 'White' : 'Black'} chapters)`)
+          : t('S’entraîner sur cette ouverture', 'Train on this opening')}
       </Button>
     </>
   );

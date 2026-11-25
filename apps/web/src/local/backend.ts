@@ -11,6 +11,10 @@
  */
 import { fenKey, positionFromFen, REACH_STEPS, suggestMoves } from '@e4e5/core';
 import {
+  addLibraryStudy,
+  deleteLibraryStudy,
+  getLibraryStudy,
+  listLibraryStudies,
   chapterMovesAt,
   createChapters,
   createRepertoire,
@@ -250,6 +254,10 @@ export const localApi = {
       const study = await getStudy(await withLichessToken(db), studyId);
       return applyStudySync(db, LOCAL_USER, repertoireId, studyId, study.chapters, choices);
     }),
+  libraryStudies: () => run(async (db) => listLibraryStudies(db, LOCAL_USER)),
+  libraryStudy: (id) => run(async (db) => getLibraryStudy(db, LOCAL_USER, id)),
+  addLibraryStudy: (studyId) => run(async (db) => addLibraryStudy(db, LOCAL_USER, await withLichessToken(db), studyId)),
+  deleteLibraryStudy: (id) => run(async (db) => deleteLibraryStudy(db, LOCAL_USER, id)),
   opening: (line) =>
     run(async () => {
       await loadOpenings();
