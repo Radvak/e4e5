@@ -25,7 +25,9 @@ import {
   importPgn,
   applyStudySync,
   getStudy,
+  planPush,
   planStudySync,
+  pushRepertoire,
   StudyError,
   studiesBy,
   getProfile,
@@ -235,6 +237,13 @@ export const localApi = {
       const study = await getStudy(await withLichessToken(db), studyId, true);
       return { study, plan: await planStudySync(db, LOCAL_USER, repertoireId, study.chapters, { hard }) };
     }),
+  pushPlan: (repertoireId) =>
+    run(async (db) => {
+      const rep = await getRepertoire(db, LOCAL_USER, repertoireId);
+      const study = rep.lichessStudyId ? await getStudy(await withLichessToken(db), rep.lichessStudyId, true) : null;
+      return planPush(db, LOCAL_USER, repertoireId, study);
+    }),
+  pushToLichess: (repertoireId, visibility) => run(async (db) => pushRepertoire(db, LOCAL_USER, repertoireId, await withLichessToken(db), { visibility })),
   applyStudySync: (repertoireId, studyId, choices) =>
     run(async (db) => {
       // The version previewed (kept since the plan).

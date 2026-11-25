@@ -166,6 +166,32 @@ export interface StudySyncResult {
   chaptersRemoved: number;
 }
 
+/** A push of a repertoire to its Lichess study (@e4e5/data lichessPush.ts). */
+export interface PushPlan {
+  studyId: string | null;
+  studyName: string | null;
+  chapters: {
+    chapterId: string;
+    name: string;
+    /** update: replaces the moves of its chapter on Lichess; create: a new chapter of the study. */
+    action: 'update' | 'create';
+    /** Its name on Lichess, when different (Lichess cannot rename it through its API). */
+    lichessName: string | null;
+    moves: number;
+    /** Moves of its chapter on Lichess the app does not have: lost by the push. */
+    lost: number;
+  }[];
+  /** Chapters of the study the repertoire does not have: left as they are. */
+  untouched: string[];
+  tooMany: boolean;
+}
+export interface PushResult {
+  studyId: string;
+  createdStudy: boolean;
+  updated: number;
+  created: number;
+}
+
 export interface Gap {
   kind: 'missing-reply' | 'no-answer';
   fen: string;
@@ -360,6 +386,10 @@ export interface Api {
   studySyncPlan: (repertoireId: string, studyId: string, hard?: boolean) => Promise<{ study: LichessStudy; plan: StudySyncPlan }>;
   /** Applies the chosen changes of the plan (same version of the study); links the repertoire to it. */
   applyStudySync: (repertoireId: string, studyId: string, choices: StudySyncChoices) => Promise<StudySyncResult>;
+  /** What pushing the repertoire to its Lichess study would do (the study as on Lichess now). */
+  pushPlan: (repertoireId: string) => Promise<PushPlan>;
+  /** Pushes the repertoire to its Lichess study, created if it has none (`visibility`: of a new study). */
+  pushToLichess: (repertoireId: string, visibility: 'private' | 'unlisted' | 'public') => Promise<PushResult>;
   cards: () => Promise<ReviewCard[]>;
   /** An answer: `id` makes it count once, `reviewedAt` is when it was given. */
   review: (id: string, answer: { fen: string; uci: string; grade: Grade; id: string; reviewedAt: number }) => Promise<ReviewCard>;

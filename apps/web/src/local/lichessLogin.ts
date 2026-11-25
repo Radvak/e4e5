@@ -33,8 +33,9 @@ export async function startLichessLogin(): Promise<void> {
     redirect_uri: redirectUri(),
     code_challenge_method: 'S256',
     code_challenge: challenge,
-    // Reading the user's studies, the private ones included (to create a repertoire from one).
-    scope: 'study:read',
+    // Reading the user's studies, the private ones included (to create a repertoire from one), and
+    // writing them (to push a repertoire to its study).
+    scope: 'study:read study:write',
     state,
   });
   const url = `${PUBLIC_SOURCES.lichessHost}/oauth?${params}`;

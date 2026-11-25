@@ -8,6 +8,7 @@ import { api, type Gap, type ImportResult, type Me, type RepertoireDetail, type 
 import { chapterForLine, chapterForPosition, chapterRoot, playLine } from '../chapters';
 import { ChapterBar } from '../components/ChapterBar';
 import { StudySyncDialog } from '../components/StudySyncDialog';
+import { PushDialog } from '../components/PushDialog';
 import { PausedZoneHeader } from '../components/PausedZoneHeader';
 import { useMoveDrag, type DropTarget } from '../components/useMoveDrag';
 import { useLongPress } from '../components/useLongPress';
@@ -48,6 +49,7 @@ export function RepertoireEditor({ me }: { me: Me }) {
   const [notice, setNotice] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [syncOpen, setSyncOpen] = useState(false);
+  const [pushOpen, setPushOpen] = useState(false);
   /** Move whose comment is being written (id), or null. */
   const [commentEdit, setCommentEdit] = useState<number | null>(null);
 
@@ -406,9 +408,13 @@ export function RepertoireEditor({ me }: { me: Me }) {
         ...(data.lichessStudyId
           ? [
               { label: t('Mettre à jour depuis Lichess', 'Update from Lichess'), onClick: () => setSyncOpen(true) },
+              { label: t('Pousser sur Lichess', 'Push to Lichess'), onClick: () => setPushOpen(true) },
               { label: t('Voir l’étude sur Lichess', 'See the study on Lichess'), onClick: () => window.open(`https://lichess.org/study/${data.lichessStudyId}`, '_blank', 'noopener') },
             ]
-          : [{ label: t('Lier à une étude Lichess…', 'Link to a Lichess study…'), onClick: () => setSyncOpen(true) }]),
+          : [
+              { label: t('Lier à une étude Lichess…', 'Link to a Lichess study…'), onClick: () => setSyncOpen(true) },
+              { label: t('Créer l’étude sur Lichess', 'Create the study on Lichess'), onClick: () => setPushOpen(true) },
+            ]),
         { label: data.active ? t('Mettre le répertoire en pause', 'Pause the repertoire') : t('Reprendre l’entraînement', 'Resume training'), onClick: () => toggleActive.mutate() },
         {
           label: t('Renommer le répertoire', 'Rename the repertoire'),
@@ -426,6 +432,7 @@ export function RepertoireEditor({ me }: { me: Me }) {
       ]}
     />
     {syncOpen && <StudySyncDialog repertoire={data} onClose={() => setSyncOpen(false)} />}
+    {pushOpen && <PushDialog repertoire={data} onClose={() => setPushOpen(false)} />}
     {importOpen && chapter && <PgnImport chapterId={chapter.id} onDone={refresh} onClose={() => setImportOpen(false)} />}
     {acting && (
       <MoveActionsDialog

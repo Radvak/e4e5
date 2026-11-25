@@ -57,7 +57,6 @@ export const plural = (n: number, one: string, many: string) =>
  * first, then patterns for those with a value inside.
  */
 const ERRORS_EN: Record<string, string> = {
-  'Pas un coup à entraîner dans ce répertoire': 'Not a move to train in this repertoire',
   'Cette position n’est pas encore apprise : entraînez-la d’abord': 'This position is not learnt yet: train it first',
   'Indiquez votre pseudo Chess.com dans les paramètres': 'Enter your Chess.com username in the settings',
   'Liez votre compte Lichess dans les paramètres': 'Link your Lichess account in the settings',
@@ -69,10 +68,19 @@ const ERRORS_EN: Record<string, string> = {
   'Lichess limite le nombre de requêtes : réessayez dans une minute': 'Lichess limits the number of requests: try again in a minute',
   'Lichess a refusé la requête (étude privée, ou accès bloqué)': 'Lichess refused the request (private study, or access blocked)',
   'Étude introuvable ou privée': 'Study not found or private',
+  'Liez votre compte Lichess (Mon compte) pour écrire dans vos études': 'Link your Lichess account (My account) to write to your studies',
+  'Lichess refuse l’écriture : reliez votre compte Lichess pour l’autoriser (l’étude doit être à vous)':
+    'Lichess refuses to write: link your Lichess account again to allow it (the study must be yours)',
+  'Lichess n’a pas créé le chapitre': 'Lichess did not create the chapter',
+  'Chapitre introuvable': 'Chapter not found',
+  'Le répertoire n’a pas la même couleur que le chapitre': 'The repertoire does not have the colour of the chapter',
+  'Ordre des chapitres incomplet': 'Incomplete order of the chapters',
+  'Pas un coup à entraîner dans ce répertoire': 'Not a move to train in this repertoire',
 };
 const ERROR_PATTERNS_EN: [RegExp, (...m: string[]) => string][] = [
   [/^Coup illégal (\S+) au demi-coup (\d+)$/, (_, uci, ply) => `Illegal move ${uci} at ply ${ply}`],
   [/^Lichess a répondu (\d+)$/, (_, status) => `Lichess answered ${status}`],
+  [/^Lichess : (.*)$/, (_, why) => `Lichess: ${why}`],
 ];
 
 /** An error message from @e4e5/data, in the current language. */

@@ -191,9 +191,10 @@ export function lichessStudyRef(input: string): { studyId: string; chapterId?: s
 /**
  * The repertoire as one PGN game with variations, from the initial position or from `startFen`
  * (a chapter starting at a position: FEN header). A position reached a second time (by
- * transposition) is not expanded again: the move gets a "Transposition" comment instead.
+ * transposition) is not expanded again: the move gets a "Transposition" comment instead (unless
+ * `transpositions` is false: for a PGN read back by the app, where it would become a comment).
  */
-export function repertoireToPgn(rep: Repertoire, name = 'Repertoire', startFen?: string): string {
+export function repertoireToPgn(rep: Repertoire, name = 'Repertoire', startFen?: string, opts: { transpositions?: boolean } = {}): string {
   const game = defaultGame<PgnNodeData>();
   game.headers.set('Event', name);
   game.headers.set('Result', '*');
@@ -212,7 +213,7 @@ export function repertoireToPgn(rep: Repertoire, name = 'Repertoire', startFen?:
       const child = new ChildNode<PgnNodeData>({ san: m.san, comments, nags: m.nags ?? undefined });
       parent.children.push(child);
       if (expanded.has(m.toFen)) {
-        comments.push('Transposition');
+        if (opts.transpositions !== false) comments.push('Transposition');
       } else {
         expanded.add(m.toFen);
         build(child, next);

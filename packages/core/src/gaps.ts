@@ -16,6 +16,9 @@
  * of these depths, weighted by probability, is the expected preparation depth. Positions under
  * the cutoff count with the depth reached so far, so a smaller cutoff is more exact. These
  * shares (depth, lost, ends, unknown, belowCutoff) only add up with `split` (the default).
+ *
+ * Each position is explored once: the probabilities of its move orders are summed before going
+ * on (linear in the size of the repertoire, however many transpositions).
  */
 import { totalGames, type ExplorerResponse } from './explorer.js';
 import { playUci, START_FEN } from './position.js';
@@ -71,7 +74,7 @@ export interface GapOptions {
   root?: string;
   /** Plies played before `root` (for the depth). */
   rootPly?: number;
-  /** Safety budget of visited positions. */
+  /** Safety budget of positions (each one is explored once, whatever the move orders reaching it). */
   maxNodes?: number;
   /** Called wherever the preparation of some games ends (see `PrepEnd`). */
   onEnd?: (end: PrepEnd) => void;
@@ -88,98 +91,175 @@ export interface PrepEnd {
   ply: number;
 }
 
+/** An edge of the exploration graph: a share of a position's games going on to another position. */
+interface Edge {
+  to: string;
+  move: RepMove;
+  /** Share of the position's probability carried (1 per move of mine without `split`). */
+  share: number;
+}
+
+/** What follows a position, independent of its probability (built once per position). */
+type Node =
+  | { kind: 'no-answer' | 'line-end' | 'no-stats'; stats: boolean; edges: Edge[] }
+  | { kind: 'mine'; edges: Edge[] }
+  | { kind: 'stats'; edges: Edge[]; holes: { move: { uci: string; san: string }; share: number }[]; rest: number };
+
 export function findGaps(
   rep: Repertoire,
   statsAt: (fen: string) => ExplorerResponse | null | undefined,
   { cutoff = 0.01, split = true, root = START_FEN, rootPly = 0, maxNodes = 200_000, onEnd }: GapOptions = {},
 ): GapReport {
-  const gaps = new Map<string, Gap>();
+  // 1. The graph: every position reachable through the repertoire (and opponent moves
+  // transposing back into it), each built once whatever the number of move orders reaching it.
+  const build = (fen: string): Node => {
+    const moves = rep.movesAt(fen);
+    if (rep.isMyTurn(fen)) {
+      if (!moves.length) return { kind: 'no-answer', stats: true, edges: [] };
+      const share = split ? 1 / moves.length : 1;
+      return { kind: 'mine', edges: moves.map((m) => ({ to: m.toFen, move: m, share })) };
+    }
+    if (!moves.length) return { kind: 'line-end', stats: true, edges: [] };
+    const stats = statsAt(fen);
+    const total = stats ? totalGames(stats) : 0;
+    if (!stats || !total) return { kind: 'no-stats', stats: !!stats, edges: [] };
+    const edges: Edge[] = [];
+    const holes: { move: { uci: string; san: string }; share: number }[] = [];
+    let seen = 0;
+    for (const em of stats.moves) {
+      const share = totalGames(em) / total;
+      seen += share;
+      const own = moves.find((m) => m.uci === em.uci);
+      if (own) {
+        edges.push({ to: own.toFen, move: own, share });
+        continue;
+      }
+      const played = playUci(fen, em.uci);
+      if (played && rep.movesAt(played.toFen).length) edges.push({ to: played.toFen, move: played, share }); // transposes back into the repertoire
+      else holes.push({ move: { uci: em.uci, san: em.san }, share });
+    }
+    // Rare moves beyond the ones listed by the explorer: unprepared, too small to list.
+    return { kind: 'stats', edges, holes, rest: Math.max(0, 1 - seen) };
+  };
+
+  const nodes = new Map<string, Node>();
+  const order: string[] = []; // depth-first post-order
+  let truncated = false;
+  nodes.set(root, build(root));
+  const stack: { fen: string; next: number }[] = [{ fen: root, next: 0 }];
+  while (stack.length) {
+    const top = stack[stack.length - 1]!;
+    const edges = nodes.get(top.fen)!.edges;
+    if (top.next < edges.length) {
+      const to = edges[top.next++]!.to;
+      if (nodes.has(to)) continue;
+      if (nodes.size >= maxNodes) {
+        truncated = true;
+        continue;
+      }
+      nodes.set(to, build(to));
+      stack.push({ fen: to, next: 0 });
+    } else {
+      order.push(top.fen);
+      stack.pop();
+    }
+  }
+  // Reversed post-order: every position comes after all the positions leading to it, except
+  // along a cycle (a move back to a position on the way: not followed).
+  order.reverse();
+  const index = new Map(order.map((fen, i) => [fen, i]));
+
+  // 2. The probabilities, flowing in that order: each position gets the sum over its move orders.
+  const prob = new Map<string, number>([[root, 1]]);
+  /** Sum of probability × plies over the move orders reaching a position (expected depth). */
+  const plyMass = new Map<string, number>([[root, rootPly]]);
+  /** The most likely move into each position: its line (the most likely one). */
+  const bestIn = new Map<string, { from: string; move: RepMove; q: number }>();
+  const pathTo = (fen: string): RepMove[] => {
+    const path: RepMove[] = [];
+    for (let b = bestIn.get(fen); b; b = bestIn.get(b.from)) path.push(b.move);
+    return path.reverse();
+  };
+
+  const gaps: Gap[] = [];
   const missing = new Map<string, number>();
-  const used = new Set<string>();
+  const used: string[] = [];
   const reached = new Map<string, number>();
   let lost = 0;
   let unknown = 0;
   let ends = 0;
   let belowCutoff = 0;
   let plies = 0;
-  let nodes = 0;
-  let truncated = false;
 
-  const addGap = (g: Gap) => {
-    const key = `${g.kind}|${g.fen}|${g.move?.uci ?? ''}`;
-    const known = gaps.get(key);
-    if (!known) return void gaps.set(key, g);
-    if (g.prob > known.prob) known.path = g.path;
-    known.prob += g.prob;
-  };
-
-  const onPath = new Set<string>();
-  const visit = (fen: string, p: number, path: RepMove[]) => {
-    const ply = rootPly + path.length;
-    /** The preparation of these games ends here. */
-    const stop = (share: number, kind: PrepEnd['kind']) => {
-      plies += share * ply;
-      if (share > 0) onEnd?.({ kind, fen, path, prob: share, ply });
+  for (const fen of order) {
+    const p = prob.get(fen);
+    if (!p) continue; // only behind positions too rare to explore
+    const mass = plyMass.get(fen)!;
+    /** The preparation of a share (of p) of these games ends here. */
+    const stop = (q: number, kind: PrepEnd['kind']) => {
+      if (q <= 0) return;
+      plies += (q * mass) / p;
+      onEnd?.({ kind, fen, path: pathTo(fen), prob: q, ply: mass / p });
     };
-    if (p < cutoff || onPath.has(fen) || ++nodes > maxNodes) {
-      if (nodes > maxNodes) truncated = true;
+    reached.set(fen, p);
+    if (p < cutoff) {
       // Too rare: its probability is known (not explored further), so it is not "unknown".
-      else if (p < cutoff && !onPath.has(fen)) reached.set(fen, (reached.get(fen) ?? 0) + p);
       belowCutoff += p;
-      return stop(p, 'too-rare');
+      stop(p, 'too-rare');
+      continue;
     }
-    reached.set(fen, (reached.get(fen) ?? 0) + p);
-    onPath.add(fen);
-    const moves = rep.movesAt(fen);
-    if (rep.isMyTurn(fen)) {
-      if (!moves.length) {
+    const node = nodes.get(fen)!;
+    const flow = (e: Edge, q: number) => {
+      const i = index.get(e.to);
+      if (i === undefined || i <= index.get(fen)!) {
+        // A cycle, or past the node budget: not followed.
+        if (i === undefined) truncated = true;
+        belowCutoff += q;
+        plies += q * (mass / p + 1);
+        onEnd?.({ kind: 'too-rare', fen: e.to, path: [...pathTo(fen), e.move], prob: q, ply: mass / p + 1 });
+        return;
+      }
+      prob.set(e.to, (prob.get(e.to) ?? 0) + q);
+      plyMass.set(e.to, (plyMass.get(e.to) ?? 0) + (q / p) * (mass + p));
+      const best = bestIn.get(e.to);
+      if (!best || q > best.q) bestIn.set(e.to, { from: fen, move: e.move, q });
+    };
+    switch (node.kind) {
+      case 'no-answer':
         lost += p;
         stop(p, 'hole');
-        addGap({ kind: 'no-answer', fen, prob: p, path });
-      }
-      for (const m of moves) visit(m.toFen, split ? p / moves.length : p, [...path, m]);
-    } else if (!moves.length) {
-      ends += p;
-      stop(p, 'line-end');
-    } else {
-      const stats = statsAt(fen);
-      const total = stats ? totalGames(stats) : 0;
-      if (!stats || !total) {
+        gaps.push({ kind: 'no-answer', fen, prob: p, path: pathTo(fen) });
+        break;
+      case 'line-end':
+        ends += p;
+        stop(p, 'line-end');
+        break;
+      case 'no-stats':
         unknown += p;
         stop(p, 'no-stats');
-        if (!stats) missing.set(fen, (missing.get(fen) ?? 0) + p);
-      } else {
-        used.add(fen);
-        let seen = 0;
-        for (const em of stats.moves) {
-          const q = (p * totalGames(em)) / total;
-          seen += q;
-          const own = moves.find((m) => m.uci === em.uci);
-          if (own) {
-            visit(own.toFen, q, [...path, own]);
-            continue;
-          }
-          const played = playUci(fen, em.uci);
-          if (played && rep.movesAt(played.toFen).length) {
-            visit(played.toFen, q, [...path, played]); // transposes back into the repertoire
-            continue;
-          }
+        if (!node.stats) missing.set(fen, p);
+        break;
+      case 'mine':
+        for (const e of node.edges) flow(e, p * e.share);
+        break;
+      case 'stats': {
+        used.push(fen);
+        for (const e of node.edges) flow(e, p * e.share);
+        for (const h of node.holes) {
+          const q = p * h.share;
           lost += q;
           stop(q, 'hole');
-          if (q >= cutoff) addGap({ kind: 'missing-reply', fen, move: { uci: em.uci, san: em.san }, prob: q, path });
+          if (q >= cutoff) gaps.push({ kind: 'missing-reply', fen, move: h.move, prob: q, path: pathTo(fen) });
         }
-        // Rare moves beyond the ones listed by the explorer: unprepared, too small to list.
-        const rest = Math.max(0, p - seen);
-        lost += rest;
-        stop(rest, 'hole');
+        lost += p * node.rest;
+        stop(p * node.rest, 'hole');
+        break;
       }
     }
-    onPath.delete(fen);
-  };
-  visit(root, 1, []);
+  }
 
   return {
-    gaps: [...gaps.values()].sort((a, b) => b.prob - a.prob),
+    gaps: gaps.sort((a, b) => b.prob - a.prob),
     depth: plies,
     lost,
     ends,
@@ -187,7 +267,7 @@ export function findGaps(
     belowCutoff,
     reached,
     missingStats: [...missing].map(([fen, prob]) => ({ fen, prob })).sort((a, b) => b.prob - a.prob),
-    usedStats: [...used],
+    usedStats: used,
     truncated,
   };
 }

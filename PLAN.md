@@ -12,6 +12,7 @@ A web app to build and learn chess opening repertoires. It runs on the device, w
 | Stack | TypeScript monorepo (pnpm): React + Vite + chessground / SQLite WASM (Drizzle) |
 | Chess logic | `chessops` in a shared `packages/core` |
 | License | GPL-3.0 is acceptable (chessground, chessops) |
+| Lichess studies | A repertoire maps to a study, a chapter to a chapter (ids kept). Update from Lichess (merge, preview) and push to Lichess on demand (POST …/{chapterId}/moves, import-pgn for new chapters, new private study), scopes study:read study:write |
 | Statistics | Always the **Lichess** explorer, clearly labelled "Lichess players rated X–Y". A slider picks the range, defaulting to the buckets around the user's Lichess rating. No automatic Chess.com→Lichess conversion: users know the gap and adjust the slider. Speed selector: blitz, rapid, or both |
 | Deployment | No server (since 2026-11-25): GitHub Pages and the mobile apps, SQLite (WASM) on the device |
 
