@@ -8,6 +8,7 @@ import { InstallPrompt } from './components/InstallPrompt';
 import { useTrainingSummary } from './useTrainingSummary';
 import type { Me } from './api';
 import { Lacunes } from './pages/Lacunes';
+import { Library, LibraryOpeningPage } from './pages/Library';
 import { Explorer } from './pages/Explorer';
 import { Games, useGamesReport } from './pages/Games';
 import { LichessCallback } from './pages/LichessCallback';
@@ -20,9 +21,13 @@ import { Training } from './pages/Training';
 import { t } from './i18n';
 import { Button, Icon, Menu, plural, type IconName } from './ui';
 
-/** The five sections: build, learn, the gaps (games and training), explore, and what the games show. */
-const SECTIONS: { to: string; label: string; icon: IconName; active: (path: string) => boolean }[] = [
+/**
+ * The six sections: build, discover openings (library), learn, the gaps (games and training), explore,
+ * and what the games show. `short`: the label in the phone tab bar, when the full one is too long.
+ */
+const SECTIONS: { to: string; label: string; short?: string; icon: IconName; active: (path: string) => boolean }[] = [
   { to: '/repertoires', label: t('Répertoires', 'Repertoires'), icon: 'book', active: (p) => p.startsWith('/repertoires') || (p.startsWith('/r/') && !p.endsWith('/train')) },
+  { to: '/library', label: t('Bibliothèque', 'Library'), short: t('Biblio', 'Library'), icon: 'library', active: (p) => p.startsWith('/library') },
   { to: '/train', label: t('Entraîner', 'Train'), icon: 'target', active: (p) => p.endsWith('/train') },
   { to: '/gaps', label: t('Lacunes', 'Gaps'), icon: 'level', active: (p) => p.startsWith('/gaps') },
   { to: '/explorer', label: t('Explorer', 'Explore'), icon: 'compass', active: (p) => p.startsWith('/explorer') },
@@ -151,6 +156,8 @@ export function App() {
           <Route path="/repertoires/new" element={<NewRepertoire me={me.data} />} />
           <Route path="/r/:id" element={<RepertoireEditor me={me.data} />} />
           <Route path="/r/:id/train" element={<Training me={me.data} />} />
+          <Route path="/library" element={<Library />} />
+          <Route path="/library/:slug" element={<LibraryOpeningPage me={me.data} />} />
           <Route path="/train" element={<Training me={me.data} />} />
           <Route path="/explorer" element={<Explorer me={me.data} />} />
           <Route path="/gaps" element={<Lacunes />} />
@@ -174,7 +181,7 @@ export function App() {
         {SECTIONS.map((s) => (
           <Link key={s.to} to={s.to} className={s.active(pathname) ? 'active' : ''}>
             <Icon name={s.icon} size={22} />
-            {s.label}
+            {s.short ?? s.label}
             {badge(s.to)}
           </Link>
         ))}

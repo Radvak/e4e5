@@ -100,7 +100,7 @@ button.link:hover { background: var(--surface-3); }
 .page { width: 100%; max-width: 1180px; margin: 0 auto; padding: 16px var(--page-pad) calc(var(--tabbar-h) + 28px + env(safe-area-inset-bottom)); flex: 1; }
 .page.narrow { max-width: 760px; }
 .tabbar {
-  position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; display: grid; grid-template-columns: repeat(5, 1fr);
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; display: grid; grid-template-columns: repeat(6, 1fr);
   height: calc(var(--tabbar-h) + env(safe-area-inset-bottom)); padding-bottom: env(safe-area-inset-bottom);
   background: rgba(31, 29, 26, 0.96); backdrop-filter: blur(8px); border-top: 1px solid var(--border);
 }
@@ -920,3 +920,31 @@ table.explorer tr.move-detail table.games { font-size: 0.85rem; }
 .sync-list .check { align-items: baseline; flex-wrap: wrap; }
 .sync-name { font-weight: 600; }
 .sync-loss { color: #e0a96d; }
+
+/* --- Library (Bibliothèque): openings explained ---------------------------------------------- */
+.library-filters { margin-bottom: 12px; }
+.library-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
+@media (min-width: 640px) { .library-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1000px) { .library-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.library-card { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 12px; align-items: start; color: var(--text); padding: 12px; }
+.library-card:hover { text-decoration: none; border-color: var(--border-strong); background: var(--surface-2); }
+.library-card .mini-board.library-thumb { width: 112px; height: 112px; pointer-events: none; }
+.library-card-title { font-weight: 700; display: flex; align-items: center; gap: 6px; }
+.library-tagline { margin: 6px 0 8px; color: var(--text-2); font-size: 0.9rem; }
+.badge.difficulty-1 { background: var(--accent-soft); color: var(--accent-hover); }
+.badge.difficulty-3 { background: var(--danger-soft); color: var(--danger); }
+.badge.trap { background: var(--danger-soft); color: var(--danger); margin-left: 4px; }
+.library-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: -6px 0 14px; }
+.library-actions .spacer { flex: 1; }
+.library-level { margin-top: 12px; padding: 0 var(--page-pad); }
+.library-level h3 { margin: 0 0 6px; font-size: 1rem; }
+.library-note { margin: 10px 0 0; padding: 8px 10px; border-left: 3px solid var(--accent); background: var(--surface-2); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+.library-lines { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.library-lines li { min-width: 0; }
+.library-line-pick { width: 100%; min-width: 0; white-space: normal; overflow-wrap: anywhere; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; padding: 8px 10px; border-radius: var(--radius-sm); border: 1px solid transparent; background: none; color: var(--text); cursor: pointer; }
+.library-line-pick:hover { background: var(--surface-2); }
+.library-line-pick.on { border-color: var(--accent); background: var(--accent-soft); }
+.library-line-name { font-weight: 600; }
+.library-text p { margin: 0 0 12px; }
+.library-text ul { margin: 0 0 12px; padding-left: 20px; display: grid; gap: 6px; }
+.library-sources { margin-top: 4px; }

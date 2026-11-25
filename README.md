@@ -11,6 +11,10 @@ data stays on the device.
 - Lichess studies both ways (official API, with your Lichess account): update a repertoire from
   its study, chapter by chapter (your own additions kept), and push it to its study (created,
   private, if it has none).
+- Library ("Bibliothèque"): well-known openings explained (summary, key ideas, main lines and traps
+  on the board with a note per move, the moves played at your level), and "S'entraîner sur cette
+  ouverture" makes a repertoire of one (a chapter per line) and starts training it. The content is
+  in `apps/web/src/library/openings.ts`.
 - Training: spaced repetition (FSRS) on the positions of your repertoires ("Réviser"), and
   "Se tester" where the opponent plays the replies Lichess players of your level play.
 - Gap finder ("Lacunes"): the frequent opponent moves your repertoires do not answer, and how deep
