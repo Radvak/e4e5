@@ -17,8 +17,9 @@ A web app to build and learn chess opening repertoires. It runs on the device, w
 
 ## Data model
 
-The repertoire is a **graph of positions** (FEN without move counters) linked by moves, so
-transpositions merge. Any position may have several moves, including for the user's side
+A repertoire (one colour, like a Lichess study) has **chapters**; each chapter is a **graph of
+positions** (FEN without move counters) linked by moves, so transpositions merge, starting from
+the initial position or from its own FEN. One chapter maps to one Lichess chapter. Any position may have several moves, including for the user's side
 (several prepared answers are fine; training accepts any of them).
 
 Position statistics live in `position_stats`: one row per (position, speeds, rating buckets),
@@ -27,8 +28,10 @@ shared by all users. It grows with every live Lichess request and with imported 
 previous explorer cache: 2,578 positions, blitz+rapid+classical, 1600–1999. When live data cannot be
 fetched (no token, rate limit, network), the closest stored combination is shown, labelled as such.
 
-Tables: `users` (login + password hash, Lichess id/token/ratings, Chess.com username/ratings), `sessions`, `repertoires` (name, color),
-`rep_moves` (from/to FEN, uci, san, comment, nags, isMain, source), `position_stats` and `seed_imports`.
+Tables: `users` (Lichess id/token/ratings, Chess.com username/ratings), `repertoires` (name, color,
+Lichess study id), `chapters` (repertoire, name, order, start FEN, active, Lichess chapter id),
+`rep_moves` (chapter, from/to FEN, uci, san, comment, nags, isMain, paused, source), `move_cards`,
+`review_log`, `games`, `position_stats`.
 
 Planned: `review_cards` (FSRS state per user move), `game_syncs`, `inbox_items`.
 

@@ -14,9 +14,10 @@ import {
   type GapCandidate,
   type PlayedMove,
 } from '@e4e5/core';
-import { eq, inArray } from 'drizzle-orm';
+import { inArray } from 'drizzle-orm';
 import type { Db } from './db.js';
-import { games, graphColumns, repertoires, repMoves } from './schema.js';
+import { userChapters } from './repertoires.js';
+import { games, graphColumns, repMoves } from './schema.js';
 
 export interface RepInfo {
   id: string;
@@ -28,12 +29,13 @@ export interface RepInfo {
   gap: GapCandidate<string>;
 }
 
+/** The user's chapters, each analysed as the repertoires were before chapters. */
 export async function loadRepertoires(db: Db, userId: string): Promise<RepInfo[]> {
-  const reps = await db.select().from(repertoires).where(eq(repertoires.userId, userId));
+  const reps = await userChapters(db, userId);
   if (!reps.length) return [];
-  const moves = await db.select(graphColumns).from(repMoves).where(inArray(repMoves.repertoireId, reps.map((r) => r.id)));
+  const moves = await db.select(graphColumns).from(repMoves).where(inArray(repMoves.chapterId, reps.map((r) => r.id)));
   return reps.map((r) => {
-    const rep = new Repertoire(r.color, moves.filter((m) => m.repertoireId === r.id));
+    const rep = new Repertoire(r.color, moves.filter((m) => m.chapterId === r.id));
     return { id: r.id, name: r.name, color: r.color, active: r.active, rep, gap: gapCandidate(r.id, rep) };
   });
 }

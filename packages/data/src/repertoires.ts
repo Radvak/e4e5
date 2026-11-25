@@ -1,6 +1,8 @@
 /**
- * Repertoires and their moves, for one user. Shared by the server (routes/repertoires.ts) and the
- * app running without a server: same queries, same rules.
+ * Repertoires, their chapters and the moves of each chapter, for one user.
+ *
+ * A repertoire has a colour and chapters (like a Lichess study); each chapter is its own graph of
+ * moves, starting from the initial position or from its `startFen`.
  */
 import {
   fenKey,
@@ -10,7 +12,6 @@ import {
   positionFromFen,
   START_FEN,
   Repertoire,
-  repertoireToPgn,
   trunkOf,
   type Color,
   type RepMove,
@@ -18,16 +19,27 @@ import {
 import { and, asc, eq, inArray, ne, or, sql } from 'drizzle-orm';
 import { DataError, newId, type Db } from './db.js';
 import { planSync } from './repertoireSync.js';
-import { repertoires, repMoves, type RepMoveRow } from './schema.js';
+import { chapters, repertoires, repMoves, type RepMoveRow } from './schema.js';
 
 export type RepertoireRow = typeof repertoires.$inferSelect;
+export type ChapterRow = typeof chapters.$inferSelect;
+/** A chapter with the colour of its repertoire. */
+export type OwnChapter = ChapterRow & { color: Color };
 
 export interface RepertoirePatch {
   name?: string;
+  lichessStudyId?: string | null;
+}
+
+export interface ChapterPatch {
+  name?: string;
   /** false: paused (left out of "train all" and of the games analysis). */
   active?: boolean;
-  /** Set by the sync tool to adopt an existing repertoire (keeps its progress). */
-  sourceKey?: string;
+  /** Set by a sync tool to adopt an existing chapter (keeps its progress). */
+  sourceKey?: string | null;
+  lichessChapterId?: string | null;
+  /** Moves the chapter to another repertoire of the same colour (at its end). */
+  repertoireId?: string;
 }
 
 export interface MovePatch {
@@ -40,6 +52,9 @@ export interface MovePatch {
 /** SQLite's limit of bound parameters: rows are written in batches. */
 const BATCH = 500;
 
+/** Where the lines of a chapter start (fenKey). */
+export const chapterRoot = (c: { startFen: string | null }): string => (c.startFen ? fenKey(positionFromFen(c.startFen)) : START_FEN);
+
 /** The repertoire if it belongs to the user, else a 404. */
 export async function ownRepertoire(db: Db, userId: string, id: string): Promise<RepertoireRow> {
   const [rep] = await db
@@ -50,52 +65,148 @@ export async function ownRepertoire(db: Db, userId: string, id: string): Promise
   return rep;
 }
 
-export async function loadMoves(db: Db, repertoireId: string): Promise<RepMoveRow[]> {
-  return db.select().from(repMoves).where(eq(repMoves.repertoireId, repertoireId)).orderBy(asc(repMoves.id));
+const chapterColumns = {
+  id: chapters.id,
+  repertoireId: chapters.repertoireId,
+  userId: chapters.userId,
+  name: chapters.name,
+  position: chapters.position,
+  startFen: chapters.startFen,
+  active: chapters.active,
+  sourceKey: chapters.sourceKey,
+  lichessChapterId: chapters.lichessChapterId,
+  createdAt: chapters.createdAt,
+  color: repertoires.color,
+};
+
+/** The chapter (with its repertoire's colour) if it belongs to the user, else a 404. */
+export async function ownChapter(db: Db, userId: string, id: string): Promise<OwnChapter> {
+  const [chapter] = await db
+    .select(chapterColumns)
+    .from(chapters)
+    .innerJoin(repertoires, eq(chapters.repertoireId, repertoires.id))
+    .where(and(eq(chapters.id, id), eq(chapters.userId, userId)));
+  if (!chapter) throw new DataError(404, 'Chapitre introuvable');
+  return chapter;
 }
 
-/** Deletes moves no longer reachable from the initial position. */
-async function pruneOrphans(db: Db, repertoireId: string, color: Color): Promise<number> {
-  const rows = await loadMoves(db, repertoireId);
-  const orphans = new Repertoire(color, rows).unreachableMoves() as RepMoveRow[];
-  const ids = orphans.map((m) => m.id);
-  for (let i = 0; i < ids.length; i += BATCH) {
-    await db.delete(repMoves).where(inArray(repMoves.id, ids.slice(i, i + BATCH)));
+/** The user's chapters with their repertoire's colour and name, in the order of their repertoires. */
+export async function userChapters(db: Db, userId: string) {
+  return db
+    .select({ ...chapterColumns, repertoireName: repertoires.name })
+    .from(chapters)
+    .innerJoin(repertoires, eq(chapters.repertoireId, repertoires.id))
+    .where(eq(chapters.userId, userId))
+    .orderBy(asc(repertoires.createdAt), asc(chapters.position), asc(chapters.createdAt));
+}
+
+export async function loadMoves(db: Db, chapterId: string): Promise<RepMoveRow[]> {
+  return db.select().from(repMoves).where(eq(repMoves.chapterId, chapterId)).orderBy(asc(repMoves.id));
+}
+
+async function deleteMoves(db: Db, ids: number[]) {
+  for (let i = 0; i < ids.length; i += BATCH) await db.delete(repMoves).where(inArray(repMoves.id, ids.slice(i, i + BATCH)));
+}
+
+/** Deletes the moves of a chapter no longer reachable from its start. */
+async function pruneOrphans(db: Db, chapter: OwnChapter): Promise<number> {
+  const rows = await loadMoves(db, chapter.id);
+  const orphans = new Repertoire(chapter.color, rows).unreachableMoves(chapterRoot(chapter)) as RepMoveRow[];
+  await deleteMoves(db, orphans.map((m) => m.id));
+  return orphans.length;
+}
+
+/** The trunk of some moves (thumbnail: the moves from the start while there is only one). */
+function thumbnail(moves: Parameters<typeof trunkOf>[0], start: string) {
+  const t = trunkOf(moves, start);
+  return { trunkFen: t.fen, trunk: t.sans, branches: t.branches };
+}
+
+/** The moves of the user's chapters needed for the thumbnails, per chapter. */
+async function trunkMoves(db: Db, userId: string) {
+  const moves = await db
+    .select({ chapterId: repMoves.chapterId, fromFen: repMoves.fromFen, toFen: repMoves.toFen, san: repMoves.san, uci: repMoves.uci })
+    .from(repMoves)
+    .innerJoin(chapters, eq(repMoves.chapterId, chapters.id))
+    .where(eq(chapters.userId, userId));
+  const byChapter = new Map<string, typeof moves>();
+  for (const m of moves) {
+    const list = byChapter.get(m.chapterId);
+    if (list) list.push(m);
+    else byChapter.set(m.chapterId, [m]);
   }
-  return ids.length;
+  return byChapter;
 }
 
-/** The user's repertoires, each with its trunk (thumbnail: the moves from the start while there is only one). */
+/** The user's repertoires, each with its chapters in order, and each chapter with its trunk. */
 export async function listRepertoires(db: Db, userId: string) {
   const reps = await db.select().from(repertoires).where(eq(repertoires.userId, userId)).orderBy(asc(repertoires.createdAt));
-  const moves = await db
-    .select({ repertoireId: repMoves.repertoireId, fromFen: repMoves.fromFen, toFen: repMoves.toFen, san: repMoves.san, uci: repMoves.uci })
-    .from(repMoves)
-    .innerJoin(repertoires, eq(repMoves.repertoireId, repertoires.id))
-    .where(eq(repertoires.userId, userId));
-  const byRep = new Map<string, typeof moves>();
-  for (const m of moves) {
-    const list = byRep.get(m.repertoireId);
-    if (list) list.push(m);
-    else byRep.set(m.repertoireId, [m]);
-  }
-  return reps.map((r) => {
-    // The first moves of the variations, drawn as arrows.
-    const t = trunkOf(byRep.get(r.id) ?? []);
-    return { ...r, trunkFen: t.fen, trunk: t.sans, branches: t.branches };
-  });
+  const list = await userChapters(db, userId);
+  const moves = await trunkMoves(db, userId);
+  return reps.map((r) => ({
+    ...r,
+    chapters: list
+      .filter((c) => c.repertoireId === r.id)
+      .map(({ repertoireName: _, ...c }) => ({ ...c, ...thumbnail(moves.get(c.id) ?? [], chapterRoot(c)) })),
+  }));
 }
 
-export async function createRepertoire(db: Db, userId: string, body: { name: string; color: Color; sourceKey?: string }) {
-  const row = { id: newId(), userId, ...body };
+/** The user's chapters, with their repertoire (name, colour) and their trunk. */
+export async function listChapters(db: Db, userId: string) {
+  const list = await userChapters(db, userId);
+  const moves = await trunkMoves(db, userId);
+  return list.map((c) => ({ ...c, ...thumbnail(moves.get(c.id) ?? [], chapterRoot(c)) }));
+}
+
+export async function createRepertoire(db: Db, userId: string, body: { name: string; color: Color; lichessStudyId?: string | null }) {
+  const row = { id: newId(), userId, lichessStudyId: null, ...body, createdAt: new Date() };
   await db.insert(repertoires).values(row);
   return row;
 }
 
-/** A repertoire with its moves: only what the web app uses, without empty fields (a big repertoire is several MB otherwise). */
-export async function getRepertoire(db: Db, userId: string, id: string) {
-  const rep = await ownRepertoire(db, userId, id);
-  const moves = (await loadMoves(db, rep.id)).map((m) => ({
+/** A new chapter, at the end of its repertoire. */
+export async function createChapter(
+  db: Db,
+  userId: string,
+  repertoireId: string,
+  body: { name: string; startFen?: string | null; sourceKey?: string | null; lichessChapterId?: string | null },
+): Promise<OwnChapter> {
+  const rep = await ownRepertoire(db, userId, repertoireId);
+  if (body.startFen) {
+    try {
+      positionFromFen(body.startFen);
+    } catch {
+      throw new DataError(400, 'FEN invalide');
+    }
+  }
+  const row = {
+    id: newId(),
+    repertoireId: rep.id,
+    userId,
+    name: body.name,
+    position: await nextPosition(db, rep.id),
+    startFen: body.startFen ?? null,
+    active: true,
+    sourceKey: body.sourceKey ?? null,
+    lichessChapterId: body.lichessChapterId ?? null,
+    createdAt: new Date(),
+  };
+  await db.insert(chapters).values(row);
+  return { ...row, color: rep.color };
+}
+
+async function nextPosition(db: Db, repertoireId: string): Promise<number> {
+  const [last] = await db
+    .select({ n: sql<number | null>`max(${chapters.position})` })
+    .from(chapters)
+    .where(eq(chapters.repertoireId, repertoireId));
+  return last?.n === null || last?.n === undefined ? 0 : Number(last.n) + 1;
+}
+
+/** A chapter with its moves: only what the web app uses, without empty fields (a big chapter is several MB otherwise). */
+export async function getChapter(db: Db, userId: string, id: string) {
+  const chapter = await ownChapter(db, userId, id);
+  const moves = (await loadMoves(db, chapter.id)).map((m) => ({
     id: m.id,
     fromFen: m.fromFen,
     toFen: m.toFen,
@@ -107,7 +218,7 @@ export async function getRepertoire(db: Db, userId: string, id: string) {
     ...(m.nags?.length ? { nags: m.nags } : {}),
     ...(m.paused ? { paused: true } : {}),
   }));
-  return { ...rep, moves };
+  return { ...chapter, moves };
 }
 
 export async function updateRepertoire(db: Db, userId: string, id: string, patch: RepertoirePatch) {
@@ -116,16 +227,51 @@ export async function updateRepertoire(db: Db, userId: string, id: string, patch
   return { ...rep, ...patch };
 }
 
+export async function updateChapter(db: Db, userId: string, id: string, patch: ChapterPatch): Promise<OwnChapter> {
+  const chapter = await ownChapter(db, userId, id);
+  const { repertoireId, ...rest } = patch;
+  const set: Partial<ChapterRow> = { ...rest };
+  if (repertoireId !== undefined && repertoireId !== chapter.repertoireId) {
+    const target = await ownRepertoire(db, userId, repertoireId);
+    if (target.color !== chapter.color) throw new DataError(400, 'Le répertoire n’a pas la même couleur que le chapitre');
+    set.repertoireId = target.id;
+    set.position = await nextPosition(db, target.id);
+  }
+  if (Object.keys(set).length) await db.update(chapters).set(set).where(eq(chapters.id, chapter.id));
+  return { ...chapter, ...set };
+}
+
+/** Puts the chapters of a repertoire in this order (every chapter of the repertoire, once). */
+export async function reorderChapters(db: Db, userId: string, repertoireId: string, ids: string[]) {
+  const rep = await ownRepertoire(db, userId, repertoireId);
+  const have = await db.select({ id: chapters.id }).from(chapters).where(eq(chapters.repertoireId, rep.id));
+  const same = have.length === ids.length && new Set(ids).size === ids.length && have.every((c) => ids.includes(c.id));
+  if (!same) throw new DataError(400, 'Ordre des chapitres incomplet');
+  for (const [position, id] of ids.entries()) await db.update(chapters).set({ position }).where(eq(chapters.id, id));
+  return { ok: true as const };
+}
+
+/** Deletes a repertoire with its chapters and their moves. */
 export async function deleteRepertoire(db: Db, userId: string, id: string) {
   const rep = await ownRepertoire(db, userId, id);
-  await db.delete(repMoves).where(eq(repMoves.repertoireId, rep.id));
+  const own = await db.select({ id: chapters.id }).from(chapters).where(eq(chapters.repertoireId, rep.id));
+  for (const c of own) await db.delete(repMoves).where(eq(repMoves.chapterId, c.id));
+  await db.delete(chapters).where(eq(chapters.repertoireId, rep.id));
   await db.delete(repertoires).where(eq(repertoires.id, rep.id));
   return { ok: true as const };
 }
 
-/** Adds one move (validated and normalised). */
-export async function addMove(db: Db, userId: string, id: string, fromFen: string, uci: string) {
-  const rep = await ownRepertoire(db, userId, id);
+/** Deletes a chapter and its moves (its repertoire stays, even without chapters). */
+export async function deleteChapter(db: Db, userId: string, id: string) {
+  const chapter = await ownChapter(db, userId, id);
+  await db.delete(repMoves).where(eq(repMoves.chapterId, chapter.id));
+  await db.delete(chapters).where(eq(chapters.id, chapter.id));
+  return { ok: true as const };
+}
+
+/** Adds one move to a chapter (validated and normalised). */
+export async function addMove(db: Db, userId: string, chapterId: string, fromFen: string, uci: string) {
+  const chapter = await ownChapter(db, userId, chapterId);
   let played;
   try {
     played = playUci(fromFen, uci);
@@ -136,52 +282,52 @@ export async function addMove(db: Db, userId: string, id: string, fromFen: strin
   const siblings = await db
     .select({ id: repMoves.id })
     .from(repMoves)
-    .where(and(eq(repMoves.repertoireId, rep.id), eq(repMoves.fromFen, played.fromFen)));
+    .where(and(eq(repMoves.chapterId, chapter.id), eq(repMoves.fromFen, played.fromFen)));
   const [row] = await db
     .insert(repMoves)
-    .values({ repertoireId: rep.id, ...played, isMain: siblings.length === 0, source: 'manual' })
+    .values({ chapterId: chapter.id, ...played, isMain: siblings.length === 0, source: 'manual' })
     .onConflictDoNothing()
     .returning();
   if (row) return { row, created: true };
   const [existing] = await db
     .select()
     .from(repMoves)
-    .where(and(eq(repMoves.repertoireId, rep.id), eq(repMoves.fromFen, played.fromFen), eq(repMoves.uci, played.uci)));
+    .where(and(eq(repMoves.chapterId, chapter.id), eq(repMoves.fromFen, played.fromFen), eq(repMoves.uci, played.uci)));
   return { row: existing!, created: false };
 }
 
 /**
- * Saves a variation: every move of the line (from the initial position) that is not in the
- * repertoire yet is added. A new move is the main line only where the position had no move.
+ * Saves a variation: every move of the line (from the chapter's start) that is not in the
+ * chapter yet is added. A new move is the main line only where the position had no move.
  */
-export async function saveLine(db: Db, userId: string, id: string, ucis: string[]) {
-  const rep = await ownRepertoire(db, userId, id);
-  const pos = positionFromFen(START_FEN);
+export async function saveLine(db: Db, userId: string, chapterId: string, ucis: string[]) {
+  const chapter = await ownChapter(db, userId, chapterId);
+  const pos = positionFromFen(chapter.startFen ?? START_FEN);
   const played = [];
   for (const uci of ucis) {
     const move = playUciOn(pos, uci);
     if (!move) throw new DataError(400, `Coup illégal ${uci} au demi-coup ${played.length + 1}`);
     played.push(move);
   }
-  const graph = new Repertoire(rep.color, await loadMoves(db, rep.id));
+  const graph = new Repertoire(chapter.color, await loadMoves(db, chapter.id));
   const rows = [];
   for (const m of played) {
     if (graph.has(m.fromFen, m.uci)) continue;
     const isMain = graph.movesAt(m.fromFen).length === 0;
     graph.add(m);
-    rows.push({ ...m, repertoireId: rep.id, isMain, source: 'manual' as const });
+    rows.push({ ...m, chapterId: chapter.id, isMain, source: 'manual' as const });
   }
   if (rows.length) await db.insert(repMoves).values(rows).onConflictDoNothing();
   return { added: rows.length };
 }
 
-export async function updateMove(db: Db, userId: string, id: string, moveId: number, patch: MovePatch) {
-  const rep = await ownRepertoire(db, userId, id);
+export async function updateMove(db: Db, userId: string, chapterId: string, moveId: number, patch: MovePatch) {
+  const chapter = await ownChapter(db, userId, chapterId);
   patch = { ...patch };
-  const where = and(eq(repMoves.id, moveId), eq(repMoves.repertoireId, rep.id));
+  const where = and(eq(repMoves.id, moveId), eq(repMoves.chapterId, chapter.id));
   const [move] = await db.select().from(repMoves).where(where);
   if (!move) throw new DataError(404, 'Coup introuvable');
-  const samePosition = and(eq(repMoves.repertoireId, rep.id), eq(repMoves.fromFen, move.fromFen));
+  const samePosition = and(eq(repMoves.chapterId, chapter.id), eq(repMoves.fromFen, move.fromFen));
   // The main move is never paused: making a move main resumes it, pausing it hands the main
   // line to the first other move still trained in the position.
   if (patch.isMain) {
@@ -204,22 +350,22 @@ export async function updateMove(db: Db, userId: string, id: string, moveId: num
   return updated!;
 }
 
-/** Deletes a move and everything that is only reachable through it. */
-export async function deleteMove(db: Db, userId: string, id: string, moveId: number) {
-  const rep = await ownRepertoire(db, userId, id);
-  await db.delete(repMoves).where(and(eq(repMoves.id, moveId), eq(repMoves.repertoireId, rep.id)));
-  const pruned = await pruneOrphans(db, rep.id, rep.color);
+/** Deletes a move and everything of the chapter that is only reachable through it. */
+export async function deleteMove(db: Db, userId: string, chapterId: string, moveId: number) {
+  const chapter = await ownChapter(db, userId, chapterId);
+  await db.delete(repMoves).where(and(eq(repMoves.id, moveId), eq(repMoves.chapterId, chapter.id)));
+  const pruned = await pruneOrphans(db, chapter);
   return { ok: true as const, pruned };
 }
 
 /**
- * Sync from a source (a sync tool outside this repository): merges the PGN into the repertoire, keeping the training
- * progress (see planSync). dryRun: only answers what would change. Mode "hard": the repertoire
- * becomes exactly the source (moves added by hand removed too).
+ * Sync of a chapter from a source (a Lichess chapter, a PGN): merges the PGN into the chapter,
+ * keeping the training progress (see planSync). dryRun: only answers what would change. Mode
+ * "hard": the chapter becomes exactly the source (moves added by hand removed too).
  */
-export async function syncRepertoire(db: Db, userId: string, id: string, pgn: string, opts: { dryRun?: boolean; mode?: 'merge' | 'hard' }) {
-  const rep = await ownRepertoire(db, userId, id);
-  const plan = planSync(rep.color, await loadMoves(db, rep.id), pgn, opts.mode ?? 'merge');
+export async function syncChapter(db: Db, userId: string, chapterId: string, pgn: string, opts: { dryRun?: boolean; mode?: 'merge' | 'hard' }) {
+  const chapter = await ownChapter(db, userId, chapterId);
+  const plan = planSync(chapter.color, await loadMoves(db, chapter.id), pgn, opts.mode ?? 'merge', chapterRoot(chapter));
   const summary = {
     added: plan.add.length,
     removed: plan.remove.length,
@@ -228,29 +374,28 @@ export async function syncRepertoire(db: Db, userId: string, id: string, pgn: st
     errors: plan.errors.slice(0, 20),
   };
   if (opts.dryRun) return { ...summary, dryRun: true as const };
-  const ids = plan.remove.map((m) => m.id);
-  for (let i = 0; i < ids.length; i += BATCH) await db.delete(repMoves).where(inArray(repMoves.id, ids.slice(i, i + BATCH)));
+  await deleteMoves(db, plan.remove.map((m) => m.id));
   for (const u of plan.update) {
     const { id: moveId, ...patch } = u;
-    await db.update(repMoves).set(patch).where(and(eq(repMoves.id, moveId), eq(repMoves.repertoireId, rep.id)));
+    await db.update(repMoves).set(patch).where(and(eq(repMoves.id, moveId), eq(repMoves.chapterId, chapter.id)));
   }
   for (let i = 0; i < plan.add.length; i += BATCH) {
     await db
       .insert(repMoves)
-      .values(plan.add.slice(i, i + BATCH).map((m) => ({ ...m, isMain: !!m.isMain, comment: m.comment ?? null, nags: m.nags ?? null, repertoireId: rep.id, source: 'pgn' as const })))
+      .values(plan.add.slice(i, i + BATCH).map((m) => ({ ...m, isMain: !!m.isMain, comment: m.comment ?? null, nags: m.nags ?? null, chapterId: chapter.id, source: 'pgn' as const })))
       .onConflictDoNothing();
   }
-  // Moves left without a way from the initial position (their parent line was removed).
-  const pruned = await pruneOrphans(db, rep.id, rep.color);
+  // Moves left without a way from the chapter's start (their parent line was removed).
+  const pruned = await pruneOrphans(db, chapter);
   return { ...summary, pruned };
 }
 
-/** Merges a PGN (any number of games, variations included) into the repertoire. */
-export async function importPgn(db: Db, userId: string, id: string, pgn: string) {
-  const rep = await ownRepertoire(db, userId, id);
+/** Merges a PGN (any number of games, variations included) into a chapter. */
+export async function importPgn(db: Db, userId: string, chapterId: string, pgn: string) {
+  const chapter = await ownChapter(db, userId, chapterId);
   const parsed = pgnToMoves(pgn);
-  const existing = await loadMoves(db, rep.id);
-  const graph = new Repertoire(rep.color, existing);
+  const existing = await loadMoves(db, chapter.id);
+  const graph = new Repertoire(chapter.color, existing);
   // Positions that already have their moves: existing main-line choices are kept.
   const hadMoves = new Set(existing.map((m) => m.fromFen));
   /** Positions given a main move by this import: one per position, even across games. */
@@ -265,12 +410,12 @@ export async function importPgn(db: Db, userId: string, id: string, pgn: string)
       if (isMain) mainSet.add(m.fromFen);
     } else duplicates++;
   }
-  const reachable = graph.reachable();
+  const reachable = graph.reachable(chapterRoot(chapter));
   const toInsert = fresh.filter((m) => reachable.has(m.fromFen));
   for (let i = 0; i < toInsert.length; i += BATCH) {
     await db
       .insert(repMoves)
-      .values(toInsert.slice(i, i + BATCH).map((m) => ({ ...m, isMain: !!m.isMain, repertoireId: rep.id, source: 'pgn' as const })))
+      .values(toInsert.slice(i, i + BATCH).map((m) => ({ ...m, isMain: !!m.isMain, chapterId: chapter.id, source: 'pgn' as const })))
       .onConflictDoNothing();
   }
   return {
@@ -282,13 +427,6 @@ export async function importPgn(db: Db, userId: string, id: string, pgn: string)
   };
 }
 
-/** The repertoire as PGN, with a file name made from its name. */
-export async function exportPgn(db: Db, userId: string, id: string) {
-  const rep = await ownRepertoire(db, userId, id);
-  const pgn = repertoireToPgn(new Repertoire(rep.color, await loadMoves(db, rep.id)), rep.name);
-  return { pgn, filename: rep.name.replace(/[^\w-]+/g, '_') || 'repertoire' };
-}
-
 /** The position of a FEN as stored in the moves (core fenKey), else a 400. */
 function positionKey(fen: string): string {
   try {
@@ -298,13 +436,15 @@ function positionKey(fen: string): string {
   }
 }
 
-/** Moves prepared in this position in any of the user's repertoires (both colours). */
-export async function repertoireMovesAt(db: Db, userId: string, fen: string) {
+/** Moves prepared in this position in any of the user's chapters (both colours). */
+export async function chapterMovesAt(db: Db, userId: string, fen: string) {
   const key = positionKey(fen);
   return db
     .select({
+      chapterId: chapters.id,
+      chapterName: chapters.name,
       repertoireId: repertoires.id,
-      name: repertoires.name,
+      repertoireName: repertoires.name,
       color: repertoires.color,
       id: repMoves.id,
       paused: repMoves.paused,
@@ -315,27 +455,31 @@ export async function repertoireMovesAt(db: Db, userId: string, fen: string) {
       nags: repMoves.nags,
     })
     .from(repMoves)
-    .innerJoin(repertoires, eq(repMoves.repertoireId, repertoires.id))
-    .where(and(eq(repertoires.userId, userId), eq(repMoves.fromFen, key)));
+    .innerJoin(chapters, eq(repMoves.chapterId, chapters.id))
+    .innerJoin(repertoires, eq(chapters.repertoireId, repertoires.id))
+    .where(and(eq(chapters.userId, userId), eq(repMoves.fromFen, key)));
 }
 
 /**
- * The repertoires containing this position (reached by one of their moves, or with moves from
- * it: the initial position), with the number of their moves from here (0: end of their line).
+ * The chapters containing this position (reached by one of their moves, or with moves from it:
+ * their start), with the number of their moves from here (0: end of their line).
  */
-export async function positionRepertoires(db: Db, userId: string, fen: string) {
+export async function positionChapters(db: Db, userId: string, fen: string) {
   const key = positionKey(fen);
   const rows = await db
     .select({
+      chapterId: chapters.id,
+      chapterName: chapters.name,
       repertoireId: repertoires.id,
-      name: repertoires.name,
+      repertoireName: repertoires.name,
       color: repertoires.color,
       moves: sql<number>`sum(case when ${repMoves.fromFen} = ${key} then 1 else 0 end)`,
     })
     .from(repMoves)
-    .innerJoin(repertoires, eq(repMoves.repertoireId, repertoires.id))
-    .where(and(eq(repertoires.userId, userId), or(eq(repMoves.fromFen, key), eq(repMoves.toFen, key))))
-    .groupBy(repertoires.id)
-    .orderBy(repertoires.name);
+    .innerJoin(chapters, eq(repMoves.chapterId, chapters.id))
+    .innerJoin(repertoires, eq(chapters.repertoireId, repertoires.id))
+    .where(and(eq(chapters.userId, userId), or(eq(repMoves.fromFen, key), eq(repMoves.toFen, key))))
+    .groupBy(chapters.id)
+    .orderBy(repertoires.name, chapters.position);
   return rows.map((r) => ({ ...r, moves: Number(r.moves) }));
 }

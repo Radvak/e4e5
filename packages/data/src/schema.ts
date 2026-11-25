@@ -35,6 +35,10 @@ export const sessions = sqliteTable('sessions', {
   expiresAt: integer('expires_at', { mode: 'timestamp_ms' }).notNull(),
 });
 
+/**
+ * A repertoire: chapters of one colour (like a Lichess study and its chapters). The training, the
+ * gap finder and the games analysis see all the chapters of a colour together.
+ */
 export const repertoires = sqliteTable(
   'repertoires',
   {
@@ -42,23 +46,54 @@ export const repertoires = sqliteTable(
     userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
     color: text('color', { enum: ['white', 'black'] }).notNull(),
+    /** The Lichess study it is synced with (8 characters), if any. */
+    lichessStudyId: text('lichess_study_id'),
+    createdAt: createdAt(),
+  },
+  (t) => [index('repertoires_user').on(t.userId)],
+);
+
+/**
+ * A chapter of a repertoire: its own graph of moves (rep_moves), like a chapter of a Lichess
+ * study. Before chapters existed it was a repertoire: those kept their id, as chapters and as the
+ * repertoire of their single chapter.
+ */
+export const chapters = sqliteTable(
+  'chapters',
+  {
+    id: text('id').primaryKey(),
+    /** Not null for every chapter (the column was added to an existing table, so SQLite has it nullable). */
+    repertoireId: text('repertoire_id').notNull().references(() => repertoires.id, { onDelete: 'cascade' }),
+    /** The repertoire's owner, for the queries per user. */
+    userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    /** Order in the repertoire (0 first). */
+    position: integer('position').notNull().default(0),
+    /** Where its lines start (FEN), null: the initial position. */
+    startFen: text('start_fen'),
     /** false: paused (left out of "train all", the badge and the games analysis). */
     active: integer('active', { mode: 'boolean' }).notNull().default(true),
     /**
-     * Where the repertoire comes from, for a sync tool (outside this repository), e.g.
+     * Where the chapter comes from, for a sync tool (outside this repository), e.g.
      * "alphaechecs:sicilienne:Sozin 6.Fc4": matched on each sync, even after a rename.
      */
     sourceKey: text('source_key'),
+    /** The Lichess chapter it is synced with (8 characters), in its repertoire's study. */
+    lichessChapterId: text('lichess_chapter_id'),
     createdAt: createdAt(),
   },
-  (t) => [index('repertoires_user').on(t.userId), uniqueIndex('repertoires_source').on(t.userId, t.sourceKey)],
+  (t) => [
+    index('chapters_repertoire').on(t.repertoireId),
+    index('chapters_user').on(t.userId),
+    uniqueIndex('chapters_source').on(t.userId, t.sourceKey),
+  ],
 );
 
 export const repMoves = sqliteTable(
   'rep_moves',
   {
     id: integer('id').primaryKey({ autoIncrement: true }),
-    repertoireId: text('repertoire_id').notNull().references(() => repertoires.id, { onDelete: 'cascade' }),
+    chapterId: text('chapter_id').notNull().references(() => chapters.id, { onDelete: 'cascade' }),
     fromFen: text('from_fen').notNull(),
     toFen: text('to_fen').notNull(),
     uci: text('uci').notNull(),
@@ -72,8 +107,8 @@ export const repMoves = sqliteTable(
     createdAt: createdAt(),
   },
   (t) => [
-    uniqueIndex('rep_moves_unique').on(t.repertoireId, t.fromFen, t.uci),
-    index('rep_moves_repertoire').on(t.repertoireId),
+    uniqueIndex('rep_moves_unique').on(t.chapterId, t.fromFen, t.uci),
+    index('rep_moves_chapter').on(t.chapterId),
   ],
 );
 
@@ -105,8 +140,8 @@ export const reviewLog = sqliteTable(
   'review_log',
   {
     id: integer('id').primaryKey({ autoIncrement: true }),
-    /** Repertoire being trained. */
-    repertoireId: text('repertoire_id').notNull().references(() => repertoires.id, { onDelete: 'cascade' }),
+    /** Chapter of the move asked. */
+    chapterId: text('chapter_id').notNull().references(() => chapters.id, { onDelete: 'cascade' }),
     fen: text('fen').notNull(),
     /** Move asked (null for the answers recorded per position, before move cards). */
     uci: text('uci'),
@@ -117,7 +152,7 @@ export const reviewLog = sqliteTable(
     /** Id given by the device to the answer (answers sent again after a lost connection count once). */
     clientId: text('client_id'),
   },
-  (t) => [index('review_log_repertoire_time').on(t.repertoireId, t.reviewedAt), uniqueIndex('review_log_client_id').on(t.clientId)],
+  (t) => [index('review_log_chapter_time').on(t.chapterId, t.reviewedAt), uniqueIndex('review_log_client_id').on(t.clientId)],
 );
 
 /**
@@ -211,7 +246,7 @@ export type User = typeof users.$inferSelect;
 
 /** The columns of a move needed to build a repertoire graph (lighter than the whole row). */
 export const graphColumns = {
-  repertoireId: repMoves.repertoireId,
+  chapterId: repMoves.chapterId,
   fromFen: repMoves.fromFen,
   toFen: repMoves.toFen,
   uci: repMoves.uci,

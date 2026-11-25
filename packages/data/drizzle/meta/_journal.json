@@ -85,6 +85,13 @@
       "when": 1795298482317,
       "tag": "0011_stats_period",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1795564556589,
+      "tag": "0012_chapters",
+      "breakpoints": true
     }
   ]
 }

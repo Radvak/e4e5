@@ -3,7 +3,7 @@ import { createClient } from '@libsql/client';
 import { drizzle } from 'drizzle-orm/libsql';
 import { migrate } from 'drizzle-orm/libsql/migrator';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { createRepertoire, getRepertoire, listCards, makeDue, recordAnswer, reviewNow, saveLine, type Db } from '../src/index.js';
+import { createChapter, createRepertoire, getChapter, listCards, makeDue, recordAnswer, reviewNow, saveLine, type Db } from '../src/index.js';
 import * as schema from '../src/schema.js';
 import { reviewLog, users } from '../src/schema.js';
 
@@ -23,9 +23,9 @@ beforeEach(async () => {
   ]);
   db = d;
   const rep = await createRepertoire(db, 'u1', { name: 'Blancs', color: 'white' });
-  repId = rep.id;
+  repId = (await createChapter(db, 'u1', rep.id, { name: 'Blancs' })).id;
   await saveLine(db, 'u1', repId, ['e2e4', 'e7e5', 'g1f3']);
-  fen = (await getRepertoire(db, 'u1', repId)).moves.find((m) => m.uci === 'g1f3')!.fromFen;
+  fen = (await getChapter(db, 'u1', repId)).moves.find((m) => m.uci === 'g1f3')!.fromFen;
 });
 
 describe('training', () => {
@@ -48,7 +48,7 @@ describe('training', () => {
   });
 
   it('refuses a move not to train, and the repertoire of another user', async () => {
-    const e4 = (await getRepertoire(db, 'u1', repId)).moves.find((m) => m.uci === 'e7e5')!.fromFen;
+    const e4 = (await getChapter(db, 'u1', repId)).moves.find((m) => m.uci === 'e7e5')!.fromFen;
     await expect(recordAnswer(db, 'u1', repId, { fen, uci: 'f1c4', grade: 'good' })).rejects.toMatchObject({ statusCode: 400 });
     await expect(recordAnswer(db, 'u1', repId, { fen: e4, uci: 'e7e5', grade: 'good' })).rejects.toMatchObject({ statusCode: 400 });
     await expect(recordAnswer(db, 'u2', repId, { fen, uci: 'g1f3', grade: 'good' })).rejects.toMatchObject({ statusCode: 404 });

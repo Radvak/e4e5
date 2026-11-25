@@ -10,7 +10,7 @@
 import { recallOf, Repertoire, scheduleReview, type Grade } from '@e4e5/core';
 import { and, eq, inArray } from 'drizzle-orm';
 import { DataError, type Db } from './db.js';
-import { ownRepertoire } from './repertoires.js';
+import { ownChapter } from './repertoires.js';
 import { moveCards, repMoves, reviewLog } from './schema.js';
 
 type CardRow = typeof moveCards.$inferSelect;
@@ -50,13 +50,13 @@ export interface Answer {
   reviewedAt?: number;
 }
 
-/** Records an answer (the move asked in a position of the repertoire) and schedules its next review. */
-export async function recordAnswer(db: Db, userId: string, repertoireId: string, answer: Answer) {
-  const rep = await ownRepertoire(db, userId, repertoireId);
+/** Records an answer (the move asked in a position of the chapter) and schedules its next review. */
+export async function recordAnswer(db: Db, userId: string, chapterId: string, answer: Answer) {
+  const rep = await ownChapter(db, userId, chapterId);
   const { fen, uci, grade, id, reviewedAt } = answer;
-  const graph = new Repertoire(rep.color, await db.select().from(repMoves).where(eq(repMoves.repertoireId, rep.id)));
+  const graph = new Repertoire(rep.color, await db.select().from(repMoves).where(eq(repMoves.chapterId, rep.id)));
   if (!graph.isMyTurn(fen) || !graph.movesAt(fen).some((m) => m.uci === uci)) {
-    throw new DataError(400, 'Pas un coup à entraîner dans ce répertoire');
+    throw new DataError(400, 'Pas un coup à entraîner dans ce chapitre');
   }
   const key = and(eq(moveCards.userId, userId), eq(moveCards.fen, fen), eq(moveCards.uci, uci));
   const [existing] = await db.select().from(moveCards).where(key);
@@ -67,7 +67,7 @@ export async function recordAnswer(db: Db, userId: string, repertoireId: string,
   // Recorded once per id: the same answer recorded again leaves the card as it is.
   const logged = await db
     .insert(reviewLog)
-    .values({ repertoireId: rep.id, fen, uci, grade, isNew: !existing, reviewedAt: at, clientId: id ?? null })
+    .values({ chapterId: rep.id, fen, uci, grade, isNew: !existing, reviewedAt: at, clientId: id ?? null })
     .onConflictDoNothing({ target: reviewLog.clientId })
     .returning({ id: reviewLog.id });
   if (!logged.length && existing) return publicCard(existing, now);
@@ -85,14 +85,14 @@ export async function recordAnswer(db: Db, userId: string, repertoireId: string,
 }
 
 /**
- * Makes my moves of a repertoire in a position due for review now (e.g. after a deviation in a
+ * Makes my moves of a chapter in a position due for review now (e.g. after a deviation in a
  * game). Only the learnt ones: new moves are learnt through the normal review. Returns how many.
  */
-export async function makeDue(db: Db, userId: string, repertoireId: string, fen: string): Promise<number> {
+export async function makeDue(db: Db, userId: string, chapterId: string, fen: string): Promise<number> {
   const moves = await db
     .select({ uci: repMoves.uci })
     .from(repMoves)
-    .where(and(eq(repMoves.repertoireId, repertoireId), eq(repMoves.fromFen, fen)));
+    .where(and(eq(repMoves.chapterId, chapterId), eq(repMoves.fromFen, fen)));
   if (!moves.length) return 0;
   const updated = await db
     .update(moveCards)
@@ -102,10 +102,10 @@ export async function makeDue(db: Db, userId: string, repertoireId: string, fen:
   return updated.length;
 }
 
-/** makeDue for a repertoire of the user, as asked from the app: 404 when nothing was learnt there. */
-export async function reviewNow(db: Db, userId: string, repertoireId: string, fen: string): Promise<{ ok: true }> {
-  await ownRepertoire(db, userId, repertoireId);
-  if (!(await makeDue(db, userId, repertoireId, fen))) {
+/** makeDue for a chapter of the user, as asked from the app: 404 when nothing was learnt there. */
+export async function reviewNow(db: Db, userId: string, chapterId: string, fen: string): Promise<{ ok: true }> {
+  await ownChapter(db, userId, chapterId);
+  if (!(await makeDue(db, userId, chapterId, fen))) {
     throw new DataError(404, 'Cette position n’est pas encore apprise : entraînez-la d’abord');
   }
   return { ok: true };

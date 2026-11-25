@@ -5,10 +5,11 @@ import { drizzle } from 'drizzle-orm/libsql';
 import { migrate } from 'drizzle-orm/libsql/migrator';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  createChapter,
   createRepertoire,
   dismissInbox,
   gamesReport,
-  getRepertoire,
+  getChapter,
   myGameMoves,
   myGamesAt,
   recordAnswer,
@@ -83,9 +84,9 @@ beforeEach(async () => {
   await d.insert(users).values({ id: 'u1', username: 'u1', chesscomUsername: 'Moi', lichessUsername: 'moi' });
   db = d;
   const rep = await createRepertoire(db, 'u1', { name: 'Blancs', color: 'white' });
-  repId = rep.id;
+  repId = (await createChapter(db, 'u1', rep.id, { name: 'Blancs' })).id;
   await saveLine(db, 'u1', repId, ['e2e4', 'e7e5', 'g1f3']);
-  const fen = (await getRepertoire(db, 'u1', repId)).moves.find((m) => m.uci === 'g1f3')!.fromFen;
+  const fen = (await getChapter(db, 'u1', repId)).moves.find((m) => m.uci === 'g1f3')!.fromFen;
   await recordAnswer(db, 'u1', repId, { fen, uci: 'g1f3', grade: 'easy' });
 });
 afterEach(() => vi.unstubAllGlobals());

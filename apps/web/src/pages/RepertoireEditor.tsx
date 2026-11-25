@@ -1,4 +1,4 @@
-import { playUci, Repertoire, START_FEN, totalGames, pathTo, type PlayedMove } from '@e4e5/core';
+import { playUci, Repertoire, repertoireToPgn, START_FEN, totalGames, pathTo, type PlayedMove } from '@e4e5/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { DrawShape } from 'chessground/draw';
 import type { Key } from 'chessground/types';
@@ -344,7 +344,7 @@ export function RepertoireEditor({ me }: { me: Me }) {
           ? [{ label: t('S’entraîner à partir d’ici', 'Train from here'), to: `/r/${id}/train?from=${encodeURIComponent(fen)}` }]
           : []),
         { label: t('Importer un PGN', 'Import a PGN'), onClick: () => setImportOpen(true) },
-        { label: t('Exporter en PGN', 'Export as PGN'), onClick: () => (location.href = `/api/repertoires/${id}/pgn`) },
+        { label: t('Exporter en PGN', 'Export as PGN'), onClick: () => downloadPgn(repertoireToPgn(rep, data.name), data.name) },
         { label: data.active ? t('Mettre en pause', 'Pause') : t('Reprendre l’entraînement', 'Resume training'), onClick: () => toggleActive.mutate() },
         {
           label: t('Renommer', 'Rename'),
@@ -717,4 +717,14 @@ function PgnImport({ repertoireId, onDone, onClose }: { repertoireId: string; on
       )}
     </section>
   );
+}
+
+/** Downloads a PGN file named after the repertoire. */
+function downloadPgn(pgn: string, name: string) {
+  const url = URL.createObjectURL(new Blob([pgn], { type: 'application/x-chess-pgn' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${name.replace(/[^\p{L}\p{N}_-]+/gu, '_') || 'repertoire'}.pgn`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

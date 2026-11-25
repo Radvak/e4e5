@@ -1,5 +1,5 @@
 /**
- * Merge of a source (PGN) into an existing repertoire, for the sync tool: the training progress
+ * Merge of a source (PGN) into an existing chapter: the training progress
  * is kept (review cards are keyed by position, and the positions still there keep theirs).
  *
  * - moves of the source missing from the repertoire are added;
@@ -13,7 +13,7 @@
  * removed (added by hand or from games included), comments, annotations and main moves are the
  * source's. The progress of the positions still there is kept all the same.
  */
-import { pgnToMoves, Repertoire, type Color, type RepMove } from '@e4e5/core';
+import { pgnToMoves, Repertoire, START_FEN, type Color, type RepMove } from '@e4e5/core';
 
 export interface ExistingMove extends RepMove {
   id: number;
@@ -33,12 +33,13 @@ const key = (m: { fromFen: string; uci: string }) => `${m.fromFen} ${m.uci}`;
 
 export type SyncMode = 'merge' | 'hard';
 
-export function planSync(color: Color, existing: ExistingMove[], pgn: string, mode: SyncMode = 'merge'): SyncPlan {
+/** `root`: where the lines start (the chapter's start). */
+export function planSync(color: Color, existing: ExistingMove[], pgn: string, mode: SyncMode = 'merge', root: string = START_FEN): SyncPlan {
   const hard = mode === 'hard';
   const parsed = pgnToMoves(pgn);
   // The source as a graph (duplicates across games merged), only what is reachable.
   const target = new Repertoire(color, parsed.moves);
-  const reachable = target.reachable();
+  const reachable = target.reachable(root);
   const wanted = new Map<string, RepMove>();
   for (const m of target.all()) if (reachable.has(m.fromFen)) wanted.set(key(m), m);
   const unreachable = target.size - wanted.size;
