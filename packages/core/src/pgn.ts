@@ -1,5 +1,6 @@
 /** PGN <-> repertoire moves. */
 import { Chess, type Position } from 'chessops/chess';
+import { makeFen } from 'chessops/fen';
 import {
   ChildNode,
   defaultGame,
@@ -9,7 +10,7 @@ import {
   type Node,
   type PgnNodeData,
 } from 'chessops/pgn';
-import { fenKey, playSanOn, type Color } from './position.js';
+import { fenKey, playSanOn, positionFromFen, type Color } from './position.js';
 import { trunkOf, type Repertoire, type RepMove, type Thumbnail } from './repertoire.js';
 
 export interface PgnImport {
@@ -188,14 +189,19 @@ export function lichessStudyRef(input: string): { studyId: string; chapterId?: s
 }
 
 /**
- * The repertoire as one PGN game with variations. A position reached a second time (by
+ * The repertoire as one PGN game with variations, from the initial position or from `startFen`
+ * (a chapter starting at a position: FEN header). A position reached a second time (by
  * transposition) is not expanded again: the move gets a "Transposition" comment instead.
  */
-export function repertoireToPgn(rep: Repertoire, name = 'Repertoire'): string {
+export function repertoireToPgn(rep: Repertoire, name = 'Repertoire', startFen?: string): string {
   const game = defaultGame<PgnNodeData>();
   game.headers.set('Event', name);
   game.headers.set('Result', '*');
-  const start = Chess.default();
+  const start = startFen ? positionFromFen(startFen) : Chess.default();
+  if (startFen) {
+    game.headers.set('FEN', makeFen(start.toSetup()));
+    game.headers.set('SetUp', '1');
+  }
   const expanded = new Set<string>([fenKey(start)]);
 
   const build = (parent: Node<PgnNodeData>, pos: Position) => {

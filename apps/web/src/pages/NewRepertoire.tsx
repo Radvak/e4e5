@@ -2,7 +2,7 @@ import { lichessStudyRef, pgnToMoves, trunkOf, type ChapterKind, type Color, typ
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { api, type LichessStudy, type Me, type RepertoireSummary } from '../api';
+import { api, type LichessStudy, type Me } from '../api';
 import { lineText } from '../chessText';
 import { MiniBoard } from '../components/MiniBoard';
 import { locale, t } from '../i18n';
@@ -38,7 +38,7 @@ export function NewRepertoire({ me }: { me: Me }) {
   const studyId = params.get('study');
   const chapterId = params.get('chapter') ?? undefined;
 
-  const created = async (rep: RepertoireSummary) => {
+  const created = async (rep: { id: string }) => {
     await qc.invalidateQueries({ queryKey: ['repertoires'] });
     navigate(`/r/${rep.id}`);
   };
@@ -87,7 +87,7 @@ type Source = 'lichess' | 'mine';
  * most liked first, searched from the device (native app only, see lichessSearch.ts), and my own
  * studies (official API, filtered by what is typed). A pasted study link opens it.
  */
-function Catalogue({ me, onOpen, onCreated }: { me: Me; onOpen: (ref: { studyId: string; chapterId?: string }) => void; onCreated: (rep: RepertoireSummary) => void }) {
+function Catalogue({ me, onOpen, onCreated }: { me: Me; onOpen: (ref: { studyId: string; chapterId?: string }) => void; onCreated: (rep: { id: string }) => void }) {
   const [params, setParams] = useSearchParams();
   // Typed into local state (the URL lags behind fast typing), copied to the URL (?q=) to come back to.
   const [input, setInput] = useState(() => params.get('q') ?? '');
@@ -117,7 +117,8 @@ function Catalogue({ me, onOpen, onCreated }: { me: Me; onOpen: (ref: { studyId:
   // All of Lichess when it can be searched (native app), else my studies.
   const sources: Source[] = [...(native ? (['lichess'] as const) : []), ...(mine ? (['mine'] as const) : [])];
   const source: Source | undefined = sources.find((x) => x === params.get('source')) ?? sources[0];
-  const create = useMutation({ mutationFn: () => api.createRepertoire(name, color), onSuccess: onCreated });
+  // One chapter to start with, of the same name.
+  const create = useMutation({ mutationFn: () => api.createRepertoire(name, color, { chapters: [{ name: name.trim() }] }), onSuccess: onCreated });
   const side = color === 'white' ? t('Blancs', 'White') : t('Noirs', 'Black');
 
   return (
@@ -331,7 +332,7 @@ function StudyImport({
   studyId: string;
   chapterId?: string;
   onBack: () => void;
-  onCreated: (rep: RepertoireSummary) => void;
+  onCreated: (rep: { id: string }) => void;
 }) {
   const study = useQuery({ queryKey: ['lichess-study', studyId], queryFn: () => api.lichessStudy(studyId), retry: false, staleTime: 10 * 60_000 });
   const [name, setName] = useState('');
@@ -368,19 +369,13 @@ function StudyImport({
     };
   }, [s, chosen]);
 
+  // One chapter per chapter of the study, keeping its Lichess id (to sync it later).
   const create = useMutation({
-    mutationFn: async () => {
-      const pgn = s!.chapters.filter((_, i) => chosen.has(i)).map((c) => c.pgn).join('\n\n');
-      const rep = await api.createRepertoire(name.trim(), color);
-      try {
-        await api.importPgn(rep.id, pgn);
-      } catch (e) {
-        // No empty repertoire left behind.
-        await api.deleteRepertoire(rep.id).catch(() => undefined);
-        throw e;
-      }
-      return rep;
-    },
+    mutationFn: () =>
+      api.createRepertoire(name.trim(), color, {
+        lichessStudyId: s!.id,
+        chapters: s!.chapters.filter((_, i) => chosen.has(i)).map((c) => ({ name: c.name, pgn: c.pgn, lichessChapterId: c.id ?? null })),
+      }),
     onSuccess: onCreated,
   });
 

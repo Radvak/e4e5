@@ -26,6 +26,33 @@ export function trainingRepertoire(color: Color, moves: Iterable<RepMove>): Repe
   return new Repertoire(color, [...moves].filter((m) => !m.paused));
 }
 
+/**
+ * The moves of several chapters as one graph (a repertoire), given in chapter order. A move in
+ * several chapters comes once: trained unless paused in all of them, its comment and annotations
+ * from the first chapter having some. One main move per position: the main move of the first
+ * chapter with one there, else the first move.
+ */
+export function mergeChapterMoves<M extends RepMove>(moves: Iterable<M>): M[] {
+  const byKey = new Map<string, M>();
+  const mainOf = new Map<string, string>();
+  for (const m of moves) {
+    if (m.isMain && !mainOf.has(m.fromFen)) mainOf.set(m.fromFen, m.uci);
+    const key = `${m.fromFen} ${m.uci}`;
+    const have = byKey.get(key);
+    if (!have) {
+      byKey.set(key, { ...m });
+      continue;
+    }
+    if (!m.paused) have.paused = false;
+    if (!have.comment && m.comment) have.comment = m.comment;
+    if (!have.nags?.length && m.nags?.length) have.nags = m.nags;
+  }
+  const merged = [...byKey.values()];
+  for (const m of merged) if (!mainOf.has(m.fromFen)) mainOf.set(m.fromFen, m.uci);
+  for (const m of merged) m.isMain = mainOf.get(m.fromFen) === m.uci;
+  return merged;
+}
+
 export class Repertoire {
   readonly color: Color;
   private byFen = new Map<string, RepMove[]>();

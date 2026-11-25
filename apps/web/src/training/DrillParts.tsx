@@ -224,6 +224,6 @@ export function DrillActions({
  * with the question (same data as the Explorer's "in your repertoires").
  */
 export function useMyMovesHere(fen: string | undefined, color: Color) {
-  const q = useQuery({ queryKey: ['explorer-reps', fen], queryFn: () => api.repertoireMovesAt(fen!), enabled: !!fen, staleTime: 60_000 });
+  const q = useQuery({ queryKey: ['explorer-reps', fen], queryFn: () => api.chapterMovesAt(fen!), enabled: !!fen, staleTime: 60_000 });
   return (uci: string) => q.data?.find((r) => r.uci === uci && r.color === color && !r.paused);
 }

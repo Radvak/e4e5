@@ -17,13 +17,15 @@ import { useTrainingSources, type Source } from '../training/useTrainingSources'
 type Mode = 'review' | 'play';
 
 /**
- * Training page, for one repertoire (/r/:id/train, optionally ?from=<fen> for a subtree) or all
- * of them (/train). Two modes: spaced-repetition review, and playing lines against the app.
+ * Training page, for one repertoire (/r/:id/train, optionally ?chapter=<id> for one of its
+ * chapters, ?from=<fen> for a subtree) or all of them (/train). Two modes: spaced-repetition review, and playing lines against the app.
  */
 export function Training({ me }: { me: Me }) {
   const { id } = useParams();
   const [params, setParams] = useSearchParams();
   const fromParam = id ? params.get('from') : null;
+  // ?chapter=<id>: only this chapter of the repertoire.
+  const chapter = id ? params.get('chapter') : null;
   const from = useMemo(() => {
     if (!fromParam) return null;
     try {
@@ -51,7 +53,7 @@ export function Training({ me }: { me: Me }) {
     () => (shortening && reach ? { minReach: lineDepth, probs: (color: Color) => reach[color] } : null),
     [shortening, lineDepth, reach],
   );
-  const { sources, loading, review } = useTrainingSources(ids, from, shorten);
+  const { sources, loading, review } = useTrainingSources(ids, from, shorten, chapter);
   // The daily limit of new lines is shared by all repertoires: lines learnt today elsewhere count.
   const summary = useTrainingSummary(me);
   const learntElsewhere = (summary.data ?? []).filter((s) => !ids.includes(s.repertoireId)).reduce((n, s) => n + s.learntTodayLines, 0);
@@ -65,7 +67,7 @@ export function Training({ me }: { me: Me }) {
   }, [reach]);
   const ex = explorerParams(me, speed, range);
   // The session is kept while the page is left (explorer, other mode), per scope.
-  const sessionKey = `${ids.join()}|${from ?? ''}`;
+  const sessionKey = `${ids.join()}|${chapter ?? ''}|${from ?? ''}`;
   // ?mode=test opens "Se tester" (e.g. from the home page when nothing is due), ?mode=review
   // "Réviser" (e.g. an error of Mes parties); else the last mode used.
   const [mode, setModeState] = useState<Mode>(() =>
@@ -93,7 +95,7 @@ export function Training({ me }: { me: Me }) {
   return (
     <div className="training">
       <PageHeader
-        back={id ? `/r/${id}` : undefined}
+        back={id ? `/r/${id}${chapter ? `?chapter=${chapter}` : ''}` : undefined}
         title={t('Entraînement', 'Training')}
         subtitle={
           mode === 'review'
@@ -126,7 +128,7 @@ export function Training({ me }: { me: Me }) {
             <>Seulement les lignes après <strong>{fromPath ? lineText(fromPath) : 'cette position'}</strong>.</>,
             <>Only the lines after <strong>{fromPath ? lineText(fromPath) : 'this position'}</strong>.</>,
           )}{' '}
-          <Button size="sm" variant="ghost" onClick={() => setParams({})}>{t('Tout entraîner', 'Train everything')}</Button>
+          <Button size="sm" variant="ghost" onClick={() => setParams(chapter ? { chapter } : {})}>{t('Tout entraîner', 'Train everything')}</Button>
         </p>
       )}
       {shortening && <ShortenNotice gaps={gaps} colors={[...new Set(sources.map((s) => s.color))]} />}
@@ -156,9 +158,9 @@ export function Training({ me }: { me: Me }) {
         />
       ) : (
         <PlayMode
-          key={`${ids.join()}-${from ?? ''}`}
+          key={`${ids.join()}-${chapter ?? ''}-${from ?? ''}`}
           sources={sources}
-          root={from ?? START_FEN}
+          root={from ?? sources[0]?.root ?? START_FEN}
           speeds={ex.speeds}
           ratings={ex.ratings}
           onReview={onReview}

@@ -92,10 +92,10 @@ export function chooseReply(
 }
 
 /** Shortest line from the initial position to `fen` in the repertoire (main lines preferred). */
-export function pathTo(rep: Repertoire, fen: string): RepMove[] | null {
-  if (fen === START_FEN) return [];
-  const seen = new Set<string>([START_FEN]);
-  let frontier: { fen: string; path: RepMove[] }[] = [{ fen: START_FEN, path: [] }];
+export function pathTo(rep: Repertoire, fen: string, root: string = START_FEN): RepMove[] | null {
+  if (fen === root) return [];
+  const seen = new Set<string>([root]);
+  let frontier: { fen: string; path: RepMove[] }[] = [{ fen: root, path: [] }];
   while (frontier.length) {
     const next: typeof frontier = [];
     for (const node of frontier) {

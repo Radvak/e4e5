@@ -12,7 +12,7 @@
 import { fenKey, positionFromFen, REACH_STEPS, suggestMoves } from '@e4e5/core';
 import {
   chapterMovesAt,
-  createChapter,
+  createChapters,
   createRepertoire,
   DataError,
   deleteChapter,
@@ -21,7 +21,7 @@ import {
   dismissInbox,
   gamesReport,
   gapsAnalysis,
-  getChapter,
+  getRepertoire,
   importPgn,
   getStudy,
   StudyError,
@@ -38,17 +38,18 @@ import {
   startSync,
   syncStatus,
   listCards,
-  listChapters,
   listRepertoires,
+  moveChapters,
   positionChapters,
   recordAnswer,
   reviewNow,
   saveLine,
+  reorderChapters,
   updateChapter,
   updateMove,
   updateRepertoire,
 } from '@e4e5/data';
-import { chapters, users } from '@e4e5/data/schema';
+import { users } from '@e4e5/data/schema';
 import { eq } from 'drizzle-orm';
 import { ApiError, type Api, type Me } from '../api';
 import { LOCAL_USER, localDb } from './db';
@@ -98,12 +99,6 @@ async function withLichessToken(db: LocalDb) {
   return { ...SOURCES, lichessToken: u?.token ?? null };
 }
 
-/** The repertoire has this chapter only. */
-async function aloneInRepertoire(db: LocalDb, repertoireId: string): Promise<boolean> {
-  const n = await db.$count(chapters, eq(chapters.repertoireId, repertoireId));
-  return n === 1;
-}
-
 /** The local user with its accounts. */
 async function localUser(db: LocalDb) {
   const [u] = await db.select().from(users).where(eq(users.id, LOCAL_USER));
@@ -148,38 +143,46 @@ export const localApi = {
       await unlinkLichess(db, LOCAL_USER);
       return { user: await localMe(db) };
     }),
-  // Until the pages show the chapters (step 2 of the chapters work), each chapter is shown as a
-  // repertoire: the methods below take and answer chapters.
-  repertoires: () => run(async (db) => listChapters(db, LOCAL_USER)),
-  createRepertoire: (name, color) =>
+  repertoires: () => run(async (db) => listRepertoires(db, LOCAL_USER)),
+  createRepertoire: (name, color, opts) =>
     run(async (db) => {
-      const rep = await createRepertoire(db, LOCAL_USER, { name: name.trim(), color });
-      return createChapter(db, LOCAL_USER, rep.id, { name: name.trim() });
+      const rep = await createRepertoire(db, LOCAL_USER, { name: name.trim(), color, lichessStudyId: opts?.lichessStudyId ?? null });
+      const chapters = await createChapters(db, LOCAL_USER, rep.id, opts?.chapters ?? []);
+      return { id: rep.id, name: rep.name, color: rep.color, chapters };
     }),
   renameRepertoire: (id, name) =>
     run(async (db) => {
-      const chapter = await updateChapter(db, LOCAL_USER, id, { name: name.trim() });
-      if (await aloneInRepertoire(db, chapter.repertoireId)) await updateRepertoire(db, LOCAL_USER, chapter.repertoireId, { name: name.trim() });
-      return chapter;
+      await updateRepertoire(db, LOCAL_USER, id, { name: name.trim() });
+      return { ok: true };
     }),
-  setRepertoireActive: (id, active) => run(async (db) => updateChapter(db, LOCAL_USER, id, { active })),
-  deleteRepertoire: (id) =>
+  setRepertoireActive: (id, active) =>
     run(async (db) => {
-      const chapter = await getChapter(db, LOCAL_USER, id);
-      if (await aloneInRepertoire(db, chapter.repertoireId)) return deleteRepertoire(db, LOCAL_USER, chapter.repertoireId);
-      return deleteChapter(db, LOCAL_USER, id);
+      const rep = await getRepertoire(db, LOCAL_USER, id);
+      for (const c of rep.chapters) await updateChapter(db, LOCAL_USER, c.id, { active });
+      return { ok: true };
     }),
-  repertoire: (id) => run(async (db) => getChapter(db, LOCAL_USER, id)),
+  deleteRepertoire: (id) => run(async (db) => deleteRepertoire(db, LOCAL_USER, id)),
+  repertoire: (id) => run(async (db) => getRepertoire(db, LOCAL_USER, id)),
+  createChapters: (repertoireId, list) => run(async (db) => createChapters(db, LOCAL_USER, repertoireId, list)),
+  renameChapter: (id, name) =>
+    run(async (db) => {
+      await updateChapter(db, LOCAL_USER, id, { name: name.trim() });
+      return { ok: true };
+    }),
+  setChapterActive: (id, active) =>
+    run(async (db) => {
+      await updateChapter(db, LOCAL_USER, id, { active });
+      return { ok: true };
+    }),
+  moveChapters: (ids, repertoireId) => run(async (db) => moveChapters(db, LOCAL_USER, ids, repertoireId)),
+  reorderChapters: (repertoireId, ids) => run(async (db) => reorderChapters(db, LOCAL_USER, repertoireId, ids)),
+  deleteChapter: (id) => run(async (db) => deleteChapter(db, LOCAL_USER, id)),
   saveLine: (id, ucis) => run(async (db) => saveLine(db, LOCAL_USER, id, ucis)),
   updateMove: (id, moveId, patch) => run(async (db) => updateMove(db, LOCAL_USER, id, moveId, patch)),
   deleteMove: (id, moveId) => run(async (db) => deleteMove(db, LOCAL_USER, id, moveId)),
   importPgn: (id, pgn) => run(async (db) => importPgn(db, LOCAL_USER, id, pgn)),
-  positionRepertoires: (fen) =>
-    run(async (db) => (await positionChapters(db, LOCAL_USER, fen)).map(({ chapterId, chapterName, color, moves }) => ({ repertoireId: chapterId, name: chapterName, color, moves }))),
-  repertoireMovesAt: (fen) =>
-    run(async (db) =>
-      (await chapterMovesAt(db, LOCAL_USER, fen)).map(({ chapterId, chapterName, repertoireId: _, repertoireName: __, ...m }) => ({ ...m, repertoireId: chapterId, name: chapterName })),
-    ),
+  positionChapters: (fen) => run(async (db) => positionChapters(db, LOCAL_USER, fen)),
+  chapterMovesAt: (fen) => run(async (db) => chapterMovesAt(db, LOCAL_USER, fen)),
   cards: () => run(async (db) => listCards(db, LOCAL_USER)),
   review: (id, answer) => run(async (db) => recordAnswer(db, LOCAL_USER, id, answer)),
   reviewNow: (id, fen) => run(async (db) => reviewNow(db, LOCAL_USER, id, fen)),

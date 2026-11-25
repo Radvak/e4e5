@@ -1,4 +1,4 @@
-import { t, translateError } from './i18n';
+import { translateError } from './i18n';
 import type { Color, ExplorerResponse, FsrsCard, Grade, RepertoireSummaryCounts, PgnChapter, RepMove, SuggestedMove } from '@e4e5/core';
 
 export interface StatsMeta {
@@ -43,22 +43,56 @@ export interface Me {
   lichess: { username: string; perfs: Perfs | null } | null;
   chesscom: { username: string; ratings: ChesscomRatings | null } | null;
 }
+/** A chapter of a repertoire: its own moves, like a chapter of a Lichess study. */
+export interface ChapterInfo {
+  id: string;
+  repertoireId: string;
+  name: string;
+  /** Order in the repertoire (0 first). */
+  position: number;
+  /** Where its lines start (FEN), null: the initial position. */
+  startFen: string | null;
+  /** false: paused (left out of the training and the analyses). */
+  active: boolean;
+  lichessChapterId: string | null;
+  createdAt: string;
+}
+/** A chapter in the list of repertoires. */
+export interface ChapterSummary extends ChapterInfo {
+  /** Number of its moves. */
+  moves: number;
+  /** Where its lines part: after the moves of `trunk`. */
+  trunkFen: string;
+  /** Its moves from its start while there is only one (SAN). */
+  trunk: string[];
+  /** The moves played from `trunkFen`: where the variations start (UCI). */
+  branches: string[];
+}
+/** A repertoire: chapters of one colour, trained and analysed together. */
 export interface RepertoireSummary {
   id: string;
   name: string;
   color: Color;
   createdAt: string;
-  /** false: paused. */
+  lichessStudyId: string | null;
+  /** false: paused (every chapter paused). */
   active: boolean;
-  /** Where the lines part: after the moves of `trunk` (only in the list of repertoires). */
+  /** Thumbnail of the whole repertoire (its chapters from the initial position). */
   trunkFen?: string;
-  /** The moves from the start while the repertoire has only one (SAN). */
   trunk?: string[];
-  /** The moves played from `trunkFen`: where the variations start (UCI). */
   branches?: string[];
+  /** In order (only in the list of repertoires). */
+  chapters?: ChapterSummary[];
 }
-export interface StoredMove extends RepMove { id: number; source: string }
-export interface RepertoireDetail extends RepertoireSummary { moves: StoredMove[] }
+export interface StoredMove extends RepMove { id: number; source: string; chapterId: string }
+/** A repertoire with its chapters and the moves of all of them (each with its chapter, in chapter order). */
+export interface RepertoireDetail extends Omit<RepertoireSummary, 'chapters'> { chapters: ChapterInfo[]; moves: StoredMove[] }
+/** A chapter to create (from a PGN: a chapter of a Lichess study; a FEN header makes it start there). */
+export interface NewChapter {
+  name: string;
+  pgn?: string;
+  lichessChapterId?: string | null;
+}
 export type { Grade };
 /** Review state of one of my moves (shared by every repertoire playing it). */
 export interface ReviewCard {
@@ -158,19 +192,24 @@ export interface MyGames {
   maxPly: number;
 }
 /** A repertoire containing a position, and how many of its moves start from it (0: end of its line). */
-export interface PositionRepertoire {
+/** A chapter containing a position, and how many of its moves start from it (0: end of its line). */
+export interface PositionChapter {
+  chapterId: string;
+  chapterName: string;
   repertoireId: string;
-  name: string;
+  repertoireName: string;
   color: Color;
   moves: number;
 }
-export interface RepertoireMoveHere {
+export interface ChapterMoveHere {
+  chapterId: string;
+  chapterName: string;
   repertoireId: string;
-  name: string;
+  repertoireName: string;
   color: Color;
-  /** The move in its repertoire (to make it main, pause it). */
+  /** The move in its chapter (to make it main, pause it). */
   id: number;
-  /** Paused in this repertoire: not trained. */
+  /** Paused in this chapter: not trained. */
   paused: boolean;
   uci: string;
   san: string;
@@ -242,21 +281,42 @@ export interface GamesReport {
   }[];
 }
 
+export interface CreatedChapter {
+  chapter: ChapterInfo;
+  imported: ImportResult | null;
+}
+export interface CreatedRepertoire {
+  id: string;
+  name: string;
+  color: Color;
+  chapters: CreatedChapter[];
+}
+
 /** What the app asks for, answered on this device (local/backend.ts). */
 export interface Api {
   me: () => Promise<Me>;
   updateMe: (patch: { chesscomUsername?: string | null }) => Promise<{ user: Me; warning?: string }>;
   unlinkLichess: () => Promise<{ user: Me }>;
   repertoires: () => Promise<RepertoireSummary[]>;
-  createRepertoire: (name: string, color: Color) => Promise<RepertoireSummary>;
-  renameRepertoire: (id: string, name: string) => Promise<RepertoireSummary>;
-  setRepertoireActive: (id: string, active: boolean) => Promise<RepertoireSummary>;
+  /** A new repertoire with these chapters (none: an empty repertoire). */
+  createRepertoire: (name: string, color: Color, opts?: { chapters?: NewChapter[]; lichessStudyId?: string | null }) => Promise<CreatedRepertoire>;
+  renameRepertoire: (id: string, name: string) => Promise<{ ok: true }>;
+  /** Pauses or resumes every chapter. */
+  setRepertoireActive: (id: string, active: boolean) => Promise<{ ok: true }>;
   deleteRepertoire: (id: string) => Promise<{ ok: true }>;
   repertoire: (id: string) => Promise<RepertoireDetail>;
-  saveLine: (id: string, ucis: string[]) => Promise<{ added: number }>;
-  updateMove: (id: string, moveId: number, patch: { comment?: string | null; nags?: number[] | null; isMain?: boolean; paused?: boolean }) => Promise<StoredMove>;
-  deleteMove: (id: string, moveId: number) => Promise<{ ok: true; pruned: number }>;
-  importPgn: (id: string, pgn: string) => Promise<ImportResult>;
+  /** New chapters at the end of a repertoire (from their PGN, if any). */
+  createChapters: (repertoireId: string, chapters: NewChapter[]) => Promise<CreatedChapter[]>;
+  renameChapter: (id: string, name: string) => Promise<{ ok: true }>;
+  setChapterActive: (id: string, active: boolean) => Promise<{ ok: true }>;
+  /** Moves chapters to another repertoire of their colour (at its end, in this order); the repertoires left empty are deleted. */
+  moveChapters: (ids: string[], repertoireId: string) => Promise<{ ok: true; deleted: string[] }>;
+  reorderChapters: (repertoireId: string, ids: string[]) => Promise<{ ok: true }>;
+  deleteChapter: (id: string) => Promise<{ ok: true }>;
+  saveLine: (chapterId: string, ucis: string[]) => Promise<{ added: number }>;
+  updateMove: (chapterId: string, moveId: number, patch: { comment?: string | null; nags?: number[] | null; isMain?: boolean; paused?: boolean }) => Promise<StoredMove>;
+  deleteMove: (chapterId: string, moveId: number) => Promise<{ ok: true; pruned: number }>;
+  importPgn: (chapterId: string, pgn: string) => Promise<ImportResult>;
   /** The studies of a Lichess player (private ones too for my own account), most recently updated first. */
   lichessStudiesBy: (username: string) => Promise<LichessStudyListItem[]>;
   lichessStudy: (id: string) => Promise<LichessStudy>;
@@ -268,8 +328,8 @@ export interface Api {
   myGameMoves: (id: string) => Promise<{ moves: string[] }>;
   /** Opening of a line (UCI moves, comma separated), null if none is named. */
   opening: (line: string) => Promise<{ eco: string; name: string } | null>;
-  positionRepertoires: (fen: string) => Promise<PositionRepertoire[]>;
-  repertoireMovesAt: (fen: string) => Promise<RepertoireMoveHere[]>;
+  positionChapters: (fen: string) => Promise<PositionChapter[]>;
+  chapterMovesAt: (fen: string) => Promise<ChapterMoveHere[]>;
   syncState: () => Promise<SyncState>;
   startSync: (source: 'chesscom' | 'lichess') => Promise<SyncJob>;
   gamesReport: (days: number, speeds: string[]) => Promise<GamesReport>;

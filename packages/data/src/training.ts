@@ -1,17 +1,16 @@
 /**
  * Training: spaced-repetition reviews (FSRS) of my moves, in the positions where it is my turn.
  * A move card belongs to the user, not to a repertoire: a move learnt once is known everywhere.
- * Shared by the server (routes/training.ts, gamesync.ts) and the app running without a server.
  *
  * The app schedules each answer on the device at once (core fsrs.ts, offline too) and records it
  * here, possibly later: with its own id (an answer recorded twice counts once) and the time it was
  * given, so the same card is computed again.
  */
-import { recallOf, Repertoire, scheduleReview, type Grade } from '@e4e5/core';
-import { and, eq, inArray } from 'drizzle-orm';
+import { recallOf, scheduleReview, turnOf, type Grade } from '@e4e5/core';
+import { and, asc, eq, inArray } from 'drizzle-orm';
 import { DataError, type Db } from './db.js';
-import { ownChapter } from './repertoires.js';
-import { moveCards, repMoves, reviewLog } from './schema.js';
+import { ownRepertoire } from './repertoires.js';
+import { chapters, moveCards, repMoves, reviewLog } from './schema.js';
 
 type CardRow = typeof moveCards.$inferSelect;
 
@@ -50,13 +49,26 @@ export interface Answer {
   reviewedAt?: number;
 }
 
-/** Records an answer (the move asked in a position of the chapter) and schedules its next review. */
-export async function recordAnswer(db: Db, userId: string, chapterId: string, answer: Answer) {
-  const rep = await ownChapter(db, userId, chapterId);
+/** My moves in a position, in the chapters of a repertoire (first chapter first). */
+async function movesInRepertoire(db: Db, repertoireId: string, fen: string) {
+  return db
+    .select({ chapterId: repMoves.chapterId, uci: repMoves.uci })
+    .from(repMoves)
+    .innerJoin(chapters, eq(repMoves.chapterId, chapters.id))
+    .where(and(eq(chapters.repertoireId, repertoireId), eq(repMoves.fromFen, fen)))
+    .orderBy(asc(chapters.position), asc(chapters.createdAt));
+}
+
+/**
+ * Records an answer (the move asked in a position of the repertoire, in any of its chapters) and
+ * schedules its next review. The history keeps the first chapter having the move.
+ */
+export async function recordAnswer(db: Db, userId: string, repertoireId: string, answer: Answer) {
+  const rep = await ownRepertoire(db, userId, repertoireId);
   const { fen, uci, grade, id, reviewedAt } = answer;
-  const graph = new Repertoire(rep.color, await db.select().from(repMoves).where(eq(repMoves.chapterId, rep.id)));
-  if (!graph.isMyTurn(fen) || !graph.movesAt(fen).some((m) => m.uci === uci)) {
-    throw new DataError(400, 'Pas un coup à entraîner dans ce chapitre');
+  const chapter = (await movesInRepertoire(db, rep.id, fen)).find((m) => m.uci === uci)?.chapterId;
+  if (turnOf(fen) !== rep.color || !chapter) {
+    throw new DataError(400, 'Pas un coup à entraîner dans ce répertoire');
   }
   const key = and(eq(moveCards.userId, userId), eq(moveCards.fen, fen), eq(moveCards.uci, uci));
   const [existing] = await db.select().from(moveCards).where(key);
@@ -67,7 +79,7 @@ export async function recordAnswer(db: Db, userId: string, chapterId: string, an
   // Recorded once per id: the same answer recorded again leaves the card as it is.
   const logged = await db
     .insert(reviewLog)
-    .values({ chapterId: rep.id, fen, uci, grade, isNew: !existing, reviewedAt: at, clientId: id ?? null })
+    .values({ chapterId: chapter, fen, uci, grade, isNew: !existing, reviewedAt: at, clientId: id ?? null })
     .onConflictDoNothing({ target: reviewLog.clientId })
     .returning({ id: reviewLog.id });
   if (!logged.length && existing) return publicCard(existing, now);
@@ -85,14 +97,11 @@ export async function recordAnswer(db: Db, userId: string, chapterId: string, an
 }
 
 /**
- * Makes my moves of a chapter in a position due for review now (e.g. after a deviation in a
+ * Makes my moves of a repertoire in a position due for review now (e.g. after a deviation in a
  * game). Only the learnt ones: new moves are learnt through the normal review. Returns how many.
  */
-export async function makeDue(db: Db, userId: string, chapterId: string, fen: string): Promise<number> {
-  const moves = await db
-    .select({ uci: repMoves.uci })
-    .from(repMoves)
-    .where(and(eq(repMoves.chapterId, chapterId), eq(repMoves.fromFen, fen)));
+export async function makeDue(db: Db, userId: string, repertoireId: string, fen: string): Promise<number> {
+  const moves = await movesInRepertoire(db, repertoireId, fen);
   if (!moves.length) return 0;
   const updated = await db
     .update(moveCards)
@@ -102,10 +111,10 @@ export async function makeDue(db: Db, userId: string, chapterId: string, fen: st
   return updated.length;
 }
 
-/** makeDue for a chapter of the user, as asked from the app: 404 when nothing was learnt there. */
-export async function reviewNow(db: Db, userId: string, chapterId: string, fen: string): Promise<{ ok: true }> {
-  await ownChapter(db, userId, chapterId);
-  if (!(await makeDue(db, userId, chapterId, fen))) {
+/** makeDue for a repertoire of the user, as asked from the app: 404 when nothing was learnt there. */
+export async function reviewNow(db: Db, userId: string, repertoireId: string, fen: string): Promise<{ ok: true }> {
+  await ownRepertoire(db, userId, repertoireId);
+  if (!(await makeDue(db, userId, repertoireId, fen))) {
     throw new DataError(404, 'Cette position n’est pas encore apprise : entraînez-la d’abord');
   }
   return { ok: true };

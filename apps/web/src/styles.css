@@ -894,3 +894,25 @@ table.explorer tr.move-detail table.games { font-size: 0.85rem; }
 .stats-files { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 0.9rem; }
 .stats-files td { padding: 6px 4px; border-top: 1px solid var(--border); }
 .stats-files td:last-child { text-align: right; }
+
+/* --- Chapters ----------------------------------------------------------------------------------- */
+/* Editor: the chapters of the repertoire, the open one highlighted. */
+.chapter-bar { margin-top: 0; }
+.chapter-bar-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.chapter-bar-head h3 { margin: 0; }
+.chapter-items { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; max-height: 260px; overflow-y: auto; }
+.chapter-item { display: flex; align-items: center; gap: 4px; border-radius: var(--radius-sm); }
+.chapter-item.on { background: var(--accent-soft); }
+.chapter-item.paused .chapter-title { color: var(--muted); }
+.chapter-pick { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 6px 8px; background: none; border: none; color: var(--text); text-align: left; cursor: pointer; font: inherit; }
+.chapter-pick:hover { background: var(--surface-2); border-radius: var(--radius-sm); }
+.chapter-num { width: 1.6em; flex: none; color: var(--muted); font-size: 0.8rem; text-align: right; }
+.chapter-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chapter-item.on .chapter-title { font-weight: 600; }
+/* List of repertoires: the chapters under a repertoire, boxes to pick them while organising. */
+.rep-chapters { list-style: none; margin: 0; padding: 0 0 0 2px; display: flex; flex-direction: column; gap: 2px; font-size: 0.88rem; max-width: 100%; }
+.rep-chapters li { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rep-chapters li.paused { color: var(--muted); }
+.rep-chapters a { color: var(--text-2); }
+.rep-chapters.organize { gap: 4px; }
+.organize-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 8px 0; position: sticky; top: 8px; z-index: 5; }

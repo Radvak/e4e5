@@ -7,18 +7,21 @@ import { Repertoire, repertoireToPgn } from '@e4e5/core';
 import {
   addMove,
   createChapter,
+  createChapters,
   createRepertoire,
   DataError,
   deleteChapter,
   deleteMove,
   deleteRepertoire,
   getChapter,
+  getRepertoire,
   importPgn,
-  listChapters,
   listRepertoires,
+  moveChapters,
   positionChapters,
   chapterMovesAt,
   reorderChapters,
+  repertoireGraphs,
   saveLine,
   updateChapter,
   updateMove,
@@ -78,8 +81,8 @@ describe('repertoires', () => {
       ['Nf3', true],
       ['Bc4', false],
     ]);
-    const [summary] = await listChapters(db, 'u1');
-    expect(summary!.trunk).toEqual(['e4', 'e5']);
+    const [summary] = await listRepertoires(db, 'u1');
+    expect(summary!.chapters[0]!.trunk).toEqual(['e4', 'e5']);
   });
 
   it('keeps the repertoires of other users out of reach', async () => {
@@ -87,7 +90,6 @@ describe('repertoires', () => {
     await expect(getChapter(db, 'u2', rep.id)).rejects.toMatchObject({ statusCode: 404 });
     await expect(createChapter(db, 'u2', rep.repertoireId, { name: 'Intrus' })).rejects.toMatchObject({ statusCode: 404 });
     expect(await listRepertoires(db, 'u2')).toEqual([]);
-    expect(await listChapters(db, 'u2')).toEqual([]);
   });
 
   it('refuses an illegal move', async () => {
@@ -145,10 +147,10 @@ describe('chapters', () => {
     expect([sozin.position, alapin.position]).toEqual([0, 1]);
     await reorderChapters(db, 'u1', rep.id, [alapin.id, sozin.id]);
     const [listed] = await listRepertoires(db, 'u1');
-    expect(listed).toMatchObject({ name: 'Sicilienne', color: 'black' });
-    expect(listed!.chapters.map((c) => [c.name, c.color, c.trunk])).toEqual([
-      ['Alapin', 'black', ['e4', 'c5', 'c3']],
-      ['Sozin', 'black', []],
+    expect(listed).toMatchObject({ name: 'Sicilienne', color: 'black', active: true });
+    expect(listed!.chapters.map((c) => [c.name, c.moves, c.trunk])).toEqual([
+      ['Alapin', 3, ['e4', 'c5', 'c3']],
+      ['Sozin', 0, []],
     ]);
     await expect(reorderChapters(db, 'u1', rep.id, [alapin.id])).rejects.toMatchObject({ statusCode: 400 });
   });
@@ -160,9 +162,11 @@ describe('chapters', () => {
     const black = await createRepertoire(db, 'u1', { name: 'Noirs', color: 'black' });
     await expect(updateChapter(db, 'u1', scandinave.id, { repertoireId: black.id })).rejects.toMatchObject({ statusCode: 400 });
     expect(await updateChapter(db, 'u1', scandinave.id, { repertoireId: e4.id })).toMatchObject({ repertoireId: e4.id, position: 1 });
-    expect((await listChapters(db, 'u1')).map((c) => [c.repertoireName, c.name])).toEqual([
-      ['1.e4', 'Caro-Kann'],
-      ['1.e4', 'Scandinave'],
+    const reps = await listRepertoires(db, 'u1');
+    expect(reps.map((r) => [r.name, r.chapters.map((c) => c.name)])).toEqual([
+      ['Scandinave', []],
+      ['1.e4', ['Caro-Kann', 'Scandinave']],
+      ['Noirs', []],
     ]);
   });
 
@@ -186,12 +190,66 @@ describe('chapters', () => {
     const advance = await createChapter(db, 'u1', rep.id, { name: 'Avance', startFen });
     await expect(createChapter(db, 'u1', rep.id, { name: 'X', startFen: 'pas une position' })).rejects.toMatchObject({ statusCode: 400 });
     expect(await saveLine(db, 'u1', advance.id, ['e4e5', 'c8f5', 'g1f3'])).toEqual({ added: 3 });
-    expect((await listChapters(db, 'u1'))[0]!.trunk).toEqual(['e5', 'Bf5', 'Nf3']);
+    expect((await listRepertoires(db, 'u1'))[0]!.chapters[0]!.trunk).toEqual(['e5', 'Bf5', 'Nf3']);
     // Deleting 3... Bf5 prunes what follows it, from the chapter's start.
     const bf5 = (await getChapter(db, 'u1', advance.id)).moves.find((m) => m.san === 'Bf5')!;
     expect(await deleteMove(db, 'u1', advance.id, bf5.id)).toEqual({ ok: true, pruned: 1 });
     // A PGN starting there (FEN header) is reachable in this chapter.
     const pgn = `[FEN "${startFen}"]\n[SetUp "1"]\n\n3. Nc3 dxe4 *`;
     expect(await importPgn(db, 'u1', advance.id, pgn)).toMatchObject({ added: 2, unreachable: 0 });
+  });
+
+  it('gives a repertoire with all its chapters, merged into one graph for the analyses', async () => {
+    const rep = await createRepertoire(db, 'u1', { name: 'Sicilienne', color: 'black' });
+    const a = await createChapter(db, 'u1', rep.id, { name: 'Alapin' });
+    const b = await createChapter(db, 'u1', rep.id, { name: 'Ouverte' });
+    await saveLine(db, 'u1', b.id, ['e2e4', 'c7c5', 'g1f3']);
+    await saveLine(db, 'u1', a.id, ['e2e4', 'c7c5', 'c2c3']);
+    const detail = await getRepertoire(db, 'u1', rep.id);
+    expect(detail.chapters.map((c) => c.name)).toEqual(['Alapin', 'Ouverte']);
+    // Moves in chapter order, each with its chapter.
+    expect(detail.moves.map((m) => [m.chapterId === a.id ? 'A' : 'B', m.san])).toEqual([
+      ['A', 'e4'], ['A', 'c5'], ['A', 'c3'], ['B', 'e4'], ['B', 'c5'], ['B', 'Nf3'],
+    ]);
+    const [graph] = await repertoireGraphs(db, 'u1');
+    expect(graph!.moves.map((m) => m.san)).toEqual(['e4', 'c5', 'c3', 'Nf3']);
+    // A paused chapter is left out, unless every chapter is paused.
+    await updateChapter(db, 'u1', a.id, { active: false });
+    expect((await repertoireGraphs(db, 'u1'))[0]!.moves.map((m) => m.san)).toEqual(['e4', 'c5', 'Nf3']);
+    await updateChapter(db, 'u1', b.id, { active: false });
+    expect((await repertoireGraphs(db, 'u1'))[0]).toMatchObject({ active: false });
+    expect((await repertoireGraphs(db, 'u1'))[0]!.moves).toHaveLength(4);
+  });
+
+  it('creates the chapters of a study, each from its PGN and its start', async () => {
+    const rep = await createRepertoire(db, 'u1', { name: 'Caro-Kann', color: 'black' });
+    const startFen = 'rnbqkbnr/pp2pppp/2p5/3p4/3PP3/8/PPP2PPP/RNBQKBNR w KQkq - 0 1';
+    const done = await createChapters(db, 'u1', rep.id, [
+      { name: 'Intro', pgn: '1. e4 c6 2. d4 d5 *', lichessChapterId: 'aaaaaaaa' },
+      { name: 'Classique', pgn: `[FEN "${startFen}"]\n[SetUp "1"]\n\n1. Nc3 dxe4 *` },
+      { name: 'Vide' },
+    ]);
+    expect(done.map((d) => [d.chapter.name, d.chapter.startFen, d.chapter.lichessChapterId, d.imported?.added ?? null])).toEqual([
+      ['Intro', null, 'aaaaaaaa', 4],
+      ['Classique', startFen, null, 2],
+      ['Vide', null, null, null],
+    ]);
+    const [listed] = await listRepertoires(db, 'u1');
+    // The thumbnail of the repertoire: from the initial position.
+    expect(listed!.trunk).toEqual(['e4', 'c6', 'd4', 'd5']);
+  });
+
+  it('groups chapters into a repertoire, deleting the repertoires left empty', async () => {
+    const scandinave = await chapterOf('u1', 'Scandinave', 'white');
+    const caro = await chapterOf('u1', 'Caro-Kann', 'white');
+    const e4 = await createRepertoire(db, 'u1', { name: '1.e4', color: 'white' });
+    const keep = await createChapter(db, 'u1', caro.repertoireId, { name: 'Reste' });
+    expect(await moveChapters(db, 'u1', [scandinave.id, caro.id], e4.id)).toEqual({ ok: true, deleted: [scandinave.repertoireId] });
+    const reps = await listRepertoires(db, 'u1');
+    expect(reps.map((r) => [r.name, r.chapters.map((c) => c.name)])).toEqual([
+      ['Caro-Kann', ['Reste']],
+      ['1.e4', ['Scandinave', 'Caro-Kann']],
+    ]);
+    expect(keep.repertoireId).toBe(caro.repertoireId);
   });
 });

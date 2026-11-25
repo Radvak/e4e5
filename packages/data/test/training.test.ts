@@ -11,6 +11,7 @@ const MIGRATIONS = fileURLToPath(new URL('../drizzle', import.meta.url));
 
 let db: Db;
 let repId: string;
+let chapterId: string;
 /** The position after 1.e4 e5, where White plays Nf3 in the repertoire. */
 let fen: string;
 beforeEach(async () => {
@@ -23,9 +24,10 @@ beforeEach(async () => {
   ]);
   db = d;
   const rep = await createRepertoire(db, 'u1', { name: 'Blancs', color: 'white' });
-  repId = (await createChapter(db, 'u1', rep.id, { name: 'Blancs' })).id;
-  await saveLine(db, 'u1', repId, ['e2e4', 'e7e5', 'g1f3']);
-  fen = (await getChapter(db, 'u1', repId)).moves.find((m) => m.uci === 'g1f3')!.fromFen;
+  repId = rep.id;
+  chapterId = (await createChapter(db, 'u1', rep.id, { name: 'Blancs' })).id;
+  await saveLine(db, 'u1', chapterId, ['e2e4', 'e7e5', 'g1f3']);
+  fen = (await getChapter(db, 'u1', chapterId)).moves.find((m) => m.uci === 'g1f3')!.fromFen;
 });
 
 describe('training', () => {
@@ -48,7 +50,7 @@ describe('training', () => {
   });
 
   it('refuses a move not to train, and the repertoire of another user', async () => {
-    const e4 = (await getChapter(db, 'u1', repId)).moves.find((m) => m.uci === 'e7e5')!.fromFen;
+    const e4 = (await getChapter(db, 'u1', chapterId)).moves.find((m) => m.uci === 'e7e5')!.fromFen;
     await expect(recordAnswer(db, 'u1', repId, { fen, uci: 'f1c4', grade: 'good' })).rejects.toMatchObject({ statusCode: 400 });
     await expect(recordAnswer(db, 'u1', repId, { fen: e4, uci: 'e7e5', grade: 'good' })).rejects.toMatchObject({ statusCode: 400 });
     await expect(recordAnswer(db, 'u2', repId, { fen, uci: 'g1f3', grade: 'good' })).rejects.toMatchObject({ statusCode: 404 });

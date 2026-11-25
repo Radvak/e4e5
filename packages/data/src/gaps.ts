@@ -11,10 +11,8 @@
  * until nothing is pending, and each pass may reach deeper positions.
  */
 import { findGaps, gapCandidate, LINE_DEPTHS, Repertoire, rankRepertoires, turnOf, type Color, type StoredStats } from '@e4e5/core';
-import { inArray } from 'drizzle-orm';
 import type { Db } from './db.js';
-import { userChapters } from './repertoires.js';
-import { graphColumns, repMoves } from './schema.js';
+import { repertoireGraphs } from './repertoires.js';
 
 export interface GapsQuery {
   speeds: string[];
@@ -38,16 +36,13 @@ const MAX_GAPS = 200;
  * background and answers how many are waiting (none: nothing is fetched).
  */
 export async function gapsAnalysis(db: Db, userId: string, q: GapsQuery, storedStats: StoredStats, prefetch?: (fens: string[]) => number) {
-  // Each chapter is analysed as the repertoires were before chapters (the unit of `gapOwner`).
-  const reps = await userChapters(db, userId);
-  const ids = reps.map((r) => r.id);
-  const moves = ids.length ? await db.select(graphColumns).from(repMoves).where(inArray(repMoves.chapterId, ids)) : [];
+  // Each repertoire as one graph (its chapters merged).
+  const reps = await repertoireGraphs(db, userId);
 
   const analyse = async (color: Color) => {
     const own = reps.filter((r) => r.color === color);
     if (!own.length) return null;
-    const ids = new Set(own.map((r) => r.id));
-    const colorMoves = moves.filter((m) => ids.has(m.chapterId));
+    const colorMoves = own.flatMap((r) => r.moves);
     const merged = new Repertoire(color, colorMoves);
     // Only opponent positions of the repertoire need statistics.
     const opponentFens = [...new Set(colorMoves.map((m) => m.fromFen))].filter((f) => turnOf(f) !== color);
@@ -63,7 +58,7 @@ export async function gapsAnalysis(db: Db, userId: string, q: GapsQuery, storedS
     const toFetch = [...report.missingStats.map((m) => m.fen), ...approximate].filter(often);
     const pending = prefetch ? prefetch(toFetch) : 0;
 
-    const candidates = own.map((r) => gapCandidate(r.id, new Repertoire(color, colorMoves.filter((m) => m.chapterId === r.id))));
+    const candidates = own.map((r) => gapCandidate(r.id, new Repertoire(color, r.moves)));
     return {
       truncated: report.truncated,
       /** Positions analysed with statistics of another range (exact ones not stored yet). */

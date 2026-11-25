@@ -1,10 +1,12 @@
-import { playUci, Repertoire, repertoireToPgn, START_FEN, totalGames, pathTo, type PlayedMove } from '@e4e5/core';
+import { pathTo, playUci, Repertoire, repertoireToPgn, START_FEN, totalGames, type PlayedMove } from '@e4e5/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { DrawShape } from 'chessground/draw';
 import type { Key } from 'chessground/types';
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api, type Gap, type ImportResult, type Me, type RepertoireDetail, type StoredMove } from '../api';
+import { chapterForLine, chapterForPosition, chapterRoot, playLine } from '../chapters';
+import { ChapterBar } from '../components/ChapterBar';
 import { PausedZoneHeader } from '../components/PausedZoneHeader';
 import { useMoveDrag, type DropTarget } from '../components/useMoveDrag';
 import { useLongPress } from '../components/useLongPress';
@@ -47,31 +49,66 @@ export function RepertoireEditor({ me }: { me: Me }) {
   /** Move whose comment is being written (id), or null. */
   const [commentEdit, setCommentEdit] = useState<number | null>(null);
 
-  const rep = useMemo(() => new Repertoire(data?.color ?? 'white', data?.moves ?? []), [data]);
-
-  // ?fen=<position>: open the editor on that position (e.g. from the training progress).
-  // ?line=<uci,uci,…>: open it on that line from the initial position; moves not in the
-  // repertoire are a draft (e.g. a hole from the gap finder, possibly prepared elsewhere).
+  // The chapter open (?chapter=, else the first one): its moves are on the board, edits go to it.
   const [params, setParams] = useSearchParams();
+  const chapterParam = params.get('chapter');
+  const chapter = data?.chapters.find((c) => c.id === chapterParam) ?? data?.chapters[0];
+  const chapterId = chapter?.id ?? '';
+  const root = chapter ? chapterRoot(chapter) : START_FEN;
+  const chapterMoves = useMemo(() => (data?.moves ?? []).filter((m) => m.chapterId === chapterId), [data, chapterId]);
+  const rep = useMemo(() => new Repertoire(data?.color ?? 'white', chapterMoves), [data?.color, chapterMoves]);
+  /** All the chapters together: what the repertoire covers (missing moves). */
+  const whole = useMemo(() => new Repertoire(data?.color ?? 'white', data?.moves ?? []), [data]);
+  /** The chapter the line on the board belongs to. */
+  const [lineOf, setLineOf] = useState('');
+  const selectChapter = (id: string, moves: PlayedMove[] = []) => {
+    setLine(moves);
+    setPly(moves.length);
+    setLineOf(id);
+    setNotice(null);
+    setParams({ chapter: id }, { replace: true });
+  };
+  // Another chapter opened by a link or the browser's back button: its start.
+  useEffect(() => {
+    if (!chapterId || chapterId === lineOf || params.get('fen') || params.get('line')) return;
+    if (lineOf) {
+      setLine([]);
+      setPly(0);
+    }
+    setLineOf(chapterId);
+  }, [chapterId]);
+
+  // ?fen=<position>: open the editor on that position (e.g. from the training progress), in the
+  // chapter given or the first one containing it. ?line=<uci,uci,…>: on that line from the
+  // initial position (after ?fen=: from that position), in the chapter given or the one following
+  // it the furthest; moves not in the chapter are a draft (e.g. a hole from the gap finder).
   const openFen = params.get('fen');
   const openLine = params.get('line');
   useEffect(() => {
     if ((!openFen && !openLine) || !data) return;
-    const path: PlayedMove[] | null = openFen ? pathTo(rep, openFen) : [];
-    for (const uci of path && openLine ? openLine.split(',') : []) {
-      const move = playUci(path!.at(-1)?.toFen ?? START_FEN, uci);
-      if (!move) break;
-      path!.push(move);
+    const color = data.color;
+    const given = data.chapters.find((c) => c.id === chapterParam);
+    const ucis = openLine ? openLine.split(',') : [];
+    let target: { chapter: typeof given & {}; line: PlayedMove[] } | null = null;
+    if (openFen) {
+      if (given) {
+        const path = pathTo(new Repertoire(color, data.moves.filter((m) => m.chapterId === given.id)), openFen, chapterRoot(given));
+        target = path && { chapter: given, line: path };
+      } else target = chapterForPosition(color, data.chapters, data.moves, openFen);
+      if (target) target.line = [...target.line, ...playLine(target.line.at(-1)?.toFen ?? chapterRoot(target.chapter), ucis)];
+    } else {
+      const line = playLine(START_FEN, ucis);
+      if (given) {
+        const start = chapterRoot(given) === START_FEN ? 0 : line.findIndex((m) => m.toFen === chapterRoot(given)) + 1;
+        target = { chapter: given, line: line.slice(start) };
+      } else target = chapterForLine(color, data.chapters, data.moves, line);
     }
-    if (path) {
-      setLine(path);
-      setPly(path.length);
-    }
-    setParams({}, { replace: true });
+    if (target) selectChapter(target.chapter.id, target.line);
+    else setParams(chapter ? { chapter: chapter.id } : {}, { replace: true });
   }, [openFen, openLine, data]);
-  const stored = useMemo(() => new Map((data?.moves ?? []).map((m) => [`${m.fromFen} ${m.uci}`, m])), [data]);
+  const stored = useMemo(() => new Map(chapterMoves.map((m) => [`${m.fromFen} ${m.uci}`, m])), [chapterMoves]);
   const storedMove = (m: LineMove) => stored.get(`${m.fromFen} ${m.uci}`);
-  const fen = line[ply - 1]?.toFen ?? START_FEN;
+  const fen = line[ply - 1]?.toFen ?? root;
   // The moves trained (main first), then the paused ones.
   const atFen = rep.movesAt(fen) as StoredMove[];
   const here = [...atFen.filter((m) => !m.paused), ...atFen.filter((m) => m.paused)];
@@ -95,7 +132,7 @@ export function RepertoireEditor({ me }: { me: Me }) {
       qc.invalidateQueries({ queryKey: ['repertoires'] }),
     ]);
   const saveLine = useMutation({
-    mutationFn: () => api.saveLine(id, shown.map((m) => m.uci)),
+    mutationFn: () => api.saveLine(chapterId, shown.map((m) => m.uci)),
     onSuccess: async (r) => {
       await refresh();
       setNotice(t(`${plural(r.added, 'coup enregistré', 'coups enregistrés')}.`, `${plural(r.added, 'move saved', 'moves saved')}.`));
@@ -117,15 +154,15 @@ export function RepertoireEditor({ me }: { me: Me }) {
       navigate('/repertoires');
     },
   });
-  const deleteMove = useMutation({ mutationFn: (m: StoredMove) => api.deleteMove(id, m.id), onSuccess: refresh });
+  const deleteMove = useMutation({ mutationFn: (m: StoredMove) => api.deleteMove(chapterId, m.id), onSuccess: refresh });
   /**
    * Main and paused moves, set by dragging the moves of a position (see dropMove). Shown at once
-   * (same rules as the server: the main move is never paused, pausing it hands the main line to
+   * (same rules as updateMove: the main move is never paused, pausing it hands the main line to
    * the first other move still trained), then reloaded.
    */
   const arrange = useMutation({
     mutationFn: async (patches: MovePatch[]) => {
-      for (const p of patches) await api.updateMove(id, p.m.id, p.patch);
+      for (const p of patches) await api.updateMove(chapterId, p.m.id, p.patch);
     },
     onMutate: (patches) => {
       qc.setQueryData<RepertoireDetail>(['repertoire', id], (d) => d && { ...d, moves: patches.reduce(applyPatch, d.moves) });
@@ -158,14 +195,14 @@ export function RepertoireEditor({ me }: { me: Me }) {
   // The moves slide to their new place (paused: down into the paused zone; main: up).
   useFlip(listRef);
   const setComment = useMutation({
-    mutationFn: ({ m, comment }: { m: StoredMove; comment: string }) => api.updateMove(id, m.id, { comment: comment || null }),
+    mutationFn: ({ m, comment }: { m: StoredMove; comment: string }) => api.updateMove(chapterId, m.id, { comment: comment || null }),
     onSuccess: refresh,
   });
   /** The move's annotation (!, ?, !!…; null: none); its other NAGs (positions, ±…) are kept. */
   const setNag = useMutation({
     mutationFn: ({ m, nag }: { m: StoredMove; nag: number | null }) => {
       const nags = [...(m.nags ?? []).filter((n) => !(n in MOVE_NAGS)), ...(nag ? [nag] : [])];
-      return api.updateMove(id, m.id, { nags: nags.length ? nags : null });
+      return api.updateMove(chapterId, m.id, { nags: nags.length ? nags : null });
     },
     onSuccess: refresh,
   });
@@ -270,10 +307,10 @@ export function RepertoireEditor({ me }: { me: Me }) {
     () =>
       new Set(
         (gapReport.data?.[rep.color]?.gaps ?? [])
-          .filter((g) => g.repertoireId === id && g.fen === fen && g.move && !rep.has(fen, g.move.uci))
+          .filter((g) => g.repertoireId === id && g.fen === fen && g.move && !whole.has(fen, g.move.uci))
           .map((g) => g.move!.uci),
       ),
-    [gapReport.data, rep, id, fen],
+    [gapReport.data, whole, id, fen],
   );
 
   /**
@@ -319,9 +356,9 @@ export function RepertoireEditor({ me }: { me: Me }) {
   // Without the holes the repertoire covers now (saved since the report: hidden at once, until the
   // report is computed again): the opponent move added (or a transposition), or my answer.
   const covered = (g: Gap) => {
-    if (!g.move) return rep.movesAt(g.fen).length > 0;
+    if (!g.move) return whole.movesAt(g.fen).length > 0;
     const after = playUci(g.fen, g.move.uci)?.toFen;
-    return rep.has(g.fen, g.move.uci) || (!!after && rep.movesAt(after).length > 0);
+    return whole.has(g.fen, g.move.uci) || (!!after && whole.movesAt(after).length > 0);
   };
   const holes = colorReport?.gaps.filter((g) => g.repertoireId === id && !covered(g));
   if (error || !data) return <p className="error">{t('Impossible de charger le répertoire.', 'Could not load the repertoire.')}</p>;
@@ -335,19 +372,38 @@ export function RepertoireEditor({ me }: { me: Me }) {
       back="/repertoires"
       title={data.name}
       subtitle={t(
-        `${data.color === 'white' ? 'Blancs' : 'Noirs'} · ${plural(rep.size, 'coup', 'coups')}${data.active ? '' : ' · en pause'}`,
-        `${data.color === 'white' ? 'White' : 'Black'} · ${plural(rep.size, 'move', 'moves')}${data.active ? '' : ' · paused'}`,
+        `${data.color === 'white' ? 'Blancs' : 'Noirs'} · ${plural(data.chapters.length, 'chapitre', 'chapitres')} · ${plural(whole.size, 'coup', 'coups')}${data.active ? '' : ' · en pause'}`,
+        `${data.color === 'white' ? 'White' : 'Black'} · ${plural(data.chapters.length, 'chapter', 'chapters')} · ${plural(whole.size, 'move', 'moves')}${data.active ? '' : ' · paused'}`,
       )}
       actions={<Button variant="primary" icon="play" to={`/r/${id}/train`}>{t('S’entraîner', 'Train')}</Button>}
       menu={[
-        ...(ply > 0 && unsaved.length === 0
-          ? [{ label: t('S’entraîner à partir d’ici', 'Train from here'), to: `/r/${id}/train?from=${encodeURIComponent(fen)}` }]
+        ...(chapter && data.chapters.length > 1
+          ? [{ label: t('S’entraîner sur ce chapitre', 'Train this chapter'), to: `/r/${id}/train?chapter=${chapter.id}` }]
           : []),
-        { label: t('Importer un PGN', 'Import a PGN'), onClick: () => setImportOpen(true) },
-        { label: t('Exporter en PGN', 'Export as PGN'), onClick: () => downloadPgn(repertoireToPgn(rep, data.name), data.name) },
-        { label: data.active ? t('Mettre en pause', 'Pause') : t('Reprendre l’entraînement', 'Resume training'), onClick: () => toggleActive.mutate() },
+        ...(ply > 0 && unsaved.length === 0
+          ? [{ label: t('S’entraîner à partir d’ici', 'Train from here'), to: `/r/${id}/train?${new URLSearchParams({ ...(data.chapters.length > 1 ? { chapter: chapterId } : {}), from: fen })}` }]
+          : []),
+        ...(chapter
+          ? [
+              { label: t('Importer un PGN dans ce chapitre', 'Import a PGN into this chapter'), onClick: () => setImportOpen(true) },
+              { label: t('Exporter le chapitre en PGN', 'Export the chapter as PGN'), onClick: () => downloadPgn(repertoireToPgn(rep, chapter.name, chapter.startFen ?? undefined), chapter.name) },
+            ]
+          : []),
+        ...(data.chapters.length > 1
+          ? [
+              {
+                label: t('Exporter le répertoire en PGN (un chapitre par partie)', 'Export the repertoire as PGN (one chapter per game)'),
+                onClick: () =>
+                  downloadPgn(
+                    data.chapters.map((c) => repertoireToPgn(new Repertoire(data.color, data.moves.filter((m) => m.chapterId === c.id)), c.name, c.startFen ?? undefined)).join('\n\n'),
+                    data.name,
+                  ),
+              },
+            ]
+          : []),
+        { label: data.active ? t('Mettre le répertoire en pause', 'Pause the repertoire') : t('Reprendre l’entraînement', 'Resume training'), onClick: () => toggleActive.mutate() },
         {
-          label: t('Renommer', 'Rename'),
+          label: t('Renommer le répertoire', 'Rename the repertoire'),
           onClick: () => {
             const next = prompt(t('Nouveau nom', 'New name'), data.name)?.trim();
             if (next && next !== data.name) renameRep.mutate(next);
@@ -356,17 +412,18 @@ export function RepertoireEditor({ me }: { me: Me }) {
         {
           label: t('Supprimer le répertoire', 'Delete the repertoire'),
           danger: true,
-          onClick: () => confirm(t(`Supprimer le répertoire « ${data.name} » et tous ses coups ?`, `Delete the repertoire “${data.name}” and all its moves?`)) && deleteRep.mutate(),
+          onClick: () =>
+            confirm(t(`Supprimer le répertoire « ${data.name} », ses chapitres et tous leurs coups ?`, `Delete the repertoire “${data.name}”, its chapters and all their moves?`)) && deleteRep.mutate(),
         },
       ]}
     />
-    {importOpen && <PgnImport repertoireId={id} onDone={refresh} onClose={() => setImportOpen(false)} />}
+    {importOpen && chapter && <PgnImport chapterId={chapter.id} onDone={refresh} onClose={() => setImportOpen(false)} />}
     {acting && (
       <MoveActionsDialog
         san={acting.san}
         nags={acting.nags}
         paused={!!acting.paused}
-        where={t('de ce répertoire', 'from this repertoire')}
+        where={t('de ce chapitre', 'from this chapter')}
         onPause={(pause) => arrange.mutate([{ m: acting, patch: { paused: pause } }])}
         onDelete={() => deleteMove.mutate(acting)}
         onClose={() => setActing(null)}
@@ -434,8 +491,19 @@ export function RepertoireEditor({ me }: { me: Me }) {
       </div>
 
       <div className="editor-side">
+        <ChapterBar
+          repertoireId={id}
+          color={data.color}
+          chapters={data.chapters}
+          moves={data.moves}
+          current={chapter}
+          boardFen={ply > 0 && unsaved.length === 0 ? fen : null}
+          onSelect={(c) => selectChapter(c)}
+          onMovedAway={(to, c) => navigate(`/r/${to}?chapter=${c}`)}
+        />
+        {chapter && (
         <section className="panel">
-          <h3>{t('Dans votre répertoire', 'In your repertoire')}</h3>
+          <h3>{data.chapters.length > 1 || chapter.name !== data.name ? chapter.name : t('Dans votre répertoire', 'In your repertoire')}</h3>
           {line.length > 0 && (
           <div className="line-row">
           <div className="moves-path">
@@ -579,6 +647,7 @@ export function RepertoireEditor({ me }: { me: Me }) {
             </p>
           )}
         </section>
+        )}
 
 
         <Suggestions
@@ -587,13 +656,9 @@ export function RepertoireEditor({ me }: { me: Me }) {
           cutoff={gapCutoff}
           pending={!!colorReport?.pending}
           onOpen={(ucis) => {
-            const moves: PlayedMove[] = [];
-            for (const uci of ucis) {
-              const m = playUci(moves.at(-1)?.toFen ?? START_FEN, uci);
-              if (!m) break;
-              moves.push(m);
-            }
-            jumpTo(moves);
+            const target = chapterForLine(data.color, data.chapters, data.moves, playLine(START_FEN, ucis));
+            if (target && target.chapter.id !== chapterId) selectChapter(target.chapter.id, target.line);
+            else if (target) jumpTo(target.line);
             window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
         />
@@ -612,9 +677,9 @@ export function RepertoireEditor({ me }: { me: Me }) {
  */
 type MovePatch = { m: StoredMove; patch: { isMain?: boolean; paused?: boolean } };
 
-/** A main / paused change applied to the moves, by the rules of the server (PATCH of a move). */
+/** A main / paused change applied to the moves, by the rules of updateMove (same chapter, same position). */
 function applyPatch(moves: StoredMove[], { m, patch }: MovePatch): StoredMove[] {
-  const same = (x: StoredMove) => x.fromFen === m.fromFen;
+  const same = (x: StoredMove) => x.chapterId === m.chapterId && x.fromFen === m.fromFen;
   if (patch.isMain) return moves.map((x) => (x.id === m.id ? { ...x, isMain: true, paused: false } : same(x) ? { ...x, isMain: false } : x));
   if (patch.paused) {
     const wasMain = moves.find((x) => x.id === m.id)?.isMain;
@@ -668,11 +733,11 @@ function CommentNote({ move, editing, onEdit, onSave, onNag }: { move: StoredMov
 }
 
 /** Opened from the ⋯ menu of the header. */
-function PgnImport({ repertoireId, onDone, onClose }: { repertoireId: string; onDone: () => void; onClose: () => void }) {
+function PgnImport({ chapterId, onDone, onClose }: { chapterId: string; onDone: () => void; onClose: () => void }) {
   const [pgn, setPgn] = useState('');
   const [result, setResult] = useState<ImportResult | null>(null);
   const mutation = useMutation({
-    mutationFn: () => api.importPgn(repertoireId, pgn),
+    mutationFn: () => api.importPgn(chapterId, pgn),
     onSuccess: (r) => {
       setResult(r);
       setPgn('');
@@ -703,12 +768,12 @@ function PgnImport({ repertoireId, onDone, onClose }: { repertoireId: string; on
           {t(
             <>
               {plural(result.games, 'partie', 'parties')} : {plural(result.added, 'coup ajouté', 'coups ajoutés')}, {result.duplicates} déjà connus
-              {result.unreachable > 0 && `, ${result.unreachable} ignorés (inaccessibles depuis la position initiale)`}
+              {result.unreachable > 0 && `, ${result.unreachable} ignorés (inaccessibles depuis le début du chapitre)`}
               .
             </>,
             <>
               {plural(result.games, 'game', 'games')}: {plural(result.added, 'move added', 'moves added')}, {result.duplicates} already known
-              {result.unreachable > 0 && `, ${result.unreachable} skipped (unreachable from the starting position)`}
+              {result.unreachable > 0 && `, ${result.unreachable} skipped (unreachable from the start of the chapter)`}
               .
             </>,
           )}
@@ -719,7 +784,7 @@ function PgnImport({ repertoireId, onDone, onClose }: { repertoireId: string; on
   );
 }
 
-/** Downloads a PGN file named after the repertoire. */
+/** Downloads a PGN file named after the repertoire or the chapter. */
 function downloadPgn(pgn: string, name: string) {
   const url = URL.createObjectURL(new Blob([pgn], { type: 'application/x-chess-pgn' }));
   const a = document.createElement('a');

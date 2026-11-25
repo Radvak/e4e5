@@ -1,5 +1,5 @@
 /**
- * Repertoire graphs and what follows from them alone, built once per repertoire version and
+ * Repertoire graphs (chapters merged) and what follows from them alone, built once per repertoire version and
  * shared by every page (training, summary badge, progress): an answer only changes the cards,
  * so nothing here is rebuilt after it. Keys are the objects themselves (the repertoire as cached
  * by React Query, the reach probabilities of a gap report): a refetch gives new objects, the old
@@ -7,6 +7,7 @@
  */
 import {
   keptPositions,
+  mergeChapterMoves,
   prepareSummary,
   trainingRepertoire,
   type Repertoire,
@@ -15,19 +16,44 @@ import {
   type PreparedSummary,
   type TrainingPosition,
 } from '@e4e5/core';
-import type { RepertoireDetail } from '../api';
+import type { RepertoireDetail, StoredMove } from '../api';
 
-const graphs = new WeakMap<RepertoireDetail, Repertoire>();
+const trained = new WeakMap<RepertoireDetail, Map<string, { moves: StoredMove[]; graph: Repertoire }>>();
 const allPositions = new WeakMap<Repertoire, TrainingPosition[]>();
 const fromPositions = new WeakMap<Repertoire, Map<string, TrainingPosition[]>>();
 const kept = new WeakMap<TrainingPosition[], WeakMap<object, Map<number, Set<string>>>>();
 const prepared = new WeakMap<RepertoireDetail, Map<string, { probs: object | undefined; value: PreparedSummary }>>();
 
-/** The graph of a repertoire, as trained (paused moves left out). */
-export function graphOf(detail: RepertoireDetail): Repertoire {
-  let g = graphs.get(detail);
-  if (!g) graphs.set(detail, (g = trainingRepertoire(detail.color, detail.moves)));
-  return g;
+/**
+ * The moves trained in a repertoire and their graph (paused moves left out): its active chapters
+ * merged (all of them when every chapter is paused), or one chapter (`chapterId`).
+ */
+function trainedOf(detail: RepertoireDetail, chapterId?: string | null) {
+  let byChapter = trained.get(detail);
+  if (!byChapter) trained.set(detail, (byChapter = new Map()));
+  const key = chapterId ?? '';
+  let hit = byChapter.get(key);
+  if (!hit) {
+    let moves: StoredMove[];
+    if (chapterId) moves = detail.moves.filter((m) => m.chapterId === chapterId);
+    else {
+      const active = detail.chapters.filter((c) => c.active);
+      const used = new Set((active.length ? active : detail.chapters).map((c) => c.id));
+      moves = mergeChapterMoves(detail.moves.filter((m) => used.has(m.chapterId)));
+    }
+    byChapter.set(key, (hit = { moves, graph: trainingRepertoire(detail.color, moves) }));
+  }
+  return hit;
+}
+
+/** The graph of a repertoire (or of one of its chapters), as trained (paused moves left out). */
+export function graphOf(detail: RepertoireDetail, chapterId?: string | null): Repertoire {
+  return trainedOf(detail, chapterId).graph;
+}
+
+/** The moves of a repertoire (or of one of its chapters) as trained, paused ones included. */
+export function movesOf(detail: RepertoireDetail, chapterId?: string | null): StoredMove[] {
+  return trainedOf(detail, chapterId).moves;
 }
 
 /** Every position where it is my turn (core trainingPositions). */

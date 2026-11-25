@@ -5,8 +5,9 @@ Build and learn chess opening repertoires, with Lichess statistics at your level
 **https://gab23r.github.io/e4e5/** — runs entirely in the browser (no account, no server): the
 data stays on the device.
 
-- Repertoires: create them on the board, import PGN (variations kept) or Lichess studies, export
-  to PGN.
+- Repertoires made of chapters, like Lichess studies (a study becomes a repertoire, each chapter
+  a chapter): create them on the board, import PGN (variations kept) or Lichess studies, export
+  to PGN, group chapters into repertoires.
 - Training: spaced repetition (FSRS) on the positions of your repertoires ("Réviser"), and
   "Se tester" where the opponent plays the replies Lichess players of your level play.
 - Gap finder ("Lacunes"): the frequent opponent moves your repertoires do not answer, and how deep

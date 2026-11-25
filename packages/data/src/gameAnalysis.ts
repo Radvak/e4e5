@@ -14,10 +14,9 @@ import {
   type GapCandidate,
   type PlayedMove,
 } from '@e4e5/core';
-import { inArray } from 'drizzle-orm';
 import type { Db } from './db.js';
-import { userChapters } from './repertoires.js';
-import { games, graphColumns, repMoves } from './schema.js';
+import { repertoireGraphs } from './repertoires.js';
+import { games } from './schema.js';
 
 export interface RepInfo {
   id: string;
@@ -29,13 +28,11 @@ export interface RepInfo {
   gap: GapCandidate<string>;
 }
 
-/** The user's chapters, each analysed as the repertoires were before chapters. */
+/** The user's repertoires, each as one graph (its chapters merged). */
 export async function loadRepertoires(db: Db, userId: string): Promise<RepInfo[]> {
-  const reps = await userChapters(db, userId);
-  if (!reps.length) return [];
-  const moves = await db.select(graphColumns).from(repMoves).where(inArray(repMoves.chapterId, reps.map((r) => r.id)));
+  const reps = await repertoireGraphs(db, userId);
   return reps.map((r) => {
-    const rep = new Repertoire(r.color, moves.filter((m) => m.chapterId === r.id));
+    const rep = new Repertoire(r.color, r.moves);
     return { id: r.id, name: r.name, color: r.color, active: r.active, rep, gap: gapCandidate(r.id, rep) };
   });
 }

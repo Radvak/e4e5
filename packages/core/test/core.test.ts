@@ -4,6 +4,8 @@ import {
   GameLine,
   gameMovesFromPgn,
   lineStarts,
+  mergeChapterMoves,
+  pathTo,
   pickNewLines,
   trainingPositions,
   trainingRepertoire,
@@ -68,6 +70,34 @@ describe('repertoire', () => {
     const pgn = repertoireToPgn(rep, 'Italian');
     const again = new Repertoire('white', pgnToMoves(pgn).moves);
     expect(again.size).toBe(rep.size);
+  });
+
+  it('merges the moves of chapters: once each, trained unless paused everywhere, one main move', () => {
+    const a = pgnToMoves('1. e4 e5 2. Nf3 (2. Bc4) *').moves.map((m) => ({ ...m, paused: m.san === 'Nf3' }));
+    const b = pgnToMoves('1. e4 e5 2. Bc4 {Italian} 2... Nf6 (2... Bc5) *').moves.map((m) => ({ ...m, paused: m.san === 'Bc5' }));
+    const merged = mergeChapterMoves([...a, ...b]);
+    const at = (san: string) => merged.find((m) => m.san === san)!;
+    expect(merged.map((m) => m.san)).toEqual(['e4', 'e5', 'Nf3', 'Bc4', 'Nf6', 'Bc5']);
+    // Nf3: paused in its only chapter; Bc4 trained (in b), with b's comment; main of the first chapter.
+    expect([at('Nf3').paused, at('Nf3').isMain, at('Bc4').isMain, at('Bc4').comment]).toEqual([true, true, false, 'Italian']);
+    expect([at('Nf6').isMain, at('Bc5').isMain, at('Bc5').paused]).toEqual([true, false, true]);
+  });
+
+  it('exports a chapter starting at a position, and imports it back', () => {
+    const afterE4E5 = playUci(playUci(START_FEN, 'e2e4')!.toFen, 'e7e5')!.toFen;
+    const rep = new Repertoire('white', pgnToMoves(ITALIAN).moves);
+    const sub = new Repertoire('white', [...rep.all()].filter((m) => rep.reachable(afterE4E5).has(m.fromFen)));
+    const pgn = repertoireToPgn(sub, 'Italienne', afterE4E5);
+    expect(pgn).toContain('[FEN "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 1"]');
+    expect(new Repertoire('white', pgnToMoves(pgn).moves).size).toBe(sub.size);
+  });
+
+  it('finds the path to a position from another start', () => {
+    const rep = new Repertoire('white', pgnToMoves(ITALIAN).moves);
+    const afterE5 = playUci(playUci(START_FEN, 'e2e4')!.toFen, 'e7e5')!.toFen;
+    const bc4 = rep.movesAt(rep.movesAt(afterE5)[0]!.toFen).find((m) => m.san === 'Nc6')!.toFen;
+    expect(pathTo(rep, bc4, afterE5)!.map((m) => m.san)).toEqual(['Nf3', 'Nc6']);
+    expect(pathTo(rep, afterE5, bc4)).toBeNull();
   });
 });
 

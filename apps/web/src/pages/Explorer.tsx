@@ -4,9 +4,10 @@ import type { DrawShape } from 'chessground/draw';
 import type { Key } from 'chessground/types';
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { api, ApiError, type Me, type MyGameRef, type RepertoireMoveHere } from '../api';
+import { api, ApiError, type Me, type MyGameRef, type ChapterMoveHere } from '../api';
 import { Board } from '../components/Board';
 import { EngineLines, EvalBar } from '../components/EnginePanel';
+import { chapterLabel } from '../chapters';
 import { lineText, parseMoves } from '../components/lineText';
 import { useEngine } from '../engine/useEngine';
 import { useGaps } from '../useGaps';
@@ -113,14 +114,14 @@ export function Explorer({ me }: { me: Me }) {
     if (move) setLine([...shown, move], ply + 1);
   };
 
-  const repMoves = useQuery({ queryKey: ['explorer-reps', fen], queryFn: () => api.repertoireMovesAt(fen) });
+  const repMoves = useQuery({ queryKey: ['explorer-reps', fen], queryFn: () => api.chapterMovesAt(fen) });
   // The repertoires containing the position on the board (listed under the line).
-  const posRepsAll = useQuery({ queryKey: ['explorer-pos-reps', fen], queryFn: () => api.positionRepertoires(fen) });
+  const posRepsAll = useQuery({ queryKey: ['explorer-pos-reps', fen], queryFn: () => api.positionChapters(fen) });
   const posReps = { data: posRepsAll.data?.filter((r) => r.color === orientation) };
   // Annotations of the moves of the line (from my repertoires): the moves of each position of the
   // line, same queries as above (cached), so going back and forth costs nothing.
   const pathPositions = useQueries({
-    queries: line.map((m) => ({ queryKey: ['explorer-reps', m.fromFen], queryFn: () => api.repertoireMovesAt(m.fromFen), staleTime: 60_000 })),
+    queries: line.map((m) => ({ queryKey: ['explorer-reps', m.fromFen], queryFn: () => api.chapterMovesAt(m.fromFen), staleTime: 60_000 })),
   });
   const pathNags = line.map(
     (m, i) => pathPositions[i]?.data?.find((r) => r.color === orientation && r.uci === m.uci && r.nags?.length)?.nags ?? null,
@@ -176,7 +177,7 @@ export function Explorer({ me }: { me: Me }) {
   // of the other colour is never "main".
   const toMove: Color = fen.split(' ')[1] === 'b' ? 'black' : 'white';
   /** The repertoires where this move is mine (side to move), trained. */
-  const mineOf = (g: { reps: RepertoireMoveHere[] }) => g.reps.filter((r) => r.color === toMove && !r.paused);
+  const mineOf = (g: { reps: ChapterMoveHere[] }) => g.reps.filter((r) => r.color === toMove && !r.paused);
   const nextMoves = useMemo(() => {
     const all = [...prepared.values()].map((g) => {
       const mine = g.reps.filter((r) => r.color === toMove && !r.paused);
@@ -191,10 +192,10 @@ export function Explorer({ me }: { me: Me }) {
    */
   const arrange = useMutation({
     mutationFn: async (patches: RowPatch[]) => {
-      for (const p of patches) await api.updateMove(p.r.repertoireId, p.r.id, p.patch);
+      for (const p of patches) await api.updateMove(p.r.chapterId, p.r.id, p.patch);
     },
     onMutate: (patches) => {
-      qc.setQueryData<RepertoireMoveHere[]>(['explorer-reps', fen], (rows) => rows && patches.reduce(applyRowPatch, rows));
+      qc.setQueryData<ChapterMoveHere[]>(['explorer-reps', fen], (rows) => rows && patches.reduce(applyRowPatch, rows));
     },
     onSettled: (_data, _error, patches) =>
       Promise.all([
@@ -229,8 +230,8 @@ export function Explorer({ me }: { me: Me }) {
   // The moves slide to their new place (paused: down into the paused zone; main: up).
   useFlip(listRef);
   const removeMove = useMutation({
-    mutationFn: async (rows: RepertoireMoveHere[]) => {
-      for (const r of rows) await api.deleteMove(r.repertoireId, r.id);
+    mutationFn: async (rows: ChapterMoveHere[]) => {
+      for (const r of rows) await api.deleteMove(r.chapterId, r.id);
     },
     onSettled: (_data, _error, rows) =>
       Promise.all([
@@ -434,17 +435,17 @@ export function Explorer({ me }: { me: Me }) {
           )}
           {posReps.data && posReps.data.length > 0 && (
             <div className="rep-tags rep-at">
-              {[...posReps.data].sort((a, b) => a.name.localeCompare(b.name, lang, { sensitivity: 'base' })).map((r) => (
+              {[...posReps.data].sort((a, b) => chapterLabel(a).localeCompare(chapterLabel(b), lang, { sensitivity: 'base' })).map((r) => (
                 <Link
-                  key={r.repertoireId}
+                  key={r.chapterId}
                   className="rep-tag"
-                  to={`/r/${r.repertoireId}${shown.length ? `?${new URLSearchParams({ line: ucis(shown) })}` : ''}`}
+                  to={`/r/${r.repertoireId}?${new URLSearchParams({ chapter: r.chapterId, ...(shown.length ? { line: ucis(shown) } : {}) })}`}
                   title={t(
-                    `Ouvrir ${r.name} sur cette position${r.moves ? ` (${r.moves} coup${r.moves > 1 ? 's' : ''} préparé${r.moves > 1 ? 's' : ''} ici)` : ' (fin de sa ligne)'}`,
-                    `Open ${r.name} at this position${r.moves ? ` (${plural(r.moves, 'move', 'moves')} prepared here)` : ' (end of its line)'}`,
+                    `Ouvrir ${chapterLabel(r)} sur cette position${r.moves ? ` (${r.moves} coup${r.moves > 1 ? 's' : ''} préparé${r.moves > 1 ? 's' : ''} ici)` : ' (fin de sa ligne)'}`,
+                    `Open ${chapterLabel(r)} at this position${r.moves ? ` (${plural(r.moves, 'move', 'moves')} prepared here)` : ' (end of its line)'}`,
                   )}
                 >
-                  <span className={`dot inline ${r.color}`} /> {r.name}
+                  <span className={`dot inline ${r.color}`} /> {chapterLabel(r)}
                 </Link>
               ))}
             </div>
@@ -476,8 +477,8 @@ export function Explorer({ me }: { me: Me }) {
                         .join(' ')}
                       style={drag?.id === i ? { transform: `translateY(${drag.dy}px)` } : undefined}
                       title={t(
-                        `Jouer ${g.san} (${g.reps.map((r) => r.name).join(', ')}) · appui long : mettre en pause, supprimer`,
-                        `Play ${g.san} (${g.reps.map((r) => r.name).join(', ')}) · long press: pause, delete`,
+                        `Jouer ${g.san} (${g.reps.map(chapterLabel).join(', ')}) · appui long : mettre en pause, supprimer`,
+                        `Play ${g.san} (${g.reps.map(chapterLabel).join(', ')}) · long press: pause, delete`,
                       )}
                       onClick={() => play(g.uci)}
                       {...longPress(() => setActing(g))}
@@ -489,8 +490,8 @@ export function Explorer({ me }: { me: Me }) {
                         </button>
                         {g.main && nextMoves.filter((x) => !x.paused).length > 1 && <span className="badge">{t('principal', 'main')}</span>}
                         {comments.map((r) => (
-                          <div key={r.repertoireId} className="comment move-comment">
-                            {comments.length > 1 && <span className="muted">{t(`${r.name} : `, `${r.name}: `)}</span>}
+                          <div key={r.chapterId} className="comment move-comment">
+                            {comments.length > 1 && <span className="muted">{t(`${chapterLabel(r)} : `, `${chapterLabel(r)}: `)}</span>}
                             {r.comment}
                           </div>
                         ))}
@@ -586,8 +587,8 @@ export function Explorer({ me }: { me: Me }) {
 }
 
 /** Repertoire moves of the position grouped by move: which repertoires play it. */
-function groupByMove(rows: RepertoireMoveHere[]) {
-  const out = new Map<string, { uci: string; san: string; nags: number[] | null; reps: RepertoireMoveHere[] }>();
+function groupByMove(rows: ChapterMoveHere[]) {
+  const out = new Map<string, { uci: string; san: string; nags: number[] | null; reps: ChapterMoveHere[] }>();
   for (const r of rows) {
     const g = out.get(r.uci) ?? { uci: r.uci, san: r.san, nags: null, reps: [] };
     // The annotation of the first repertoire that has one.
@@ -677,12 +678,12 @@ function LineInput({ initial, onJump, onCancel }: { initial: string; onJump: (mo
   );
 }
 
-/** A main / paused change of one move of a repertoire (PATCH of the move). */
-type RowPatch = { r: RepertoireMoveHere; patch: { isMain?: boolean; paused?: boolean } };
+/** A main / paused change of one move of a chapter. */
+type RowPatch = { r: ChapterMoveHere; patch: { isMain?: boolean; paused?: boolean } };
 
-/** The change applied to the moves of the position, by the rules of the server, per repertoire. */
-function applyRowPatch(rows: RepertoireMoveHere[], { r, patch }: RowPatch): RepertoireMoveHere[] {
-  const sameRep = (x: RepertoireMoveHere) => x.repertoireId === r.repertoireId;
+/** The change applied to the moves of the position, by the rules of updateMove, per chapter. */
+function applyRowPatch(rows: ChapterMoveHere[], { r, patch }: RowPatch): ChapterMoveHere[] {
+  const sameRep = (x: ChapterMoveHere) => x.chapterId === r.chapterId;
   if (patch.isMain) return rows.map((x) => (x.id === r.id ? { ...x, isMain: true, paused: false } : sameRep(x) ? { ...x, isMain: false } : x));
   if (patch.paused) {
     const wasMain = rows.find((x) => x.id === r.id)?.isMain;

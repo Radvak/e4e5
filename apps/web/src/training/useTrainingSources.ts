@@ -3,7 +3,8 @@ import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { api, type Grade, type ReviewCard } from '../api';
 import { cardsQuery, recordReview } from '../offline/reviews';
-import { graphOf, keptOf, positionsFrom, positionsOf } from './graphCache';
+import { chapterRoot } from '../chapters';
+import { graphOf, keptOf, movesOf, positionsFrom, positionsOf } from './graphCache';
 
 /** Summary of the cards of my moves in a position (several moves: the weakest). */
 export interface PositionCard {
@@ -19,10 +20,13 @@ export interface PositionCard {
   complete: boolean;
 }
 
-/** A repertoire being trained, with its positions; review state comes from the user's move cards. */
+/** A repertoire (or one of its chapters) being trained, with its positions; review state comes from the user's move cards. */
 export interface Source {
+  /** The repertoire (answers are recorded for it). */
   id: string;
   name: string;
+  /** Where its lines start (a chapter can start at a position). */
+  root: string;
   color: Color;
   rep: Repertoire;
   /** Positions to train (limited to the subtree of `from` when given). */
@@ -47,9 +51,10 @@ export interface Shorten {
 
 /**
  * Loads the repertoires `ids` and the user's move cards; `review` records an answer. With
- * `shorten`, only the positions kept by core keptPositions are trained.
+ * `shorten`, only the positions kept by core keptPositions are trained. `chapter`: only this
+ * chapter of the (single) repertoire.
  */
-export function useTrainingSources(ids: string[], from: string | null, shorten?: Shorten | null) {
+export function useTrainingSources(ids: string[], from: string | null, shorten?: Shorten | null, chapter?: string | null) {
   const qc = useQueryClient();
   const repQueries = useQueries({
     queries: ids.map((id) => ({ queryKey: ['repertoire', id], queryFn: () => api.repertoire(id) })),
@@ -66,23 +71,26 @@ export function useTrainingSources(ids: string[], from: string | null, shorten?:
       ids.flatMap((id, i) => {
         const data = repQueries[i]?.data;
         if (!data) return [];
-        const rep = graphOf(data);
+        const info = chapter ? data.chapters.find((c) => c.id === chapter) : undefined;
+        const rep = graphOf(data, info?.id);
+        const root = info ? chapterRoot(info) : START_FEN;
         const probs = shorten && shorten.minReach > 0 ? shorten.probs(data.color) : undefined;
         const kept = probs ? keptOf(positionsOf(rep), probs, shorten!.minReach) : null;
-        const positions = positionsFrom(rep, from ?? START_FEN);
+        const positions = positionsFrom(rep, from ?? root);
         // Paused moves by position: played in training, they are not a mistake (try again).
         const paused = new Map<string, RepMove[]>();
-        for (const m of data.moves) if (m.paused) paused.set(m.fromFen, [...(paused.get(m.fromFen) ?? []), m]);
-        return [{ id, data, rep, paused, positions: kept ? positions.filter((p) => kept.has(p.fen)) : positions }];
+        for (const m of movesOf(data, info?.id)) if (m.paused) paused.set(m.fromFen, [...(paused.get(m.fromFen) ?? []), m]);
+        const name = info && info.name !== data.name ? `${data.name} › ${info.name}` : data.name;
+        return [{ id, data, name, root, rep, paused, positions: kept ? positions.filter((p) => kept.has(p.fen)) : positions }];
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [ids.join(), version, from, shorten],
+    [ids.join(), version, from, shorten, chapter],
   );
 
   // The review state, after every answer: only small functions reading the cards.
   const sources = useMemo<Source[]>(
     () =>
-      trained.map(({ id, data, rep, paused, positions }) => {
+      trained.map(({ id, data, name, root, rep, paused, positions }) => {
         const cardOf = (fen: string, uci: string) => cards.get(cardKey(fen, uci));
         const times = (fen: string) => (uci: string) => {
           const c = cardOf(fen, uci);
@@ -90,7 +98,8 @@ export function useTrainingSources(ids: string[], from: string | null, shorten?:
         };
         return {
           id,
-          name: data.name,
+          name,
+          root,
           color: data.color,
           rep,
           positions,
@@ -114,7 +123,7 @@ export function useTrainingSources(ids: string[], from: string | null, shorten?:
     [trained, cards],
   );
 
-  /** Records an answer: scheduled on the device at once, sent to the server now or when it can be reached. */
+  /** Records an answer: scheduled on the device at once, then recorded in the database. */
   const review = {
     mutate: ({ source, fen, uci, grade }: { source: Source; fen: string; uci: string; grade: Grade }) =>
       recordReview(qc, source.cardOf(fen, uci), { repertoireId: source.id, fen, uci, grade }),

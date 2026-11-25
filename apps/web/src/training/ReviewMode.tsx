@@ -1,4 +1,4 @@
-import { groupLines, lineStarts, START_FEN, type Repertoire, type RepMove, type TrainingPosition } from '@e4e5/core';
+import { groupLines, lineStarts, type Repertoire, type RepMove, type TrainingPosition } from '@e4e5/core';
 import type { Key } from 'chessground/types';
 import type { DrawShape } from 'chessground/draw';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -833,7 +833,7 @@ function Drill({
       <div className="editor-board">
         <OpeningName ucis={moves.map((m) => m.uci)} />
         <Board
-          fen={last?.toFen ?? START_FEN}
+          fen={last?.toFen ?? source.root}
           orientation={source.color}
           lastMove={last?.uci}
           shapes={shapes}
