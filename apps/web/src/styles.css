@@ -309,8 +309,6 @@ kbd { display: inline-block; min-width: 18px; padding: 0 4px; margin: 0 1px; bor
 .chapter.disabled { opacity: 0.45; cursor: not-allowed; }
 .chapter input { margin: 0; flex: none; }
 .chapter .chapter-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.chapter-side { display: inline-flex; align-items: center; gap: 4px; font-size: 0.78rem; color: var(--muted); white-space: nowrap; }
-.chapter .dot { width: 9px; height: 9px; }
 .chapter-moves { font-size: 0.8rem; color: var(--muted); white-space: nowrap; }
 .import-summary { padding: 10px 12px; border-radius: 8px; background: var(--surface-2); color: var(--text-2); font-size: 0.9rem; }
 .import-summary strong { color: var(--text); }

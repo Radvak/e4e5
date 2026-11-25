@@ -340,41 +340,48 @@ function StudyImport({
   const [chosen, setChosen] = useState<Set<number>>(new Set());
   const [hover, setHover] = useState<number | null>(null);
 
+  /** The side a chapter is studied from (its orientation, else the study's). */
+  const sideOf = (s: LichessStudy, ch: LichessStudy['chapters'][number]) => ch.orientation ?? s.color;
   /**
-   * By default: the chapter of the link, else the opening chapters of this side (the commented
-   * games can join too, but are checked by hand: one long line is not a repertoire).
+   * Checked by default: the chapter of the link, else the opening chapters of both sides (the
+   * commented games can join too, but are checked by hand: one long line is not a repertoire).
+   * The side chosen only filters them.
    */
-  const defaults = (s: LichessStudy, c: Color) => {
+  const defaults = (s: LichessStudy) => {
     const only = chapterId ? s.chapters.findIndex((ch) => ch.id === chapterId) : -1;
     if (only >= 0 && s.chapters[only]!.joins) return new Set([only]);
-    return new Set(s.chapters.flatMap((ch, i) => (ch.joins && ch.kind === 'opening' && ch.moves > 0 && (ch.orientation ?? s.color) === c ? [i] : [])));
+    return new Set(s.chapters.flatMap((ch, i) => (ch.joins && ch.kind === 'opening' && ch.moves > 0 ? [i] : [])));
   };
   useEffect(() => {
     const s = study.data;
     if (!s) return;
     setName(s.name.slice(0, 100));
-    setColor(s.color);
-    setChosen(defaults(s, s.color));
+    const linked = chapterId ? s.chapters.find((ch) => ch.id === chapterId) : undefined;
+    setColor(linked ? sideOf(s, linked) : s.color);
+    setChosen(defaults(s));
   }, [study.data]);
 
   const s = study.data;
+  /** The chapters of the side chosen (the others are hidden, and not imported). */
+  const visible = (i: number) => !!s && sideOf(s, s.chapters[i]!) === color;
+  const picked = useMemo(() => new Set([...chosen].filter(visible)), [chosen, s, color]);
   // What will be imported: distinct moves, how deep, and where the lines split.
   const selection = useMemo(() => {
-    const picked = s ? s.chapters.filter((_, i) => chosen.has(i)) : [];
+    const picked = s ? s.chapters.filter((_, i) => chosen.has(i) && visible(i)) : [];
     const moves = picked.flatMap((c) => pgnToMoves(c.pgn).moves);
     return {
       moves: new Set(moves.map((m) => `${m.fromFen} ${m.uci}`)).size,
       maxPly: Math.max(0, ...picked.map((c) => c.maxPly)),
       trunk: trunkOf(moves),
     };
-  }, [s, chosen]);
+  }, [s, chosen, color]);
 
   // One chapter per chapter of the study, keeping its Lichess id (to sync it later).
   const create = useMutation({
     mutationFn: () =>
       api.createRepertoire(name.trim(), color, {
         lichessStudyId: s!.id,
-        chapters: s!.chapters.filter((_, i) => chosen.has(i)).map((c) => ({ name: c.name, pgn: c.pgn, lichessChapterId: c.id ?? null })),
+        chapters: s!.chapters.filter((_, i) => picked.has(i)).map((c) => ({ name: c.name, pgn: c.pgn, lichessChapterId: c.id ?? null })),
       }),
     onSuccess: onCreated,
   });
@@ -410,7 +417,7 @@ function StudyImport({
             className="study-form stack"
             onSubmit={(e) => {
               e.preventDefault();
-              if (name.trim() && chosen.size) create.mutate();
+              if (name.trim() && picked.size) create.mutate();
             }}
           >
             <label className="field">
@@ -422,21 +429,25 @@ function StudyImport({
               <Tabs
                 block
                 value={color}
-                onChange={(c) => {
-                  setColor(c);
-                  setChosen(defaults(s, c));
-                }}
+                onChange={setColor}
                 tabs={COLOR_TABS}
               />
             </div>
             <div className="field">
               <span className="field-label">{t('Chapitres', 'Chapters')}</span>
               <div className="chapter-groups" onMouseLeave={() => setHover(null)}>
+                {!s.chapters.some((_, i) => visible(i)) && (
+                  <p className="muted small-text">
+                    {color === 'white'
+                      ? t('Aucun chapitre de cette étude n’est étudié avec les Blancs.', 'No chapter of this study is studied with White.')
+                      : t('Aucun chapitre de cette étude n’est étudié avec les Noirs.', 'No chapter of this study is studied with Black.')}
+                  </p>
+                )}
                 {KINDS.map(({ kind, label, why }) => {
-                  const group = s.chapters.flatMap((c, i) => (c.kind === kind ? [{ c, i }] : []));
+                  const group = s.chapters.flatMap((c, i) => (c.kind === kind && visible(i) ? [{ c, i }] : []));
                   if (!group.length) return null;
-                  // Headings only when the study mixes kinds (a pure opening study stays a plain list).
-                  const mixed = s.chapters.some((c) => c.kind !== 'opening');
+                  // Headings only when the chapters shown mix kinds (a pure opening study stays a plain list).
+                  const mixed = s.chapters.some((c, i) => visible(i) && c.kind !== 'opening');
                   return (
                     <section key={kind} className="chapter-group">
                       {mixed && (
@@ -463,12 +474,6 @@ function StudyImport({
                               >
                                 <input type="checkbox" checked={chosen.has(i)} disabled={!usable} onChange={() => toggle(i)} onFocus={() => setHover(i)} onBlur={() => setHover(null)} />
                                 <span className="chapter-name">{c.name}</span>
-                                {/* Only a chapter studied from the other side is marked. */}
-                                {c.orientation && c.orientation !== color && (
-                                  <span className="chapter-side" title={t('Chapitre étudié avec l’autre couleur', 'Chapter studied with the other colour')}>
-                                    <span className={`dot ${c.orientation}`} /> {c.orientation === 'white' ? t('Blancs', 'White') : t('Noirs', 'Black')}
-                                  </span>
-                                )}
                                 <span className="chapter-moves">{c.moves ? t(plural(c.moves, 'coup', 'coups'), plural(c.moves, 'move', 'moves')) : t('sans coups', 'no moves')}</span>
                               </label>
                             </li>
@@ -481,16 +486,16 @@ function StudyImport({
               </div>
             </div>
             <div className="import-summary">
-              {chosen.size ? (
+              {picked.size ? (
                 <>
-                  <strong>{t(plural(chosen.size, 'chapter', 'chapitres'), plural(chosen.size, 'chapter', 'chapters'))}</strong> · {t(plural(selection.moves, 'coup', 'coups'), plural(selection.moves, 'move', 'moves'))}
+                  <strong>{t(plural(picked.size, 'chapitre', 'chapitres'), plural(picked.size, 'chapter', 'chapters'))}</strong> · {t(plural(selection.moves, 'coup', 'coups'), plural(selection.moves, 'move', 'moves'))}
                   {selection.maxPly > 0 && t(<> · lignes jusqu’au {Math.ceil(selection.maxPly / 2)}<sup>e</sup> coup</>, <> · lines up to move {Math.ceil(selection.maxPly / 2)}</>)}
                 </>
               ) : (
                 t('Choisissez au moins un chapitre.', 'Choose at least one chapter.')
               )}
             </div>
-            <Button type="submit" variant="primary" block disabled={!name.trim() || chosen.size === 0 || create.isPending}>
+            <Button type="submit" variant="primary" block disabled={!name.trim() || picked.size === 0 || create.isPending}>
               {create.isPending ? t('Import…', 'Importing…') : t('Importer dans mes répertoires', 'Import into my repertoires')}
             </Button>
             {create.error && <p className="error">{create.error.message}</p>}
